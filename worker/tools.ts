@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { addCartItem, cartItemInputSchema, cartQty, MAX_CART_ITEMS, removeCartItem, type Cart } from '../shared/cart';
-import { promoJobId, promoRequestSchema, queuedPromoJob, type PromoRecord } from '../shared/promo';
+import { promoJobId, promoRequestSchema, type PromoRecord } from '../shared/promo';
 import { shareUrl, type ShareSettings } from '../shared/share';
+import { queuePromo } from './promo';
 
 export interface Store {
   cart(): Promise<Cart>;
@@ -11,8 +12,12 @@ export interface Store {
   saveShare(settings: ShareSettings): Promise<void>;
   promo(id: string): Promise<PromoRecord | undefined>;
   latestPromo(): Promise<PromoRecord | undefined>;
-  /** Stores a new job and makes it the latest. */
+  /** Stores a new job, makes it the latest and puts it last in the queue. */
   queuePromo(record: PromoRecord): Promise<void>;
+  /** Jobs that are not done or failed, oldest first. */
+  promoQueue(): Promise<PromoRecord[]>;
+  /** Stores a changed job; once it is done or failed it leaves the queue. */
+  savePromo(record: PromoRecord): Promise<void>;
 }
 
 /** A refusal the model can act on; the message goes back to it as a failed tool result. */
@@ -62,14 +67,8 @@ export const tools: readonly Tool[] = [
     name: 'promo_generate', title: '排程介紹影片', description: '為目前的購物車排一支介紹影片，回傳 jobId，再用 promo_status 查進度。購物車沒變、參數相同時重複呼叫會回傳同一個 jobId。',
     input: promoRequestSchema, annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     async run(store, args) {
-      const cart = await store.cart();
-      if (cart.items.length === 0) throw new ToolError('購物車是空的，先用 cart_add 記下東西再排介紹片。');
-      // A retried call must not queue a second paid render.
-      const latest = (await store.latestPromo())?.job;
-      if (latest?.status === 'queued' && latest.cartRevision === cart.revision && latest.durationSec === args.durationSec && latest.style === (args.style ?? null)) return { jobId: latest.id, status: latest.status };
-      // S4: runner 由 /runner/next pull 接手；S2 只建立並保存 queued job，不推播、不寫 webhook。
-      const job = queuedPromoJob(`promo-${crypto.randomUUID()}`, cart, args, now());
-      await store.queuePromo({ job, cart });
+      const job = await queuePromo(store, args);
+      if (!job) throw new ToolError('購物車是空的，先用 cart_add 記下東西再排介紹片。');
       return { jobId: job.id, status: job.status };
     },
   }),

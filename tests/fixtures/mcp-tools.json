@@ -1,0 +1,153 @@
+{
+  "tools": [
+    {
+      "name": "cart_add",
+      "title": "加入購物車",
+      "description": "把買到或看上的東西記進小屋購物車。同名、同店、同連結的東西會合併數量。只做記錄，不會下單。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "store": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "url": {
+            "type": "string",
+            "maxLength": 2000,
+            "format": "uri"
+          },
+          "priceTwd": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000
+          },
+          "imageUrl": {
+            "type": "string",
+            "maxLength": 2000,
+            "format": "uri"
+          },
+          "qty": {
+            "default": 1,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 999
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "cart_list",
+      "title": "查看購物車",
+      "description": "列出購物車內容、總額，以及分享連結、是否已開啟分享和訪客看到的價格（hidden 隱藏、range 區間、exact 精確）。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "cart_remove",
+      "title": "移出購物車",
+      "description": "從購物車拿掉一項東西。不給 qty 就整項移除；給 qty 就只減少那個數量。itemId 來自 cart_list。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "qty": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 999
+          }
+        },
+        "required": [
+          "itemId"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "promo_generate",
+      "title": "排程介紹影片",
+      "description": "為目前的購物車排一支介紹影片，回傳 jobId，再用 promo_status 查進度。購物車沒變、參數相同時重複呼叫會回傳同一個 jobId。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "durationSec": {
+            "default": 30,
+            "type": "integer",
+            "minimum": 15,
+            "maximum": 45
+          },
+          "style": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "promo_status",
+      "title": "查詢影片進度",
+      "description": "用 promo_generate 回傳的 jobId 查介紹影片的狀態、進度和成品連結。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "jobId": {
+            "type": "string",
+            "pattern": "^promo-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          }
+        },
+        "required": [
+          "jobId"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    }
+  ]
+}

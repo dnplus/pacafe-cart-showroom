@@ -1,21 +1,21 @@
-import type { z } from 'zod';
 import { cartWriteSchema, emptyCart, replaceCart, type Cart } from '../shared/cart';
 import { fixtureCartItems } from '../shared/fixtures/cart';
-import type { PromoRecord } from '../shared/promo';
+import { isFinished, type PromoRecord } from '../shared/promo';
 import { newShareSettings, sharePath, shareSettingsSchema, shareUpdateSchema, shareUrl, shareView, type ShareSettings } from '../shared/share';
 import { hasToken, isOwner, sameSecret, unauthorized } from './auth';
 import type { Env } from './env';
+import { invalidBody, json, readJson } from './http';
 import { handleMcp } from './mcp';
+import { promoApi } from './promo';
+import { runnerApi } from './runner';
 import { tools, type Store } from './tools';
 
 const CART_KEY = 'cart';
 const SHARE_KEY = 'share';
 const LATEST_PROMO_KEY = 'promo:latest';
+/** Ids of the jobs not yet done or failed, oldest first: what /runner/next takes from. */
+const PROMO_QUEUE_KEY = 'promo:queue';
 const promoKey = (id: string) => `promo:${id}`;
-const json = (body: unknown, status = 200, headers: Record<string, string> = {}) => Response.json(body, { status, headers: { 'cache-control': 'no-store', ...headers } });
-const invalidBody = (error: z.ZodError) => json({ error: 'invalid_body', issues: error.issues.map(issue => ({ path: issue.path.join('.'), message: issue.message })) }, 400);
-/** The parsed body, or null when it is not JSON. */
-const readJson = (request: Request) => request.json().then((body: unknown) => ({ body }), () => null);
 
 export class Showroom {
   constructor(private readonly ctx: DurableObjectState, private readonly env: Env) {}
@@ -55,7 +55,18 @@ export class Showroom {
         const id = await storage.get<string>(LATEST_PROMO_KEY);
         return id ? storage.get<PromoRecord>(promoKey(id)) : undefined;
       },
-      queuePromo: record => storage.put({ [promoKey(record.job.id)]: record, [LATEST_PROMO_KEY]: record.job.id }),
+      queuePromo: async record => {
+        const queue = await storage.get<string[]>(PROMO_QUEUE_KEY) ?? [];
+        await storage.put({ [promoKey(record.job.id)]: record, [LATEST_PROMO_KEY]: record.job.id, [PROMO_QUEUE_KEY]: [...queue, record.job.id] });
+      },
+      async promoQueue() {
+        const records = await Promise.all((await storage.get<string[]>(PROMO_QUEUE_KEY) ?? []).map(id => storage.get<PromoRecord>(promoKey(id))));
+        return records.filter(record => record !== undefined);
+      },
+      async savePromo(record) {
+        const queue = await storage.get<string[]>(PROMO_QUEUE_KEY) ?? [];
+        await storage.put({ [promoKey(record.job.id)]: record, [PROMO_QUEUE_KEY]: isFinished(record.job) ? queue.filter(id => id !== record.job.id) : queue });
+      },
     };
   }
 
@@ -84,6 +95,8 @@ export class Showroom {
   async fetch(request: Request): Promise<Response> {
     const { pathname } = new URL(request.url);
     if (pathname === '/mcp') return hasToken(request, this.env) ? handleMcp(request, tools, this.store()) : unauthorized();
+    if (pathname.startsWith('/runner/')) return runnerApi(request, this.env, this.store(), pathname);
+    if (pathname === '/api/promo') return promoApi(request, this.env, this.store());
     if (pathname.startsWith('/s/')) return this.shared(request, pathname);
     if (pathname === '/api/share') return this.share(request);
     if (pathname !== '/api/cart') return json({ error: 'not_found' }, 404);

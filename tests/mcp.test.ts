@@ -5,6 +5,7 @@ import type { Env } from '../worker/env';
 import worker from '../worker/index';
 import { Showroom } from '../worker/showroom';
 import { memoryState } from './memory-state';
+import toolsAtS2 from './fixtures/mcp-tools.json';
 
 const token = 'test-token-0123456789';
 const origin = 'https://showroom.test';
@@ -61,6 +62,10 @@ describe('/mcp', () => {
 
     const api = cartSchema.parse(await (await send('/api/cart', { headers: { authorization: `Bearer ${token}` } })).json());
     expect(api).toEqual(removed.structuredContent);
+  });
+
+  it('lists the same tools, schemas and annotations an agent was told about before the room could queue a video', async () => {
+    expect((await world().rpc('tools/list')).body.result).toEqual(toolsAtS2);
   });
 
   it('refuses a call without the right token, even where env.local opens owner access', async () => {
