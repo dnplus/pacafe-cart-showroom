@@ -24,7 +24,7 @@
    npm run dev:worker
    ```
 
-   打開 http://127.0.0.1:8877 。`dev:worker` 用 `wrangler.jsonc` 的 `env.local`：任何人都能寫入購物車，第一次讀取時放進 5 件 fixture（`shared/fixtures/cart.ts`）。資料存在 `.local/state`。
+   打開 http://127.0.0.1:8877 。`dev:worker` 用 `wrangler.jsonc` 的 `env.local`（`OPEN_OWNER_ACCESS=true`）：這台機器上的任何人都算屋主，可以讀寫購物車和分享設定，第一次讀取時放進 5 件 fixture（`shared/fixtures/cart.ts`）。資料存在 `.local/state`。
 
 3. 寫入購物車。下一次輪詢（每 2 秒一次）時，貨架就換上新的東西。
 
@@ -60,9 +60,9 @@ CI（`.github/workflows/ci.yml`）在每次 push 和 pull request 跑這三項�
 
 截圖和算圖腳本需要 Playwright 的 Chromium（`npx playwright-core install chromium`），用 SwiftShader 在沒有 GPU 的機器上畫 WebGL。
 
-### 正式環境的寫入權限
+### 正式環境的屋主權限
 
-正式環境只有帶 `Authorization: Bearer <CART_MCP_TOKEN>` 的寫入會成功，其餘回 401。用 `wrangler secret put CART_MCP_TOKEN` 設定 token；token 不放進任何檔案。`.env.example` 只列出變數名稱。
+正式環境的 `/api/cart`（讀和寫）和 `/api/share` 只回應帶 `Authorization: Bearer <CART_MCP_TOKEN>` 的請求，其餘回 401。房間第一次被擋時會請屋主輸入這把金鑰，存在瀏覽器的 localStorage，之後每次讀寫都帶上。用 `wrangler secret put CART_MCP_TOKEN` 設定 token；token 不放進任何檔案。`.env.example` 只列出變數名稱。
 
 `/mcp` 在任何環境都要這個 token，`env.local` 也一樣。在本機用 MCP 時，把 token 寫進 `.dev.vars`（已列在 `.gitignore`），再跑 `npm run dev:worker`：
 
@@ -74,7 +74,7 @@ echo "CART_MCP_TOKEN=$(openssl rand -base64 24)" > .dev.vars
 
 | 請求 | 回應 |
 |---|---|
-| `GET /api/cart` | `200`，`Cart`。 |
+| `GET /api/cart` | `200`，`Cart`。沒有 token 回 `401`（`env.local` 除外）。 |
 | `POST /api/cart`，body `{ "items": CartItemInput[] }` | `200`，取代後的 `Cart`。body 不對回 `400`，沒有 token 回 `401`。 |
 
 - `CartItemInput` 是 `{ title, store?, url?, priceTwd?, imageUrl?, qty? }`，`qty` 預設 1，`url` 和 `imageUrl` 只接受 http 或 https。一次最多 50 件。
@@ -82,6 +82,22 @@ echo "CART_MCP_TOKEN=$(openssl rand -base64 24)" > .dev.vars
 - `totalTwd` 是每件 `priceTwd × qty` 的總和，沒標價的算 0。
 - 貨架有 12 格（3 層 × 4 格）。每件依清單順序佔一格，`fill = min(1, 件數 / 12)`；超過 12 件的照樣算進總額，但擺不上貨架。
 - 同樣的內容寫兩次，回來的是同一個購物車，`revision` 不變。標題、店名和連結不變的東西，會保留原本的 `id` 和 `addedAt`。
+
+## 分享：`/api/share` 和 `/s/<slug>`
+
+屋主在房間按「分享」打開設定。分享預設關閉，訪客看到的價格預設隱藏。
+
+| 請求 | 回應 |
+|---|---|
+| `GET /api/share`（屋主） | `200`，`{ slug, enabled, prices, nickname, url }`。第一次問時建立。 |
+| `PUT /api/share`（屋主），body `{ enabled, prices, nickname }` | `200`，同上。三個欄位都要給；`slug` 不能改。body 不對回 `400`。 |
+| `GET /s/<slug>`，`Accept: application/json` | 分享開著時 `200`，`ShareView`；其餘一律同一個 `404 {"error":"not_found"}`。 |
+| `GET /s/<slug>`，瀏覽器 | 分享開著時回 app 的 `index.html`，`<title>` 和 `og:title` 是「{暱稱} 的小屋購物車」，`og:description` 是「{n} 件東西」，不放價格；其餘回同一個純文字 404 頁。 |
+
+- `prices` 是 `hidden`（只有品名、圖片、數量）、`range`（每件和總額給區間，如 `NT$ 300–500`）或 `exact`（精確價格和總額）。`nickname` 1 到 24 字，預設「屋主」。
+- `ShareView` 每種模式各有一個嚴格的形狀（`shared/share.ts`）：`hidden` 沒有任何價格欄位，`range` 只有 `priceRange` 和 `totalRange`。沒有 item id、店名、revision。商品連結去掉 query、`#` 和帳號密碼。
+- `/s/` 的回應都帶 `cache-control: no-store`、`vary: accept`、`referrer-policy: no-referrer`、`x-robots-tag: noindex`。slug 錯、格式不對、從沒建立、已關閉，回的 404 一模一樣。只接受 `GET`。
+- `npm run verify:share` 用真的 `wrangler dev`（有 token、不開 `OPEN_OWNER_ACCESS`）走一遍上面全部；`npm run screenshots:share` 存分享面板和分享頁的截圖。
 
 ## `/mcp`
 
