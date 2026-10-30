@@ -1,6 +1,6 @@
 # Third-party assets and software
 
-muse-cart-showroom is licensed under Apache-2.0 (see `LICENSE` and `NOTICE`). This file lists everything in the repository or the built app that comes from someone else, and the code ported from the owner's earlier projects.
+pacafe-cart-showroom is licensed under Apache-2.0 (see `LICENSE` and `NOTICE`). This file lists everything in the repository or the built app that comes from someone else, and the code ported from the owner's earlier projects.
 
 ## Assets
 

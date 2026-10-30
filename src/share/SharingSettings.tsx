@@ -59,7 +59,7 @@ export function SharingSettings({ cart, controls, onPreview, close }: { cart: Ca
     const card = await shootCard(controls.current, shareView(cart, share));
     if (!card) { setProblem('The room is not ready for a picture yet.'); return; }
     const link = document.createElement('a');
-    link.href = URL.createObjectURL(card); link.download = 'muse-cart-showroom-share.jpg'; link.click();
+    link.href = URL.createObjectURL(card); link.download = 'pacafe-cart-showroom-share.jpg'; link.click();
     setTimeout(() => URL.revokeObjectURL(link.href), 10_000);
   };
 

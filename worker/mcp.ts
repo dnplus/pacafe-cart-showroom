@@ -3,7 +3,7 @@ import { ToolError, type Store, type Tool } from './tools';
 
 const SUPPORTED_VERSIONS = ['2025-11-25', '2025-06-18'];
 const MAX_BODY_BYTES = 64 * 1024;
-const SERVER_INFO = { name: 'muse-cart-showroom', title: '小屋購物車', version: '0.2.0' };
+const SERVER_INFO = { name: 'pacafe-cart-showroom', title: '小屋購物車', version: '0.2.0' };
 const INSTRUCTIONS = '這是小屋購物車：用 cart_add 記下你買到的東西，cart_list 取得清單與分享連結，promo_generate 排一支介紹影片，再用 promo_status 查進度。這裡只做記錄，不能結帳。';
 
 const reply = (body: unknown, status = 200) => Response.json(body, { status, headers: { 'cache-control': 'no-store' } });

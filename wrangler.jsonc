@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "muse-cart-showroom",
+  "name": "pacafe-cart-showroom",
   "main": "worker/index.ts",
   "compatibility_date": "2026-10-01",
   // /api/*, /mcp and the share pages /s/* reach the Worker; every other path is the built single-page app.
@@ -10,7 +10,7 @@
   // The owner's routes need CART_MCP_TOKEN, set with `wrangler secret put CART_MCP_TOKEN`; it is never written in this file.
   "env": {
     "local": {
-      "name": "muse-cart-showroom-local",
+      "name": "pacafe-cart-showroom-local",
       "durable_objects": { "bindings": [{ "name": "SHOWROOM", "class_name": "Showroom" }] },
       "vars": {
         // Local only: anyone on this machine is the owner, and a showroom never written starts with the five-item fixture.

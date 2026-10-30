@@ -1,4 +1,4 @@
-# muse-cart-showroom／小屋購物車
+# pacafe-cart-showroom／小屋購物車
 
 > 本專案不是 Meta Muse 產品的整合，也沒有結帳。採買由使用者自己的 Muse 完成；小屋購物車只把「囤在購物車裡的東西」畫成看得見的房間。住民 agent 用 Meta Model API／Muse Code（muse-wonder-1.0、muse-spark-1.3）當大腦。
 
@@ -178,7 +178,7 @@ pa-cafe 房間的 import 閉包有 214 檔、約 3.6 萬行。住民、任務、
 | Starter Kit 3D Platformer 的 `character.glb`、`Textures/colormap.png` | 店員立牌和頭像（`scripts/render-character.mjs` 算圖） | https://github.com/KenneyNL/Starter-Kit-3D-Platformer ，commit 3fa8a04b | Kenney | CC0 1.0 |
 | Nunito Sans（`@fontsource-variable/nunito-sans` 5.3.0） | 介面字型 | https://github.com/Fonthausen/NunitoSans | The Nunito Sans Project Authors | SIL OFL 1.1 |
 | Lucide 圖示（`lucide-react` 1.54.0） | 介面圖示 | https://github.com/lucide-icons/lucide | Lucide Icons and Contributors | ISC |
-| 主播台棚景 `public/studio/showroom-set.glb` | 房間左邊的棚景 | 本 repo，`scripts/generate-studio-set.mjs` | muse-cart-showroom authors | Apache-2.0（原創） |
+| 主播台棚景 `public/studio/showroom-set.glb` | 房間左邊的棚景 | 本 repo，`scripts/generate-studio-set.mjs` | pacafe-cart-showroom authors | Apache-2.0（原創） |
 
 所有第三方素材和套件列在 [THIRD_PARTY.md](THIRD_PARTY.md)。
 

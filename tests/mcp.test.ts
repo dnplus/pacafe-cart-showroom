@@ -29,7 +29,7 @@ describe('/mcp', () => {
   it('lets an agent record purchases, get the share link and queue and poll an intro video', async () => {
     const { rpc, call, send } = world();
     const init = await rpc('initialize', { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'test', version: '0' } });
-    expect(init.body.result).toMatchObject({ protocolVersion: '2025-11-25', capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'muse-cart-showroom', version: '0.2.0' } });
+    expect(init.body.result).toMatchObject({ protocolVersion: '2025-11-25', capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'pacafe-cart-showroom', version: '0.2.0' } });
     expect(init.response.headers.get('mcp-session-id')).toBeNull();
 
     const listed = (await rpc('tools/list')).body.result.tools as { name: string; annotations: { readOnlyHint: boolean }; inputSchema: Record<string, unknown> }[];
