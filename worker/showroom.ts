@@ -1,7 +1,8 @@
+import type { z } from 'zod';
 import { cartWriteSchema, emptyCart, replaceCart, type Cart } from '../shared/cart';
 import { fixtureCartItems } from '../shared/fixtures/cart';
 import type { PromoRecord } from '../shared/promo';
-import { newShareSettings, type ShareSettings } from '../shared/share';
+import { newShareSettings, sharePath, shareSettingsSchema, shareUpdateSchema, shareUrl, shareView, type ShareSettings } from '../shared/share';
 import type { Env } from './env';
 import { handleMcp } from './mcp';
 import { tools, type Store } from './tools';
@@ -24,8 +25,12 @@ function hasToken(request: Request, env: Env) {
   const sent = /^Bearer\s+(\S+)$/i.exec(request.headers.get('authorization') ?? '')?.[1];
   return Boolean(env.CART_MCP_TOKEN && sent && sameSecret(sent, env.CART_MCP_TOKEN));
 }
-const mayWrite = (request: Request, env: Env) => env.ALLOW_OPEN_WRITES === 'true' || hasToken(request, env);
+/** The owner reads and writes the cart and the share settings; env.local lets anyone on the machine be the owner. */
+const isOwner = (request: Request, env: Env) => env.OPEN_OWNER_ACCESS === 'true' || hasToken(request, env);
 const unauthorized = () => json({ error: 'unauthorized' }, 401, { 'www-authenticate': 'Bearer' });
+const invalidBody = (error: z.ZodError) => json({ error: 'invalid_body', issues: error.issues.map(issue => ({ path: issue.path.join('.'), message: issue.message })) }, 400);
+/** The parsed body, or null when it is not JSON. */
+const readJson = (request: Request) => request.json().then((body: unknown) => ({ body }), () => null);
 
 export class Showroom {
   constructor(private readonly ctx: DurableObjectState, private readonly env: Env) {}
@@ -42,18 +47,24 @@ export class Showroom {
     return seeded;
   }
 
+  private async storedShare() {
+    const stored = await this.ctx.storage.get(SHARE_KEY);
+    return stored === undefined ? undefined : shareSettingsSchema.parse(stored);
+  }
+
   private store(): Store {
     const { storage } = this.ctx;
     return {
       cart: () => this.read(),
       saveCart: cart => storage.put(CART_KEY, cart),
-      async share() {
-        const stored = await storage.get<ShareSettings>(SHARE_KEY);
+      share: async () => {
+        const stored = await this.storedShare();
         if (stored) return stored;
         const created = newShareSettings();
         await storage.put(SHARE_KEY, created);
         return created;
       },
+      saveShare: settings => storage.put(SHARE_KEY, settings),
       promo: id => storage.get<PromoRecord>(promoKey(id)),
       async latestPromo() {
         const id = await storage.get<string>(LATEST_PROMO_KEY);
@@ -63,17 +74,41 @@ export class Showroom {
     };
   }
 
+  /** What a visitor gets at `/s/<slug>`: the narrowed cart, or one 404 for a slug that is wrong, malformed, never made or switched off. */
+  private async shared(request: Request, pathname: string) {
+    if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405, { allow: 'GET' });
+    const sent = sharePath.exec(pathname)?.[1], settings = sent ? await this.storedShare() : undefined;
+    if (!sent || !settings?.enabled || !sameSecret(sent, settings.slug)) return json({ error: 'not_found' }, 404);
+    return json(shareView(await this.read(), settings));
+  }
+
+  private async share(request: Request) {
+    if (request.method !== 'GET' && request.method !== 'PUT') return json({ error: 'method_not_allowed' }, 405, { allow: 'GET, PUT' });
+    if (!isOwner(request, this.env)) return unauthorized();
+    const store = this.store(), current = await store.share(), origin = new URL(request.url).origin;
+    if (request.method === 'GET') return json({ ...current, url: shareUrl(origin, current.slug) });
+    const sent = await readJson(request);
+    if (!sent) return json({ error: 'invalid_json' }, 400);
+    const parsed = shareUpdateSchema.safeParse(sent.body);
+    if (!parsed.success) return invalidBody(parsed.error);
+    const next: ShareSettings = { slug: current.slug, ...parsed.data };
+    await store.saveShare(next);
+    return json({ ...next, url: shareUrl(origin, next.slug) });
+  }
+
   async fetch(request: Request): Promise<Response> {
     const { pathname } = new URL(request.url);
     if (pathname === '/mcp') return hasToken(request, this.env) ? handleMcp(request, tools, this.store()) : unauthorized();
+    if (pathname.startsWith('/s/')) return this.shared(request, pathname);
+    if (pathname === '/api/share') return this.share(request);
     if (pathname !== '/api/cart') return json({ error: 'not_found' }, 404);
+    if (request.method !== 'GET' && request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405, { allow: 'GET, POST' });
+    if (!isOwner(request, this.env)) return unauthorized();
     if (request.method === 'GET') return json(await this.read());
-    if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405, { allow: 'GET, POST' });
-    if (!mayWrite(request, this.env)) return unauthorized();
-    let body: unknown;
-    try { body = await request.json(); } catch { return json({ error: 'invalid_json' }, 400); }
-    const parsed = cartWriteSchema.safeParse(body);
-    if (!parsed.success) return json({ error: 'invalid_body', issues: parsed.error.issues.map(issue => ({ path: issue.path.join('.'), message: issue.message })) }, 400);
+    const sent = await readJson(request);
+    if (!sent) return json({ error: 'invalid_json' }, 400);
+    const parsed = cartWriteSchema.safeParse(sent.body);
+    if (!parsed.success) return invalidBody(parsed.error);
     const stored = await this.stored();
     const next = replaceCart(stored ?? emptyCart(), parsed.data.items, new Date().toISOString());
     // Unchanged items give back the stored cart itself; the first write is always kept, so the fixture never comes back.

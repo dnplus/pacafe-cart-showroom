@@ -18,7 +18,7 @@ function showroom() {
   const state = memoryState();
   const env = { CART_MCP_TOKEN: token, SHOWROOM: { idFromName: (name: string) => name, get: () => new Showroom(state, env) }, ASSETS: { fetch: async () => new Response('app') } } as unknown as Env;
   const send = (input: RequestInfo | URL, init?: RequestInit) => worker.fetch(new Request(input, init) as Parameters<typeof worker.fetch>[0], env);
-  return { fetch: send as typeof fetch, cart: async () => cartSchema.parse(await (await send(`${origin}/api/cart`)).json()) };
+  return { fetch: send as typeof fetch, cart: async () => cartSchema.parse(await (await send(`${origin}/api/cart`, { headers: { authorization: `Bearer ${token}` } })).json()) };
 }
 
 const functionCall = (id: string, name: string, args: unknown) => ({ type: 'function_call', call_id: id, name, arguments: typeof args === 'string' ? args : JSON.stringify(args) });

@@ -3,18 +3,18 @@
   "name": "muse-cart-showroom",
   "main": "worker/index.ts",
   "compatibility_date": "2026-10-01",
-  // /api/* and /mcp reach the Worker; every other path is the built single-page app.
-  "assets": { "directory": "./dist/client", "binding": "ASSETS", "not_found_handling": "single-page-application", "run_worker_first": ["/api/*", "/mcp"] },
+  // /api/*, /mcp and the share pages /s/* reach the Worker; every other path is the built single-page app.
+  "assets": { "directory": "./dist/client", "binding": "ASSETS", "not_found_handling": "single-page-application", "run_worker_first": ["/api/*", "/mcp", "/s/*"] },
   "durable_objects": { "bindings": [{ "name": "SHOWROOM", "class_name": "Showroom" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Showroom"] }],
-  // Writes need CART_MCP_TOKEN, set with `wrangler secret put CART_MCP_TOKEN`; it is never written in this file.
+  // The owner's routes need CART_MCP_TOKEN, set with `wrangler secret put CART_MCP_TOKEN`; it is never written in this file.
   "env": {
     "local": {
       "name": "muse-cart-showroom-local",
       "durable_objects": { "bindings": [{ "name": "SHOWROOM", "class_name": "Showroom" }] },
       "vars": {
-        // Local only: anyone on this machine may write, and a showroom never written starts with the five-item fixture.
-        "ALLOW_OPEN_WRITES": "true",
+        // Local only: anyone on this machine is the owner, and a showroom never written starts with the five-item fixture.
+        "OPEN_OWNER_ACCESS": "true",
         "SEED_FIXTURE": "true"
       }
     }

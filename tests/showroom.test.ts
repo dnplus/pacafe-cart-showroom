@@ -7,11 +7,11 @@ import worker from '../worker/index';
 import { memoryState } from './memory-state';
 
 const env = (vars: Partial<Env> = {}) => vars as Env;
+const secret = { CART_MCP_TOKEN: 'test-token-0123456789' };
 const url = 'https://showroom.test/api/cart';
-const get = (room: Showroom) => room.fetch(new Request(url));
+const get = (room: Showroom, token: string | undefined = secret.CART_MCP_TOKEN) => room.fetch(new Request(url, { headers: token ? { authorization: `Bearer ${token}` } : {} }));
 const post = (room: Showroom, body: unknown, token?: string) => room.fetch(new Request(url, { method: 'POST', body: typeof body === 'string' ? body : JSON.stringify(body), headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) } }));
 const cartOf = async (response: Response) => cartSchema.parse(await response.json());
-const secret = { CART_MCP_TOKEN: 'test-token-0123456789' };
 
 describe('Showroom', () => {
   it('keeps a written cart for the next object over the same storage', async () => {
@@ -36,10 +36,12 @@ describe('Showroom', () => {
     expect((await post(new Showroom(memoryState(), env()), { items: [] }, 'anything')).status).toBe(401);
   });
 
-  it('lets anyone write where env.local opens writes', async () => {
-    const response = await post(new Showroom(memoryState(), env({ ALLOW_OPEN_WRITES: 'true' })), { items: [{ title: 'pen', priceTwd: 25 }] });
+  it('lets anyone act as the owner where env.local opens owner access', async () => {
+    const room = new Showroom(memoryState(), env({ OPEN_OWNER_ACCESS: 'true' }));
+    const response = await post(room, { items: [{ title: 'pen', priceTwd: 25 }] });
     expect(response.status).toBe(200);
     expect((await cartOf(response)).totalTwd).toBe(25);
+    expect((await cartOf(await get(room, undefined))).totalTwd).toBe(25);
   });
 
   it('refuses a body that is not a cart write', async () => {
@@ -51,12 +53,12 @@ describe('Showroom', () => {
   });
 
   it('starts with the fixture only when the showroom was never written', async () => {
-    const seeded = memoryState(), local = env({ SEED_FIXTURE: 'true', ALLOW_OPEN_WRITES: 'true' });
+    const seeded = memoryState(), local = env({ SEED_FIXTURE: 'true', OPEN_OWNER_ACCESS: 'true' });
     expect((await cartOf(await get(new Showroom(seeded, local)))).items).toHaveLength(5);
     const emptied = memoryState();
     await post(new Showroom(emptied, local), { items: [] });
     expect((await cartOf(await get(new Showroom(emptied, local)))).items).toEqual([]);
-    expect((await cartOf(await get(new Showroom(memoryState(), env())))).items).toEqual([]);
+    expect((await cartOf(await get(new Showroom(memoryState(), env(secret))))).items).toEqual([]);
   });
 
   it('gives back the same revision when the same cart is written twice', async () => {
@@ -68,15 +70,15 @@ describe('Showroom', () => {
 });
 
 describe('worker', () => {
-  it('sends /api/cart and /mcp to the default showroom and every other path to the app', async () => {
+  it('sends /api/cart, /api/share and /mcp to the default showroom and every other path to the app', async () => {
     const asked: string[] = [];
     const fake: Env = {
       SHOWROOM: { idFromName: (name: string) => { asked.push(`id:${name}`); return name; }, get: (id: string) => ({ fetch: async () => { asked.push(`room:${id}`); return Response.json({} as Cart); } }) } as unknown as DurableObjectNamespace,
       ASSETS: { fetch: async () => { asked.push('assets'); return new Response('app'); } } as unknown as Fetcher,
     };
     const run = (path: string) => worker.fetch(new Request(`https://showroom.test${path}`) as Parameters<typeof worker.fetch>[0], fake);
-    await run('/api/cart'); await run('/mcp'); await run('/'); await run('/some/page');
-    expect(asked).toEqual(['id:default', 'room:default', 'id:default', 'room:default', 'assets', 'assets']);
+    await run('/api/cart'); await run('/api/share'); await run('/mcp'); await run('/'); await run('/some/page');
+    expect(asked).toEqual(['id:default', 'room:default', 'id:default', 'room:default', 'id:default', 'room:default', 'assets', 'assets']);
     expect((await run('/api/other')).status).toBe(404);
   });
 });

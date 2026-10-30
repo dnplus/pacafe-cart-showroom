@@ -59,17 +59,17 @@ describe('/mcp', () => {
     const job = promoJobSchema.parse((await call('promo_status', { jobId: queued.jobId })).structuredContent);
     expect(job).toMatchObject({ id: queued.jobId, status: 'queued', progress: 0, cartRevision: removed.structuredContent.revision, durationSec: 30, style: '溫暖', output: null });
 
-    const api = cartSchema.parse(await (await send('/api/cart')).json());
+    const api = cartSchema.parse(await (await send('/api/cart', { headers: { authorization: `Bearer ${token}` } })).json());
     expect(api).toEqual(removed.structuredContent);
   });
 
-  it('refuses a call without the right token, even where env.local opens cart writes', async () => {
+  it('refuses a call without the right token, even where env.local opens owner access', async () => {
     const asked = { jsonrpc: '2.0', id: 1, method: 'ping' };
     for (const [vars, headers] of [
       [{ CART_MCP_TOKEN: token }, {}],
       [{ CART_MCP_TOKEN: token }, { authorization: 'Bearer test-token-0123456780' }],
       [{}, { authorization: `Bearer ${token}` }],
-      [{ ALLOW_OPEN_WRITES: 'true' }, {}],
+      [{ OPEN_OWNER_ACCESS: 'true' }, {}],
     ] as [Partial<Env>, Record<string, string>][]) {
       const response = await world(vars).post(asked, headers);
       expect(response.status).toBe(401);

@@ -8,6 +8,7 @@ export interface Store {
   saveCart(cart: Cart): Promise<void>;
   /** Made on first ask, so a showroom nobody shares never gets a slug. */
   share(): Promise<ShareSettings>;
+  saveShare(settings: ShareSettings): Promise<void>;
   promo(id: string): Promise<PromoRecord | undefined>;
   latestPromo(): Promise<PromoRecord | undefined>;
   /** Stores a new job and makes it the latest. */
@@ -41,11 +42,11 @@ export const tools: readonly Tool[] = [
     },
   }),
   tool({
-    name: 'cart_list', title: '查看購物車', description: '列出購物車內容、總額，以及分享連結和是否已開啟分享。',
+    name: 'cart_list', title: '查看購物車', description: '列出購物車內容、總額，以及分享連結、是否已開啟分享和訪客看到的價格（hidden 隱藏、range 區間、exact 精確）。',
     input: z.strictObject({}), annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     async run(store, _args, origin) {
       const [cart, share] = await Promise.all([store.cart(), store.share()]);
-      return { ...cart, share: { url: shareUrl(origin, share.slug), enabled: share.enabled } };
+      return { ...cart, share: { url: shareUrl(origin, share.slug), enabled: share.enabled, prices: share.prices } };
     },
   }),
   tool({
