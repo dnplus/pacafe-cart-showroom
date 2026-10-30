@@ -1,10 +1,10 @@
 import type { PointerEvent } from 'react';
 import { Pause, Play, SkipBack } from 'lucide-react';
 import type { PerformanceScript } from '../../shared/performance-script';
-import type { StudioProject } from '../../shared/studio';
 import { t } from '../i18n';
 
-type Beat = StudioProject['storyboard'][number];
+/** One storyboard beat: the host on camera (A) or a cutaway (B), with its caption and length. */
+export interface Beat { id: string; roll: 'A' | 'B'; caption: string; seconds: number }
 
 /** `mm:ss.s` for the desk's timecode. */
 export const timecode = (seconds: number) => `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${(seconds % 60).toFixed(1).padStart(4, '0')}`;

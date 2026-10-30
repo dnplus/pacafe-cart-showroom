@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { BaristaAppearance, Character } from '../../shared/domain';
-import type { FloorId } from '../../shared/floors';
 import type { StudioSet as SetPlacement } from '../../shared/studio';
 import type { PerformanceScript } from '../../shared/performance-script';
 import type { RoomFinishChoice } from '../../shared/room-finishes';
@@ -8,11 +7,10 @@ import { t } from '../i18n';
 import type { FurnitureItem } from '../room/furniture';
 import { framePresenter, usePresenterReady } from '../room/presenterShot';
 import { RoomScene, type RoomControls } from '../room/RoomScene';
-import { houseSnapshot } from '../scenes/fixtures';
 import { NoRoomZones } from './RoomZones';
 
-/** The upstairs room as a recording sees it: what studio_bundle sends the editor, read from the barista's own cafe. */
-export interface StudioSet { house: string; floorId: FloorId; furniture: FurnitureItem[]; stairs: FurnitureItem[]; finish: RoomFinishChoice; brightness?: number; barista: Character; appearance?: BaristaAppearance; /** The studio set up on that floor; `furniture` already leaves out what it covers. */ studio?: SetPlacement | null }
+/** The room as a recording sees it: its furniture, finish and barista, with the studio set standing in it. */
+export interface StudioSet { furniture: FurnitureItem[]; finish: RoomFinishChoice; brightness?: number; barista: Character; appearance?: BaristaAppearance; /** The studio set up on that floor; `furniture` already leaves out what it covers. */ studio?: SetPlacement | null }
 
 const noop = () => {};
 
@@ -25,7 +23,6 @@ export function StudioCamera({ set, script, rehearsal, at = 0, onEnd }: { set: S
   const controls = useRef<RoomControls>(null); const box = useRef<HTMLDivElement>(null);
   const [ready, setReady] = useState(false), [fallback, setFallback] = useState(false);
   const [onAir, setOnAir] = useState<{ take: object; line: string | null } | null>(null);
-  const snapshot = useMemo(() => houseSnapshot(set.house, { agents: [], quotas: {}, scores: {} }), [set.house]);
   const ended = useRef(onEnd);
   useEffect(() => { ended.current = onEnd; });
   const onStage = usePresenterReady(ready && !fallback, controls, box, script.spot);
@@ -47,8 +44,8 @@ export function StudioCamera({ set, script, rehearsal, at = 0, onEnd }: { set: S
   const line = rehearsal && onAir?.take === rehearsal ? onAir.line : undefined;
   return <div className="studio-camera-view" ref={box} data-testid="studio-camera" data-ready={onStage} data-rehearsing={line !== undefined}>
     <NoRoomZones><div className="studio-camera-room" inert style={{ visibility: onStage ? 'visible' : 'hidden' }}>
-      <RoomScene demo uiHidden cameraControls={false} snapshot={snapshot} scenery="peach" furniture={set.furniture} activeFloor={set.floorId} stairways={set.stairs} finish={set.finish} brightness={set.brightness}
-        barista={set.barista} baristaAppearance={set.appearance} hour={14} frameHeight={script.format.height} studioSet={set.studio} inspect={noop} energy={noop} counter={noop}
+      <RoomScene demo uiHidden cameraControls={false} scenery="peach" furniture={set.furniture} finish={set.finish} brightness={set.brightness}
+        barista={set.barista} baristaAppearance={set.appearance} hour={14} frameHeight={script.format.height} studioSet={set.studio} counter={noop}
         onReady={() => setReady(true)} onFallback={() => setFallback(true)} controls={controls} />
     </div></NoRoomZones>
     {!onStage && <p className="studio-camera-wait" role="status">{t(fallback ? 'The camera needs 3D, which this device cannot show.' : 'The barista is getting into place…')}</p>}
