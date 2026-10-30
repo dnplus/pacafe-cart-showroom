@@ -11,12 +11,13 @@ export function memoryState() {
   return { storage } as unknown as DurableObjectState;
 }
 
-/** The slice of an R2 bucket the worker uses: put, get (with a `bytes=a-b` range), head and delete. */
+/** The slice of an R2 bucket the worker uses: put (with custom metadata), get (with a `bytes=a-b` range), head and delete. */
 export function memoryBucket() {
-  const data = new Map<string, { bytes: Uint8Array; contentType?: string }>();
-  const object = (key: string, entry: { bytes: Uint8Array; contentType?: string }, range?: { offset: number; length: number }) => ({
+  type Entry = { bytes: Uint8Array; contentType?: string; customMetadata?: Record<string, string> };
+  const data = new Map<string, Entry>();
+  const object = (key: string, entry: Entry, range?: { offset: number; length: number }) => ({
     key, size: entry.bytes.length, httpEtag: `"${key}"`, range,
-    httpMetadata: { contentType: entry.contentType },
+    httpMetadata: { contentType: entry.contentType }, customMetadata: entry.customMetadata,
     writeHttpMetadata(headers: Headers) { if (entry.contentType) headers.set('content-type', entry.contentType); },
     body: new Blob([range ? entry.bytes.slice(range.offset, range.offset + range.length) : entry.bytes.slice()]).stream(),
     arrayBuffer: async () => entry.bytes.slice().buffer,
@@ -24,9 +25,9 @@ export function memoryBucket() {
   });
   const bucket = {
     data,
-    async put(key: string, value: ArrayBuffer | Uint8Array | string, options?: { httpMetadata?: { contentType?: string } }) {
+    async put(key: string, value: ArrayBuffer | Uint8Array | string, options?: { httpMetadata?: { contentType?: string }; customMetadata?: Record<string, string> }) {
       const bytes = typeof value === 'string' ? new TextEncoder().encode(value) : new Uint8Array(value instanceof Uint8Array ? value : new Uint8Array(value)).slice();
-      data.set(key, { bytes, contentType: options?.httpMetadata?.contentType });
+      data.set(key, { bytes, contentType: options?.httpMetadata?.contentType, customMetadata: options?.customMetadata });
       return { key, size: bytes.length };
     },
     async get(key: string, options?: { range?: Headers }) {
