@@ -203,6 +203,20 @@ describe('/runner', () => {
     expect((await next()).status).toBe(204);
   });
 
+  it('starts a reclaimed job without the files the earlier runner uploaded', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const { cartAdd, queue, claim, report, upload, progress, done } = world();
+    await cartAdd({ title: 'pen' });
+    const id = await queue();
+    await claim(); await report(id, progress('voice', 1)); await report(id, progress('rendering', 0.9));
+    await upload(id, 'video.mp4', video); await upload(id, 'thumbnail.jpg', thumbnail);
+    vi.advanceTimersByTime(RUNNER_LEASE_MS + 1000);
+    await claim(); await report(id, progress('voice', 1)); await report(id, progress('rendering', 0.9));
+    const stale = await report(id, done);
+    expect(stale.status).toBe(409);
+    expect(await stale.json()).toMatchObject({ error: 'missing_media' });
+  });
+
   it('never offers a finished job again', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     const { cartAdd, queue, claim, next, report } = world();

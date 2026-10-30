@@ -17,11 +17,13 @@ const claimable = ({ job, lease }: PromoRecord, now: number) => job.status === '
 /**
  * Hands the oldest claimable job to a runner and starts it over from storyboard, so a job whose runner died is made again from
  * the top. Two calls in a row never give the same job twice: the first renews its lease. The video is made from the owner's
- * price choice and nickname whether or not sharing is on.
+ * price choice and nickname whether or not sharing is on. Files the earlier runner uploaded are dropped, so done can only see
+ * this run's video.
  */
-export async function claimNext(store: Store, now = Date.now()): Promise<RunnerClaim | null> {
+export async function claimNext(store: Store, media: R2Bucket, now = Date.now()): Promise<RunnerClaim | null> {
   const record = (await store.promoQueue()).find(candidate => claimable(candidate, now));
   if (!record) return null;
+  if (record.lease) await media.delete(Object.keys(RUNNER_MEDIA).map(name => promoMediaKey(record.job.id, name as RunnerMedia)));
   const at = new Date(now).toISOString(), until = leaseFrom(now);
   const claimed: PromoRecord = { ...record, job: { ...record.job, status: 'storyboard', progress: 0, output: null, error: null, updatedAt: at }, lease: { claimedAt: at, until } };
   await store.savePromo(claimed);
@@ -96,7 +98,7 @@ export async function runnerApi(request: Request, env: Env, store: Store, pathna
   const origin = new URL(request.url).origin;
   if (pathname === '/runner/next') {
     if (request.method !== 'POST') return wrongMethod('POST');
-    const claim = await claimNext(store);
+    const claim = await claimNext(store, env.MEDIA);
     return claim ? json(claim) : new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } });
   }
   const match = jobPath.exec(pathname);

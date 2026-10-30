@@ -36,7 +36,7 @@ export function memoryBucket() {
       return object(key, entry, range);
     },
     async head(key: string) { const entry = data.get(key); return entry ? object(key, entry) : null; },
-    async delete(key: string) { data.delete(key); },
+    async delete(keys: string | string[]) { for (const key of [keys].flat()) data.delete(key); },
   };
   return bucket as typeof bucket & R2Bucket;
 }
