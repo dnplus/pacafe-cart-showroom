@@ -23,6 +23,15 @@
 .register-tag{position:absolute;transform:translate(-50%,-115%);background:#17302a;color:#b9f3a0;font-weight:900;font-variant-numeric:tabular-nums;padding:4px 10px;border-radius:8px;font-size:14px;white-space:nowrap;box-shadow:0 6px 14px #17302a40;pointer-events:auto;z-index:2}
 .register-tag::after{content:'';position:absolute;left:50%;bottom:-4px;width:9px;height:9px;background:inherit;transform:translateX(-50%) rotate(45deg);border-radius:2px}
 .shelf-target{border-radius:10px}
+.cart-hud-head>span:nth-child(2){flex:1;min-width:0}
+.cart-share{flex:none;display:inline-flex;align-items:center;gap:5px;min-height:34px;padding:0 12px;border-radius:999px;background:#e6eed9;color:var(--forest);font-weight:850;font-size:13px}
+.cart-share[aria-expanded=true]{background:var(--forest);color:#fff}
+.cart-key{margin-top:12px}
+.cart-key label{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:850}
+.cart-key .cart-note{margin-top:4px}
+.cart-key-row{display:flex;gap:8px;margin-top:8px}
+.cart-key-row input{min-height:40px;padding:8px 12px;border-radius:10px;font-size:14px}
+.cart-key-row button{flex:none;min-height:40px;padding:0 14px;border-radius:10px;background:var(--forest);color:#fff;font-weight:850;font-size:13px}
 @media(max-width:900px){
   .agent-house-app.showroom{flex-direction:column}
   .cart-hud{align-self:stretch;width:auto;margin:12px 12px 0 68px}
