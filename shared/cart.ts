@@ -1,0 +1,91 @@
+import { z } from 'zod';
+
+/**
+ * The cart is Muse 採買時記下的東西: things the owner's own Muse noted while shopping. The showroom only draws them on a
+ * shelf. It does not buy anything, has no checkout, and is not connected to Muse's shopping.
+ */
+export const SHELF_ROWS = 3;
+export const SHELF_COLUMNS = 4;
+/** Each item takes one shelf slot, in list order; fill is the share of these slots taken, capped at 1. */
+export const SHELF_SLOTS = SHELF_ROWS * SHELF_COLUMNS;
+/** The most items one write may hold; the ones past SHELF_SLOTS count in the total but have no room on the shelf. */
+export const MAX_CART_ITEMS = 50;
+
+const webUrl = z.url({ protocol: /^https?$/ }).max(2000);
+const timestamp = z.iso.datetime();
+const priceTwd = z.number().int().nonnegative().max(100_000_000);
+const qty = z.number().int().min(1).max(999);
+
+export const cartItemSchema = z.strictObject({
+  id: z.string().min(1).max(80),
+  title: z.string().min(1).max(200),
+  store: z.string().max(100).nullable(),
+  url: webUrl.nullable(),
+  priceTwd: priceTwd.nullable(),
+  imageUrl: webUrl.nullable(),
+  /** The item's image with its background removed (SAM), once that job has run. */
+  cutoutUrl: webUrl.nullable(),
+  qty,
+  addedAt: timestamp,
+  shelfSlot: z.number().int().nonnegative(),
+});
+export type CartItem = z.infer<typeof cartItemSchema>;
+
+export const cartSchema = z.strictObject({
+  revision: z.number().int().nonnegative(),
+  items: z.array(cartItemSchema),
+  totalTwd: z.number().int().nonnegative(),
+  /** How full the shelf is, 0–1. */
+  fill: z.number().min(0).max(1),
+  updatedAt: timestamp,
+});
+export type Cart = z.infer<typeof cartSchema>;
+
+/** What a writer sends for one item (qty defaults to 1); the showroom fills in the id, the time it was first seen and its shelf slot. */
+export const cartItemInputSchema = z.strictObject({
+  title: z.string().trim().min(1).max(200),
+  store: z.string().trim().min(1).max(100).optional(),
+  url: webUrl.optional(),
+  priceTwd: priceTwd.optional(),
+  imageUrl: webUrl.optional(),
+  qty: qty.default(1),
+});
+export type CartItemInput = z.output<typeof cartItemInputSchema>;
+export const cartWriteSchema = z.strictObject({ items: z.array(cartItemInputSchema).max(MAX_CART_ITEMS) });
+
+/** Everything the room shows about a cart, derived from its items alone. */
+export function cartView(items: readonly CartItem[]) {
+  const totalTwd = items.reduce((sum, item) => sum + (item.priceTwd ?? 0) * item.qty, 0);
+  return { count: items.length, totalTwd, fill: Math.min(1, items.length / SHELF_SLOTS), overflow: Math.max(0, items.length - SHELF_SLOTS) };
+}
+export type CartView = ReturnType<typeof cartView>;
+
+/** `NT$ 12,340`: how the register and the room's labels write an amount. */
+export const formatTwd = (amount: number) => `NT$ ${Math.round(amount).toLocaleString('en-US')}`;
+
+export const emptyCart = (): Cart => ({ revision: 0, items: [], totalTwd: 0, fill: 0, updatedAt: new Date(0).toISOString() });
+
+/** FNV-1a: a short, stable name for an item's identity, so the same thing keeps its id and first-seen time across writes. */
+function fingerprint(text: string) {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) { hash ^= text.charCodeAt(i); hash = Math.imul(hash, 0x01000193); }
+  return (hash >>> 0).toString(36);
+}
+
+/**
+ * The cart after a write that replaces its items: the same write twice gives back the same cart, revision included.
+ * An item keeps its id and `addedAt` while its title, store and link stay the same; slots follow the list order.
+ */
+export function replaceCart(previous: Cart, input: readonly CartItemInput[], now: string): Cart {
+  const seen = new Map<string, number>();
+  const items = input.map((entry, shelfSlot): CartItem => {
+    const identity = fingerprint(JSON.stringify([entry.title, entry.store ?? null, entry.url ?? null]));
+    const nth = seen.get(identity) ?? 0; seen.set(identity, nth + 1);
+    const id = `item-${identity}-${nth}`, before = previous.items.find(item => item.id === id);
+    return { id, title: entry.title, store: entry.store ?? null, url: entry.url ?? null, priceTwd: entry.priceTwd ?? null, imageUrl: entry.imageUrl ?? null,
+      cutoutUrl: before && before.imageUrl === (entry.imageUrl ?? null) ? before.cutoutUrl : null, qty: entry.qty, addedAt: before?.addedAt ?? now, shelfSlot };
+  });
+  if (JSON.stringify(items) === JSON.stringify(previous.items)) return previous;
+  const { totalTwd, fill } = cartView(items);
+  return { revision: previous.revision + 1, items, totalTwd, fill, updatedAt: now };
+}
