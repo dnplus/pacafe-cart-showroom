@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { isFinished, promoJobSchema, type PromoJob } from '../../shared/promo';
+import { promoJobSchema, type PromoJob } from '../../shared/promo';
 import { ownerFetch } from '../owner';
 
 export const PROMO_POLL_MS = 3000;
@@ -14,28 +14,26 @@ export interface PromoState {
 }
 
 /**
- * The latest video job from /api/promo: read once on mount, then every PROMO_POLL_MS while it is still being made, and stopped
- * at done or failed. `queue` asks the worker for a new job and starts polling it.
+ * The latest video job from /api/promo, read every PROMO_POLL_MS. Polling goes on past done or failed, because a resident can
+ * queue the next job through MCP while the room is open. `queue` asks the worker for a new job and reads it at once.
  */
 export function usePromo(intervalMs = PROMO_POLL_MS): PromoState & { queue: () => Promise<void> } {
   const [state, setState] = useState<PromoState>({ job: undefined, offline: false, queueing: false, queueFailed: false });
   const [round, setRound] = useState(0);
   useEffect(() => {
-    const controller = new AbortController(); let timer: ReturnType<typeof setTimeout> | undefined, working = false;
+    const controller = new AbortController(); let timer: ReturnType<typeof setTimeout> | undefined;
     const poll = async () => {
       try {
         const response = await ownerFetch('/api/promo', { signal: controller.signal });
         if (!response.ok) throw new Error(`GET /api/promo answered ${response.status}`);
         const job = promoJobSchema.nullable().parse(await response.json());
-        working = job !== null && !isFinished(job);
         setState(previous => ({ ...previous, job, offline: false }));
       } catch (error) {
         if (controller.signal.aborted) return;
         console.warn(error);
-        working = true;
         setState(previous => ({ ...previous, offline: true }));
       }
-      if (!controller.signal.aborted && working) timer = setTimeout(poll, intervalMs);
+      if (!controller.signal.aborted) timer = setTimeout(poll, intervalMs);
     };
     void poll();
     return () => { controller.abort(); clearTimeout(timer); };
