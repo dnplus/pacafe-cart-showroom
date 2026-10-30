@@ -1,12 +1,13 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { floorTop as FLOOR } from '../../shared/room-dimensions';
+import { SHELF_COLUMNS, SHELF_ROWS } from '../../shared/cart';
 import type { FurnitureItem } from './furniture';
 
 export interface FurnitureModel { node: THREE.Group; dispose(): void }
 
 /** The cart shelf's boards in its own frame: the origin hangs `hang.depth` off the wall, centred on the shelf. */
-export const shelfFrame = { width: 2.6, height: 1.95, depth: .34, back: -.18, rows: 3, columns: 4, board: .05, firstBoard: -.95, rowPitch: .605 } as const;
+export const shelfFrame = { width: 3.2, height: 2.4, depth: .38, back: -.18, rows: SHELF_ROWS, columns: SHELF_COLUMNS, board: .05, firstBoard: -1.175, rowPitch: 2.265 / SHELF_ROWS } as const;
 
 function kit() {
   const geometries = new Set<THREE.BufferGeometry>(), materials = new Map<string, THREE.MeshStandardMaterial>();

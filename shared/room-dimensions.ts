@@ -5,7 +5,8 @@ interface RoomRect { minX: number; maxX: number; minZ: number; maxZ: number }
 const round = (value: number) => Math.round(value * 1000) / 1000;
 export const insetRoomRect = (rect: RoomRect, x: number, z = x): RoomRect => ({ minX: round(rect.minX + x), maxX: round(rect.maxX - x), minZ: round(rect.minZ + z), maxZ: round(rect.maxZ - z) });
 
-export const roomFloor: RoomRect = { minX: -6.9, maxX: 6.9, minZ: -5.4, maxZ: 8.4 };
+// The showroom is the shop corner of pa-cafe's floor: the counter and shelf on the right, the studio set on the left.
+export const roomFloor: RoomRect = { minX: -5.2, maxX: 5.4, minZ: -5.4, maxZ: 1.6 };
 /** The planks' top face: floor-standing furniture, the studio set and a seated host's seat heights start here. */
 export const floorTop = .2225;
 export const roomSize = {

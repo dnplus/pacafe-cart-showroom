@@ -1,0 +1,39 @@
+.agent-house-app.showroom{flex-direction:row-reverse}
+.showroom>.world-stage{min-width:0}
+.cart-hud{flex:none;align-self:flex-start;margin:16px 16px 0 0;z-index:3;width:340px;background:#fffdf5f0;border:1px solid #e6dcc5;border-radius:18px;box-shadow:0 10px 30px #3e45231f;padding:14px 16px;color:var(--ink);backdrop-filter:blur(6px)}
+.cart-hud-head{display:flex;gap:10px;align-items:center}
+.cart-hud-mark{flex:none;width:34px;height:34px;border-radius:11px;background:#dbe4cb;display:grid;place-items:center;color:var(--forest)}
+.cart-hud-head strong{display:block;font-size:16px;font-weight:900;letter-spacing:-.2px}
+.cart-hud-head small{display:block;font-size:12px;color:var(--muted);font-weight:750}
+.cart-stats{display:grid;grid-template-columns:auto 1fr auto;gap:8px;margin:12px 0 0}
+.cart-stats>div{background:#f5efe0;border-radius:12px;padding:8px 10px;min-width:0}
+.cart-stats dt{font-size:11px;color:var(--muted);font-weight:800}
+.cart-stats dd{margin:2px 0 0;font-size:18px;font-weight:900;font-variant-numeric:tabular-nums;white-space:nowrap}
+.cart-fill{display:block;height:5px;border-radius:5px;background:#e3dcc8;margin-top:5px;overflow:hidden}
+.cart-fill i{display:block;height:100%;background:#d98b5f;border-radius:5px;transition:width .4s}
+.cart-note{margin:10px 0 0;font-size:12px;color:#8a6c4a;line-height:1.45}
+.cart-offline{color:#9f533e}
+.cart-toggle{margin-top:8px;display:flex;align-items:center;gap:4px;background:transparent;color:var(--forest);font-weight:850;font-size:13px;padding:4px 0;min-height:32px}
+.cart-list{list-style:none;margin:4px 0 0;padding:0;max-height:min(260px,40dvh);overflow:auto;border-top:1px solid #ece4d0}
+.cart-list li{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px dashed #ece4d0;font-size:13px;font-weight:750}
+.cart-line-title{min-width:0;overflow-wrap:anywhere}
+.cart-line-title small,.cart-line-price small{display:block;font-size:11px;color:var(--muted);font-weight:700}
+.cart-line-price{text-align:right;font-weight:850;white-space:nowrap;font-variant-numeric:tabular-nums}
+.cart-disclaimer{margin:10px 0 0;font-size:11px;line-height:1.45;color:#8d8f7a}
+.register-tag{position:absolute;transform:translate(-50%,-115%);background:#17302a;color:#b9f3a0;font-weight:900;font-variant-numeric:tabular-nums;padding:4px 10px;border-radius:8px;font-size:14px;white-space:nowrap;box-shadow:0 6px 14px #17302a40;pointer-events:auto;z-index:2}
+.register-tag::after{content:'';position:absolute;left:50%;bottom:-4px;width:9px;height:9px;background:inherit;transform:translateX(-50%) rotate(45deg);border-radius:2px}
+.shelf-target{border-radius:10px}
+@media(max-width:900px){
+  .agent-house-app.showroom{flex-direction:column}
+  .cart-hud{align-self:stretch;width:auto;margin:12px 12px 0 68px}
+}
+@media(max-width:700px){
+  .cart-hud{padding:10px 12px;border-radius:16px}
+  .cart-hud-mark{width:28px;height:28px;border-radius:9px}
+  .cart-hud-head strong{font-size:14px}
+  .cart-stats{margin-top:8px;gap:6px}
+  .cart-stats>div{padding:6px 8px;border-radius:10px}
+  .cart-stats dd{font-size:15px}
+  .cart-disclaimer{font-size:10px;margin-top:8px}
+  .register-tag{font-size:12px;padding:3px 8px}
+}

@@ -6,8 +6,8 @@ const roomBounds = [
   ...[minX - .05, maxX + .05].flatMap(x => [minZ - .05, maxZ + .05].flatMap(z => [-.46, .18].map(y => new Vector3(x, y, z)))),
   new Vector3(minX, roomWalls.top, minZ - .05), new Vector3(maxX, roomWalls.top, minZ - .05), new Vector3(minX, roomWalls.top, maxZ),
 ];
-// Low enough that the taller square room still fits a 1200×630 share-card crop of a 1440×900 view.
-const maxRoomPixelsPerUnit = 54;
+// Caps how close the default view comes on a large screen, so the shop never fills it edge to edge.
+const maxRoomPixelsPerUnit = 110;
 // The square room frames smaller on phones, so close-ups may zoom further than the old 3×.
 const maxRoomZoom = 3.5;
 export const clampRoomZoom = (zoom: number) => Math.max(1, Math.min(maxRoomZoom, zoom));
@@ -16,19 +16,19 @@ export const maxRoomAngle = .5;
 export const clampRoomAngle = (angle: number) => Math.max(minRoomAngle, Math.min(maxRoomAngle, angle));
 export const roomFov = 24;
 const MARGIN = 1.06;
-const centre = new Box3().setFromPoints(roomBounds).getCenter(new Vector3());
 
 interface RoomView { target: Vector3; halfW: number; halfH: number }
 
-export function frameRoom(camera: PerspectiveCamera, width: number, height: number, angle = 0): RoomView | null {
+/** Fits `bounds` (the whole room unless given) into a `width`×`height` view from the room's corner angle. */
+export function frameRoom(camera: PerspectiveCamera, width: number, height: number, angle = 0, bounds: readonly Vector3[] = roomBounds): RoomView | null {
   if (width <= 0 || height <= 0) return null;
   camera.zoom = 1; camera.fov = roomFov; camera.aspect = width / height; camera.near = .5; camera.far = 400; camera.updateProjectionMatrix();
   const yaw = Math.PI / 4 + clampRoomAngle(angle);
   const direction = new Vector3(Math.sin(yaw), 1 / Math.sqrt(3), Math.cos(yaw)).normalize();
   const tan = Math.tan(roomFov * Math.PI / 360);
-  const target = centre.clone();
+  const target = new Box3().setFromPoints([...bounds]).getCenter(new Vector3());
   const place = (distance: number) => { camera.position.copy(target).addScaledVector(direction, distance); camera.lookAt(target); camera.updateMatrixWorld(); };
-  const projected = () => roomBounds.map(point => point.clone().project(camera));
+  const projected = () => bounds.map(point => point.clone().project(camera));
   let distance = 40;
   for (let pass = 0; pass < 3; pass++) {
     let near = 4, far = 400;

@@ -13,6 +13,8 @@ import { clampRoomAngle, clampRoomZoom, frameRoom, roomFov } from './roomCamera'
 import type { SceneryId } from '../../shared/scenery';
 import { barSpots, defaultFurniture, interactionsOf, pieces as catalog, type FurnitureItem, type FurnitureKind } from './furniture';
 import { furnitureModel, type FurnitureModel } from './furnitureModels';
+import { cartScene, registerText } from '../cart/cartScene';
+import type { CartItem } from '../../shared/cart';
 import { hangOnWall } from './pieces';
 import { cameraView, Card, dress, frameOf, illustrationFrame, measureImage, orientCard, releaseCardPlane, singleLayout, standeeMaterial, type Layout, type StandeeUniforms } from './standee';
 import { baristaBodies } from './barista';
@@ -26,12 +28,12 @@ import type { RoomFinishChoice } from '../../shared/room-finishes';
 import { glowLayer, type GlowTone } from './glow';
 
 export interface Anchor { x: number; y: number; scale: number; width?: number; height?: number }
-export interface RoomAnchors { counter: Anchor; barista: Anchor }
-export type GlowTarget = 'counter';
+export interface RoomAnchors { counter: Anchor; barista: Anchor; shelf: Anchor; register: Anchor }
+export type GlowTarget = 'counter' | 'shelf';
 export interface CameraView { angle: number; zoom: number; panX: number; panY: number }
 export interface RoomDebugApi { scene: THREE.Scene; camera: THREE.PerspectiveCamera; renderer: THREE.WebGLRenderer; render(): void; actor: THREE.Object3D }
 export type RoomDebugHook = (api: RoomDebugApi) => void;
-export interface RoomRenderer { brightness(value: number): void; finish?(choice: RoomFinishChoice): void; update(scenery: SceneryId): void; motion(paused: boolean): void; graphics?(profile: GraphicsProfile): void; sleep?(asleep: boolean): void; open(listener: (panel: 'counter') => void): void; barista(character: Character, appearance?: BaristaAppearance): void; view(angle: number): void; zoomAt(factor: number, clientX: number, clientY: number): void; zoomBy(factor: number): void; panBy(dx: number, dy: number): void; resetView(): void; cameraView?(): CameraView; restoreView?(view: CameraView): void; glowTarget(target: GlowTarget, reason: 'hover' | 'focus', on: boolean): void; present?(spot: string | null): void; shoot?(shot: PresenterShot | null): void; studioSet?(set: StudioSet | null): void; perform?(act: PerformanceAct, elapsed: number): void; furniture(items: FurnitureItem[]): void; capture?(width: number, height: number, background: string): HTMLCanvasElement | null; pokeAt(clientX: number, clientY: number): string | null; dispose(): void }
+export interface RoomRenderer { brightness(value: number): void; finish?(choice: RoomFinishChoice): void; update(scenery: SceneryId): void; motion(paused: boolean): void; graphics?(profile: GraphicsProfile): void; sleep?(asleep: boolean): void; open(listener: (panel: 'counter') => void): void; barista(character: Character, appearance?: BaristaAppearance): void; view(angle: number): void; zoomAt(factor: number, clientX: number, clientY: number): void; zoomBy(factor: number): void; panBy(dx: number, dy: number): void; resetView(): void; cameraView?(): CameraView; restoreView?(view: CameraView): void; glowTarget(target: GlowTarget, reason: 'hover' | 'focus', on: boolean): void; present?(spot: string | null): void; shoot?(shot: PresenterShot | null): void; studioSet?(set: StudioSet | null): void; perform?(act: PerformanceAct, elapsed: number): void; furniture(items: FurnitureItem[]): void; /** Puts the cart's items on the shelf and its total on the register. */ cart(items: readonly CartItem[]): void; capture?(width: number, height: number, background: string): HTMLCanvasElement | null; pokeAt(clientX: number, clientY: number): string | null; dispose(): void }
 
 
 /** A front camera on the presenter: the script's zoom 1–3, and how far it has turned from the host (0) to the spot's desk (1). */
@@ -100,12 +102,13 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
   const live = new Map<string, LivePiece>();
   let lightingDirty = true;
   const glow = glowLayer(); let hovered: string | null = null;
-  const targetLit: Record<GlowTarget, Set<'hover' | 'focus'>> = { counter: new Set() };
+  const targetLit: Record<GlowTarget, Set<'hover' | 'focus'>> = { counter: new Set(), shelf: new Set() };
   function placeGlow() {
     const targets = new Map<THREE.Object3D, GlowTone>();
     const light = (pieceId: string | null | undefined, as: GlowTone) => { const node = pieceId ? live.get(pieceId)?.node : undefined; if (node && !targets.has(node)) targets.set(node, as); };
     const piece = (kind: FurnitureKind) => furniture.find(entry => entry.kind === kind && !entry.stowed)?.id;
     if (targetLit.counter.size) light(piece('bar'), 'ok');
+    if (targetLit.shelf.size) light(piece('beanShelf'), 'ok');
     light(hovered, 'hover');
     glow.set(targets);
   }
@@ -124,6 +127,15 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
   function dropPiece(piece: LivePiece) { glow.invalidate(piece.node); piece.model.dispose(); live.delete(piece.item.id); }
   let bar = barSpots(furniture);
   let counter = { ...bar.counter };
+  const cart = cartScene(); group.add(cart.register);
+  const shelfPiece = () => [...live.values()].find(piece => piece.item.kind === 'beanShelf');
+  /** The products ride on the shelf and the register on the bar, so a tap on either counts as that piece. */
+  function seatCart() {
+    const shelf = shelfPiece(), barPiece = [...live.values()].find(piece => piece.item.kind === 'bar');
+    if (shelf) { shelf.node.add(cart.products); cart.products.traverse(part => { part.userData.pieceId = shelf.item.id; }); } else cart.products.removeFromParent();
+    cart.register.visible = Boolean(barPiece); cart.register.position.set(bar.register.x, bar.register.y, bar.register.z); cart.register.rotation.y = -bar.register.turn * Math.PI / 2;
+    cart.register.traverse(part => { part.userData.pieceId = barPiece?.item.id; });
+  }
   function layFurniture(items: readonly FurnitureItem[]) {
     lightingDirty = true;
     furniture = [...items]; layoutKey = JSON.stringify(items);
@@ -135,7 +147,7 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
       piece.item = item; placePiece(item, piece.node);
     }
     bar = barSpots(furniture); counter = { ...bar.counter };
-    placeBarista(); placeGlow(); renderer.shadowMap.needsUpdate = true;
+    seatCart(); placeBarista(); placeGlow(); renderer.shadowMap.needsUpdate = true;
   }
   function mergeStatic(root: THREE.Object3D, keep: Set<THREE.Object3D>) {
     root.updateMatrixWorld(true); const inverse = root.matrixWorld.clone().invert();
@@ -184,9 +196,9 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
   function size(sprite: Card, width: number, height: number, top = height) { sprite.scale.set(width, height, 1); sprite.userData.base = { width, height, top }; }
   const baseSize = (sprite: Card): { width: number; height: number; top: number } => sprite.userData.base ?? { width: 2, height: 2, top: 2 };
   const layouts = new Map<string, Layout>();
-  function measured(path: string, image: HTMLImageElement) {
+  function measured(path: string, image: HTMLImageElement, height?: number) {
     let layout = layouts.get(path);
-    if (!layout) { layout = singleLayout(measureImage(image, 1, 1, [[0, 0]]), image.width, image.height); layouts.set(path, layout); }
+    if (!layout) { layout = singleLayout(measureImage(image, 1, 1, [[0, 0]]), image.width, image.height, height); layouts.set(path, layout); }
     return layout;
   }
   /** Illustrations need minification filtering, so the one image is drawn into its own frame texture with mipmaps. */
@@ -226,7 +238,7 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
   }
   let baristaLook: Character = 'clerk'; let baristaOwn: BaristaAppearance | undefined;
   function dressBarista() {
-    const path = baristaBodies(baristaLook, baristaOwn).find(src => !failed.has(src));
+    const body = baristaBodies(baristaLook, baristaOwn).find(entry => !failed.has(entry.src)), path = body?.src;
     if (!path || baristaStand.userData.character !== path) {
       baristaStand.visible = false; delete baristaStand.userData.character;
       host.dataset.baristaSource = path ? 'loading' : 'unavailable';
@@ -235,7 +247,7 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
     const source = avatarTexture(path); const image = source.image as HTMLImageElement | undefined;
     if (!image) return;
     if (baristaStand.userData.character !== path) {
-      wear(baristaStand, source, measured(path, image));
+      wear(baristaStand, source, measured(path, image, body?.height));
       (baristaStand.userData.uniforms as StandeeUniforms).tint.value.set(light_.tint);
       baristaStand.userData.character = path; placeBarista();
     }
@@ -271,7 +283,7 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
     studioSet = value; const generation = ++setGeneration; setView?.dispose(); setView = undefined;
     if (value) void studioSetVisual(value).then(view => {
       if (disposed || generation !== setGeneration) { view.dispose(); return; }
-      setView = view; group.add(view.root); renderer.shadowMap.needsUpdate = true; host.dataset.studioSet = value.preset; anchors(); render();
+      setView = view; group.add(view.root); renderer.shadowMap.needsUpdate = true; host.dataset.studioSet = value.preset; frameCamera(); anchors(); render();
     }, () => { if (!disposed && generation === setGeneration) host.dataset.studioSetError = 'The studio set could not be loaded.'; });
     presenterPlace = null;
     if (built) { placeBarista(); anchors(); render(); }
@@ -299,8 +311,16 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
     const left = project(new THREE.Vector3(v.x, v.y + 1, v.z - width / 2)), right = project(new THREE.Vector3(v.x, v.y + 1, v.z + width / 2));
     return { ...head, width: Math.max(4, Math.abs(right.x - left.x)), height: Math.abs(foot.y - head.y) };
   }
+  /** The screen box around a node, in percent of the canvas. */
+  function boxAnchor(node: THREE.Object3D | undefined): Anchor {
+    if (!node) return { x: 50, y: 30, width: 10, height: 10, scale: 1 };
+    group.updateMatrixWorld(true); const box = new THREE.Box3().setFromObject(node);
+    const corners = [0, 1].flatMap(x => [0, 1].flatMap(y => [0, 1].map(z => project(new THREE.Vector3(x ? box.max.x : box.min.x, y ? box.max.y : box.min.y, z ? box.max.z : box.min.z)))));
+    const xs = corners.map(p => p.x), ys = corners.map(p => p.y);
+    return { x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys), scale: 1 };
+  }
   function anchors() {
-    onAnchors({ counter: counterAnchor(), barista: baristaAnchor() });
+    onAnchors({ counter: counterAnchor(), barista: baristaAnchor(), shelf: boxAnchor(shelfPiece()?.node), register: boxAnchor(cart.register) });
   }
   /**
    * The talk-show camera: level with a seated host's face, a little above it, looking at the set from the front (+z).
@@ -318,11 +338,19 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
     host.dataset.camera = JSON.stringify({ position: camera.position.toArray(), projection: camera.projectionMatrix.toArray(), presenter: shot });
     return true;
   }
+  /** What the default view frames: on a phone the counter and shelf, on wider screens the whole shop and the studio set. */
+  function framingPoints() {
+    const box = new THREE.Box3(), narrow = host.clientWidth < 700;
+    for (const piece of live.values()) if (!narrow || piece.item.kind === 'bar' || piece.item.kind === 'beanShelf') box.expandByObject(piece.node);
+    if (!narrow && setView) box.expandByObject(setView.root);
+    if (box.isEmpty()) return undefined;
+    return [0, 1].flatMap(x => [0, 1].flatMap(y => [0, 1].map(z => new THREE.Vector3(x ? box.max.x : box.min.x, y ? box.max.y : box.min.y, z ? box.max.z : box.min.z))));
+  }
   function frameCamera() {
     const width = host.clientWidth, height = host.clientHeight;
     if (!width || !height) return;
     if (presenterShot && shootPresenter(presenterShot, width, height)) return;
-    const size = framed(width, height), view = frameRoom(camera, size.width, size.height, cameraAngle); if (!view) return;
+    const size = framed(width, height), view = frameRoom(camera, size.width, size.height, cameraAngle, framingPoints()); if (!view) return;
     const { halfW, halfH } = view, slack = 1 - 1 / cameraZoom;
     cameraPanX = Math.max(-halfW * slack, Math.min(halfW * slack, cameraPanX));
     cameraPanY = Math.max(-halfH * slack, Math.min(halfH * slack, cameraPanY));
@@ -342,7 +370,7 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
   }
   function zoomAt(factor: number, clientX: number, clientY: number) {
     const rect = host.getBoundingClientRect(); if (!rect.width || !rect.height) return;
-    const size = framed(rect.width, rect.height), view = frameRoom(camera, size.width, size.height, cameraAngle); if (!view) return;
+    const size = framed(rect.width, rect.height), view = frameRoom(camera, size.width, size.height, cameraAngle, framingPoints()); if (!view) return;
     const next = clampRoomZoom(cameraZoom * factor); if (next === cameraZoom) return;
     const { halfW, halfH } = view;
     const nx = (clientX - rect.left) / rect.width * 2 - 1, ny = 1 - (clientY - rect.top) / rect.height * 2;
@@ -352,7 +380,7 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
   }
   function panBy(dx: number, dy: number) {
     const rect = host.getBoundingClientRect(); if (!rect.width || !rect.height) return;
-    const size = framed(rect.width, rect.height), view = frameRoom(camera, size.width, size.height, cameraAngle); if (!view) return;
+    const size = framed(rect.width, rect.height), view = frameRoom(camera, size.width, size.height, cameraAngle, framingPoints()); if (!view) return;
     cameraPanX -= dx * view.halfW * 2 / rect.width / cameraZoom;
     cameraPanY += dy * view.halfH * 2 / rect.height / cameraZoom;
     frameCamera(); anchors(); render();
@@ -464,8 +492,13 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
       if (act !== presenting.act || Math.abs((now - presenting.since) / 1000 - elapsed) > .25) { presenting = { ...presenting, act, since: now - elapsed * 1000 }; placeBarista(); }
     },
     furniture(items) {
-      if (JSON.stringify(items) !== layoutKey) layFurniture(items);
+      if (JSON.stringify(items) !== layoutKey) { layFurniture(items); frameCamera(); }
       anchors(); render();
+    },
+    cart(items) {
+      if (cart.show(items)) { const shelf = shelfPiece(); if (shelf) glow.invalidate(shelf.node); seatCart(); placeGlow(); }
+      host.dataset.cartShelf = String(cart.products.userData.count ?? 0); host.dataset.register = registerText(items);
+      renderer.shadowMap.needsUpdate = true; anchors(); render();
     },
     motion(next) { paused = next; },
     graphics(next) { if (!disposed && next !== graphics) applyGraphics(next); },
@@ -513,7 +546,7 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
       let lut: THREE.Texture | undefined;
       scene.traverse(node => { if (!lut && node instanceof THREE.Mesh) for (const material of [node.material].flat()) lut ??= (renderer.properties?.get(material) as { uniforms?: { dfgLUT?: { value?: THREE.Texture } } } | undefined)?.uniforms?.dfgLUT?.value; });
       lut?.dispose();
-      surfaces.dispose(); disposed = true; cancelAnimationFrame(frame); sighting?.disconnect(); document.removeEventListener('visibilitychange', visibilityChanged); observer.disconnect(); renderer.domElement.removeEventListener('webglcontextlost', contextLost); renderer.domElement.removeEventListener('pointermove', hoverMove); renderer.domElement.removeEventListener('pointerleave', hoverLeave); glow.dispose(); light.dispose(); live.forEach(piece => piece.model.dispose()); live.clear(); geometries.forEach(g => g.dispose()); materials.forEach(m => m.dispose()); textures.forEach(t => t.dispose()); releaseCardPlane(); renderer.dispose();
+      surfaces.dispose(); disposed = true; cancelAnimationFrame(frame); sighting?.disconnect(); document.removeEventListener('visibilitychange', visibilityChanged); observer.disconnect(); renderer.domElement.removeEventListener('webglcontextlost', contextLost); renderer.domElement.removeEventListener('pointermove', hoverMove); renderer.domElement.removeEventListener('pointerleave', hoverLeave); glow.dispose(); light.dispose(); cart.dispose(); live.forEach(piece => piece.model.dispose()); live.clear(); geometries.forEach(g => g.dispose()); materials.forEach(m => m.dispose()); textures.forEach(t => t.dispose()); releaseCardPlane(); renderer.dispose();
       // Give the GPU context back now rather than at garbage collection: browsers allow only a handful at once.
       try { renderer.forceContextLoss(); } catch {}
       renderer.domElement.remove(); },
