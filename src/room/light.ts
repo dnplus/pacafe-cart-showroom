@@ -1,4 +1,3 @@
-import { createWindowOcclusion } from './windowOcclusionExperiment';
 import { updateWindowGlass, windowGlass } from './windowGlass';
 import { createWindowBeam } from './windowBeam';
 import { apertureTriangles } from './windowTransmission';
@@ -55,17 +54,17 @@ export function buildLight(scene: THREE.Scene, renderer: THREE.WebGLRenderer, gr
   ]);
   const wallBands=decal(bands, bandMap, track, THREE.NormalBlending, '#4a3523', .2);group.add(wallBands);
 
-  const patches = new Map<string, { mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>; texture: THREE.CanvasTexture; canvas: HTMLCanvasElement; beam: ReturnType<typeof createWindowBeam>; occlusion?: ReturnType<typeof createWindowOcclusion> }>();
+  const patches = new Map<string, { mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>; texture: THREE.CanvasTexture; canvas: HTMLCanvasElement; beam: ReturnType<typeof createWindowBeam> }>();
   const patchRoot = new THREE.Group(); scene.add(patchRoot);
   const warm = new THREE.Color();
-  function update(d: Daylight, windows: readonly WindowAnchor[], tint: string, brightness = 1, blockers: THREE.Object3D[] = []) {
+  function update(d: Daylight, windows: readonly WindowAnchor[], tint: string, brightness = 1) {
     const lighting = windowLighting(d, windows, brightness);
     sun.color.set(lighting.key).multiply(warm.set(tint)); sun.intensity = lighting.keyIntensity;
     sun.position.set(...lighting.position); sun.target.position.set(...lighting.target); fitShadow();
     hemi.color.set(lighting.sky); hemi.groundColor.set(lighting.ground); hemi.intensity = lighting.hemi;
     fill.color.set(lighting.fill); fill.intensity = lighting.fillIntensity; scene.environmentIntensity = lighting.environment;
     const ray = new THREE.Vector3(...lighting.target).sub(new THREE.Vector3(...lighting.position)).normalize();
-    for (const [id, patch] of patches) if (!windows.some(window => window.id === id)) { patch.mesh.removeFromParent(); patch.mesh.geometry.dispose(); patch.mesh.material.dispose(); patch.texture.dispose(); patch.beam.dispose(); patch.occlusion?.dispose(); patches.delete(id); }
+    for (const [id, patch] of patches) if (!windows.some(window => window.id === id)) { patch.mesh.removeFromParent(); patch.mesh.geometry.dispose(); patch.mesh.material.dispose(); patch.texture.dispose(); patch.beam.dispose(); patches.delete(id); }
     for (const window of windows) {
       let patch = patches.get(window.id);
       if (!patch) {
@@ -80,7 +79,6 @@ export function buildLight(scene: THREE.Scene, renderer: THREE.WebGLRenderer, gr
         const mesh = new THREE.Mesh(geometry, material); mesh.name = `window-transmission:${window.id}`; mesh.renderOrder = 1; mesh.frustumCulled = false; mesh.receiveShadow = true;
         const beam = createWindowBeam(texture); beam.mesh.name = `window-beam:${window.id}`; patchRoot.add(beam.mesh);
         patch = { mesh, texture, canvas, beam };
-        if (new URLSearchParams(location.search).has('occlusion') && patches.size < 4) { patch.occlusion = createWindowOcclusion(); patchRoot.add(patch.occlusion.surface); }
         patches.set(window.id, patch); patchRoot.add(mesh);
       }
       const glass = windowGlass(window.kind ?? '');
@@ -103,11 +101,6 @@ export function buildLight(scene: THREE.Scene, renderer: THREE.WebGLRenderer, gr
         }
         context.globalCompositeOperation = 'source-over';
       }
-      if (patch.occlusion) {
-        const measured = patch.occlusion.update(patch.canvas,window,ray,blockers,transmittedColor,patch.mesh.visible ? projection.opacity : 0);
-        Object.assign(patch.beam.mesh.material.uniforms,{aperture:{value:patch.occlusion.aperture},blockerDepth:{value:patch.occlusion.depth},occlusionEnabled:{value:1}});
-        scene.userData.windowOcclusion=measured;
-      }
       patch.texture.needsUpdate = true;
       patch.beam.update(window, ray, patch.mesh.visible ? projection.opacity : 0, `#${transmittedColor.getHexString()}`);
       const position = patch.mesh.geometry.getAttribute('position'), uv = patch.mesh.geometry.getAttribute('uv'), color = patch.mesh.geometry.getAttribute('color');
@@ -120,7 +113,7 @@ export function buildLight(scene: THREE.Scene, renderer: THREE.WebGLRenderer, gr
     }
     return lighting;
   }
-  function dispose() { for (const patch of patches.values()) { patch.mesh.geometry.dispose(); patch.mesh.material.dispose(); patch.texture.dispose(); patch.beam.dispose(); patch.occlusion?.dispose(); } patches.clear(); patchRoot.removeFromParent(); }
+  function dispose() { for (const patch of patches.values()) { patch.mesh.geometry.dispose(); patch.mesh.material.dispose(); patch.texture.dispose(); patch.beam.dispose(); } patches.clear(); patchRoot.removeFromParent(); }
   return { hemi, sun, fill, update, dispose, shadowDetail, openings(active:boolean){ wallBands.visible=!active;patchRoot.visible=!active; } };
 }
 

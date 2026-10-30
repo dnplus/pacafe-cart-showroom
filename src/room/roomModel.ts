@@ -2,9 +2,6 @@ import { baristaPresenterStep, baristaRoomCell, baristaRoomStep } from './barist
 import { SEATED_SHEET } from '../../shared/media';
 import { SEATING_FLOOR_Y } from '../../shared/seating-profiles';
 import { ownerSenderId } from '../../shared/domain';
-import { OcclusionPoses } from './occlusionPoses';
-import { mirrorSpritesExperiment } from './mirrorSpritesExperiment';
-import { installWindowMirror } from './windowMirrorExperiment';
 import { prepareWindowTransmission } from './windowTransmission';
 import { packForAction, seatedPackOf } from '../../shared/seated-sheet';
 import { layeredNavigation } from './floorNavigation';
@@ -89,9 +86,6 @@ export interface RoomRenderer { placementFurniture?(items?: readonly FurnitureIt
 export interface PresenterShot { zoom: number; toward: number }
 
 export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors) => void, onReady: () => void, onFailure: () => void, options: { activeFloor?: FloorId; stairways?: FurnitureItem[]; floorView?: FloorSceneView; persistLights?: boolean; furniture?: FurnitureItem[]; placementFurniture?: readonly FurnitureItem[]; coveredFurniture?: readonly string[]; appearance?: RoomAppearance; brightness?: number; status?(coverage: FurnitureCoverage): void; debug?: RoomDebugHook; graphics?: GraphicsProfile; frameHeight?: number; studioSet?: StudioSet | null }): RoomRenderer {
-  const mirrorEnabled = new URLSearchParams(location.search).has('mirror');
-  const legacyMirrorEnabled = new URLSearchParams(location.search).has('legacyMirror');
-  const occlusionEnabled = new URLSearchParams(location.search).has('occlusion');
   let floorView = options.floorView;
   // A canvas framed as if it were `frameHeight` CSS pixels tall: the camera's distance cap and the wall boards' phone layout follow that size, not the real one.
   const framed = (width: number, height: number) => options.frameHeight ? { width: width * options.frameHeight / height, height: options.frameHeight } : { width, height };
@@ -183,8 +177,6 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
   };
   type LivePiece = { item: FurnitureItem; node: THREE.Group; view: FurnitureVisual; key: string; index: number; poked: number };
   const live = new Map<string, LivePiece>();
-  const blockerPoses = new OcclusionPoses();
-  const lightingBlockers = () => occlusionEnabled ? [...live.values()].filter(piece => !isWindowFurniture(piece.item.kind)).map(piece => piece.node) : [];
   let preferences: Storage | undefined;
   try { if (options.persistLights !== false) preferences = localStorage; } catch { preferences = undefined; }
   const lamps = new FurnitureLighting(scene, preferences);
@@ -252,7 +244,7 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
     return on;
   }
   function placePiece(item: FurnitureItem, node: THREE.Group, host?: FurnitureItem) {
-    if (isWindowFurniture(item.kind) || occlusionEnabled) lightingDirty = true;
+    if (isWindowFurniture(item.kind)) lightingDirty = true;
     const spec = catalog[item.kind];
     if (spec.mount === 'wall') { hangOnWall(node, item.wall ?? 'back', item.wall === 'left' ? item.z : item.x, spec.hang!); return; }
     const at = spec.mount === 'surface' ? slotOf(item, furniture, host) : null;
@@ -266,9 +258,8 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
       id: item.id, models,
       asset: (node, asset) => {
         const disposeGlass = isWindowFurniture(piece.item.kind) ? prepareWindowTransmission(node) : undefined;
-        const disposeMirror = mirrorEnabled && piece.item.kind === 'collect_terra_window_panorama' && !scene.getObjectByName('experiment-planar-mirror') ? installWindowMirror(node, camera => legacyMirrorEnabled ? () => {} : mirrorSprites.prepare([...sprites, baristaStand], camera)) : undefined;
-        try { const view = assetFurnitureView(piece.item, node, overlayShared, asset); return { ...view, dispose() { view.dispose(); disposeGlass?.(); disposeMirror?.(); } }; }
-        catch (error) { disposeGlass?.(); disposeMirror?.(); throw error; }
+        try { const view = assetFurnitureView(piece.item, node, overlayShared, asset); return { ...view, dispose() { view.dispose(); disposeGlass?.(); } }; }
+        catch (error) { disposeGlass?.(); throw error; }
       },
       marker: status => furnitureMarker(catalog[piece.item.kind], status),
       beforeSwap: () => glow.invalidate(view.node),
@@ -395,7 +386,6 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
   }
   const textureLoader = new THREE.TextureLoader();
   const actionCards: ReturnType<typeof furnitureActionCard>[] = [];
-  const mirrorSprites = mirrorSpritesExperiment();
   const sprites: Card[] = []; const shadows: THREE.Mesh[] = []; const bases: THREE.Mesh[] = [];
   const acrylic = new THREE.MeshBasicMaterial({ map: acrylicTexture(), transparent: true, depthWrite: false, toneMapped: false }); materials.add(acrylic); textures.add(acrylic.map!);
   const maps = new Map<string, THREE.Texture>();
@@ -791,12 +781,8 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
   }
   function prepareFrame() {
     if (lightingDirty) windows = placedWindows(live.values());
-    const blockers = lightingBlockers();
-    if (occlusionEnabled && windows.length && light_.sunIntensity > .6) {
-      if (blockerPoses.changed(blockers)) lightingDirty = true;
-    } else blockerPoses.clear();
     if (lightingDirty) {
-      light.update(light_, windows, theme.light, roomBrightness, blockers); lightingDirty = false;
+      light.update(light_, windows, theme.light, roomBrightness); lightingDirty = false;
       renderer.shadowMap.needsUpdate = true;
     }
     lamps.place();
@@ -1038,9 +1024,6 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
       orientCard(sprite, view, calm ? 1 : Math.min(1, dt * 12)); const facing = !sprite.userData.sheet && cardFacing(result.facing, view) === 'W' ? -1 : 1;
       sprite.flip = calm ? facing : sprite.flip + Math.max(-dt * 16, Math.min(dt * 16, facing - sprite.flip));
       sprite.position.set(result.motion.position.x, .3 + hop, result.motion.position.z);
-      if (mirrorEnabled && sprite.userData.sheet && sprite.material.map && sprite.userData.layout) {
-        sprite.userData.mirrorPose = { facing: result.facing, view: { ...view }, frame: Math.floor(time / 125), moving: result.speed > 0 && !calm };
-      }
       if (sprite.userData.sheet && sprite.material.map && sprite.userData.layout) {
         const cell = sprite.userData.baristaGuest && sprite.userData.sheet === 'four' ? baristaRoomCell(result.facing, Math.floor(time / 125), view, result.speed > 0 && !calm) : sheetCell(sprite.userData.sheet, result.facing, Math.floor(time / 125), view, result.speed > 0 && !calm);
         paintFrame(sprite, cell.col, cell.row);
@@ -1362,7 +1345,7 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
       let lut: THREE.Texture | undefined;
       scene.traverse(node => { if (!lut && node instanceof THREE.Mesh) for (const material of [node.material].flat()) lut ??= (renderer.properties?.get(material) as { uniforms?: { dfgLUT?: { value?: THREE.Texture } } } | undefined)?.uniforms?.dfgLUT?.value; });
       lut?.dispose();
-      surfaces.dispose(); blockerPoses.clear(); mirrorSprites.dispose(); disposed = true; stairLandings.dispose();openFloor.dispose(); actorPositions.clear(); cancelAnimationFrame(frame); sighting?.disconnect(); document.removeEventListener('visibilitychange', visibilityChanged); window.clearInterval(tick); unwatchClock(); observer.disconnect(); renderer.domElement.removeEventListener('webglcontextlost', contextLost); renderer.domElement.removeEventListener('pointermove', hoverMove); renderer.domElement.removeEventListener('pointerleave', hoverLeave); glow.dispose(); contacts.dispose(); light.dispose(); actionCards.forEach(card => card.dispose()); live.forEach(piece => piece.view.dispose()); live.clear(); lamps.dispose(); models.dispose(); geometries.forEach(g => g.dispose()); materials.forEach(m => m.dispose()); textures.forEach(t => t.dispose()); releaseCardPlane(); renderer.dispose();
+      surfaces.dispose(); disposed = true; stairLandings.dispose();openFloor.dispose(); actorPositions.clear(); cancelAnimationFrame(frame); sighting?.disconnect(); document.removeEventListener('visibilitychange', visibilityChanged); window.clearInterval(tick); unwatchClock(); observer.disconnect(); renderer.domElement.removeEventListener('webglcontextlost', contextLost); renderer.domElement.removeEventListener('pointermove', hoverMove); renderer.domElement.removeEventListener('pointerleave', hoverLeave); glow.dispose(); contacts.dispose(); light.dispose(); actionCards.forEach(card => card.dispose()); live.forEach(piece => piece.view.dispose()); live.clear(); lamps.dispose(); models.dispose(); geometries.forEach(g => g.dispose()); materials.forEach(m => m.dispose()); textures.forEach(t => t.dispose()); releaseCardPlane(); renderer.dispose();
       // Give the GPU context back now rather than at garbage collection: browsers allow only a handful at once.
       try { renderer.forceContextLoss(); } catch {}
       renderer.domElement.remove(); },
