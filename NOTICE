@@ -1,0 +1,22 @@
+pacafe-cart-showroom
+Copyright 2026 the pacafe-cart-showroom authors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+The 3D room code was ported from PA Cafe (pa-cafe/pa-cafe), and the Meta
+Model API probes and docs/PLAN.md from agentic-remotion-studio. Both are
+projects of the same owner and are included under this product's license.
+
+This product includes third-party assets and software:
+
+- Starter Kit 3D Platformer character model and texture, by Kenney
+  (https://kenney.nl), from https://github.com/KenneyNL/Starter-Kit-3D-Platformer
+  at commit 3fa8a04b1c01ab23db43123d4ce814a34c3fc7f0. CC0 1.0.
+- Nunito Sans, Copyright 2016 The Nunito Sans Project Authors
+  (https://github.com/Fonthausen/NunitoSans). SIL Open Font License 1.1.
+- three.js, Copyright 2010-2026 three.js authors. MIT License.
+- React and React DOM, Copyright Meta Platforms, Inc. and affiliates. MIT License.
+- Zod, Copyright 2025 Colin McDonnell. MIT License.
+- Lucide icons (lucide-react), Copyright 2026 Lucide Icons and Contributors. ISC License.
+
+THIRD_PARTY.md lists every third-party asset and package with its source and license.

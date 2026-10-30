@@ -1,0 +1,37 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": [
+      "ES2023",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "types": [
+      "@cloudflare/workers-types",
+      "vite/client",
+      "node"
+    ],
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
+  },
+  "include": [
+    "src",
+    "shared",
+    "worker",
+    "adapter",
+    "runner",
+    "tests",
+    "tools",
+    "vite.config.ts",
+    "vitest.config.ts"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "mcp_servers": {
+    "showroom": {
+      "transport": "streamable_http",
+      "url": "https://<worker>.workers.dev/mcp",
+      "headers": { "Authorization": "Bearer ${CART_MCP_TOKEN}" },
+      "enabled": true,
+      "mode": "required"
+    }
+  }
+}
