@@ -33,8 +33,8 @@ function Showroom() {
   const controls = useRef<RoomControls>(null);
   const cart = state.status === 'ready' || state.status === 'offline' ? state.cart : null;
   const cast = useCast(state.status === 'ready' || state.status === 'offline', sharing);
-  // While the share panel is open the room draws what a visitor would see, so the card it captures shows no more than that.
   const unbox = useUnbox(cart);
+  // While the share panel is open the room draws what a visitor would see, so the card it captures shows no more than that.
   const shelf = useMemo(() => !cart ? null : preview ? sharedShelf(shareView(cart, preview)) : ownerShelf(cart, unbox.shelved), [cart, preview, unbox.shelved]);
   return <main className="agent-house-app showroom">
     <CartHud state={state} open={listOpen} onToggle={() => setListOpen(open => !open)} unlock={key => { saveOwnerKey(key); retry(); }} sharing={sharing} onShare={() => { setSharing(open => !open); setCasting(false); }} casting={casting} onCast={() => { setCasting(open => !open); setSharing(false); }}>
@@ -47,6 +47,6 @@ function Showroom() {
         <RoomScene scenery="peach" shelf={shelf} controls={controls} counter={() => setListOpen(true)} baristaName={t('Clerk')} barista={preview ? DEFAULT_CHARACTER : cast.view?.character} owner={{ name: preview?.nickname ?? cast.view?.nickname ?? DEFAULT_NICKNAME, sprite: preview ? null : cast.spriteUrl, open: () => { setCasting(true); setSharing(false); } }} studioSet={showroomStudioSet} hour={14} />
       </RoomZones>
     </section>
-    {!sharing && <UnboxTray {...unbox} items={cart?.items ?? []} />}
+    {!sharing && !casting && <UnboxTray {...unbox} items={cart?.items ?? []} />}
   </main>;
 }
