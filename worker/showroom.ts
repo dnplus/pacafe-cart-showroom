@@ -9,6 +9,8 @@ import { invalidBody, json, readJson } from './http';
 import { handleMcp } from './mcp';
 import { promoApi } from './promo';
 import { runnerApi } from './runner';
+import { castPath, handleCast } from './cast';
+import { DEFAULT_NICKNAME } from '../shared/share';
 import { tools, type Store } from './tools';
 
 const CART_KEY = 'cart';
@@ -118,6 +120,7 @@ export class Showroom {
     if (pathname.startsWith('/s/')) return this.shared(request, pathname);
     if (pathname === '/api/share') return this.share(request);
     if (pathname === '/api/unbox') return this.unbox(request);
+    if (castPath.test(pathname)) return handleCast(request, { storage: this.ctx.storage, env: this.env, nickname: async () => (await this.storedShare())?.nickname ?? DEFAULT_NICKNAME });
     if (pathname !== '/api/cart') return json({ error: 'not_found' }, 404);
     if (request.method !== 'GET' && request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405, { allow: 'GET, POST' });
     if (!isOwner(request, this.env)) return unauthorized();

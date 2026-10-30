@@ -1,4 +1,5 @@
 import { shareViewSchema, type ShareView } from '../shared/share';
+import { castPath } from './cast';
 import type { Env } from './env';
 import { serveMedia } from './media';
 
@@ -41,7 +42,7 @@ export default {
     }
     if (pathname.startsWith('/media/')) return serveMedia(request, env);
     if (pathname === '/api/promo' || pathname.startsWith('/runner/')) return showroom(env).fetch(request);
-    if (pathname === '/api/cart' || pathname === '/api/share' || pathname === '/api/unbox' || pathname === '/mcp') return showroom(env).fetch(request);
+    if (pathname === '/api/cart' || pathname === '/api/share' || pathname === '/api/unbox' || castPath.test(pathname) || pathname === '/mcp') return showroom(env).fetch(request);
     if (pathname.startsWith('/api/')) return Response.json({ error: 'not_found' }, { status: 404 });
     return env.ASSETS.fetch(request);
   },
