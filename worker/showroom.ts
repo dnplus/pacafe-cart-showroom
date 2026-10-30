@@ -1,8 +1,15 @@
 import { cartWriteSchema, emptyCart, replaceCart, type Cart } from '../shared/cart';
 import { fixtureCartItems } from '../shared/fixtures/cart';
+import type { PromoRecord } from '../shared/promo';
+import { newShareSettings, type ShareSettings } from '../shared/share';
 import type { Env } from './env';
+import { handleMcp } from './mcp';
+import { tools, type Store } from './tools';
 
 const CART_KEY = 'cart';
+const SHARE_KEY = 'share';
+const LATEST_PROMO_KEY = 'promo:latest';
+const promoKey = (id: string) => `promo:${id}`;
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) => Response.json(body, { status, headers: { 'cache-control': 'no-store', ...headers } });
 
 /** Compares every byte, so a wrong token takes as long to refuse as a nearly right one. */
@@ -13,11 +20,12 @@ function sameSecret(sent: string, secret: string) {
   return diff === 0;
 }
 
-function mayWrite(request: Request, env: Env) {
-  if (env.ALLOW_OPEN_WRITES === 'true') return true;
+function hasToken(request: Request, env: Env) {
   const sent = /^Bearer\s+(\S+)$/i.exec(request.headers.get('authorization') ?? '')?.[1];
   return Boolean(env.CART_MCP_TOKEN && sent && sameSecret(sent, env.CART_MCP_TOKEN));
 }
+const mayWrite = (request: Request, env: Env) => env.ALLOW_OPEN_WRITES === 'true' || hasToken(request, env);
+const unauthorized = () => json({ error: 'unauthorized' }, 401, { 'www-authenticate': 'Bearer' });
 
 export class Showroom {
   constructor(private readonly ctx: DurableObjectState, private readonly env: Env) {}
@@ -34,10 +42,34 @@ export class Showroom {
     return seeded;
   }
 
+  private store(): Store {
+    const { storage } = this.ctx;
+    return {
+      cart: () => this.read(),
+      saveCart: cart => storage.put(CART_KEY, cart),
+      async share() {
+        const stored = await storage.get<ShareSettings>(SHARE_KEY);
+        if (stored) return stored;
+        const created = newShareSettings();
+        await storage.put(SHARE_KEY, created);
+        return created;
+      },
+      promo: id => storage.get<PromoRecord>(promoKey(id)),
+      async latestPromo() {
+        const id = await storage.get<string>(LATEST_PROMO_KEY);
+        return id ? storage.get<PromoRecord>(promoKey(id)) : undefined;
+      },
+      queuePromo: record => storage.put({ [promoKey(record.job.id)]: record, [LATEST_PROMO_KEY]: record.job.id }),
+    };
+  }
+
   async fetch(request: Request): Promise<Response> {
+    const { pathname } = new URL(request.url);
+    if (pathname === '/mcp') return hasToken(request, this.env) ? handleMcp(request, tools, this.store()) : unauthorized();
+    if (pathname !== '/api/cart') return json({ error: 'not_found' }, 404);
     if (request.method === 'GET') return json(await this.read());
     if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405, { allow: 'GET, POST' });
-    if (!mayWrite(request, this.env)) return json({ error: 'unauthorized' }, 401, { 'www-authenticate': 'Bearer' });
+    if (!mayWrite(request, this.env)) return unauthorized();
     let body: unknown;
     try { body = await request.json(); } catch { return json({ error: 'invalid_json' }, 400); }
     const parsed = cartWriteSchema.safeParse(body);

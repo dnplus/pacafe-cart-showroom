@@ -11,10 +11,11 @@ export const SHELF_SLOTS = SHELF_ROWS * SHELF_COLUMNS;
 /** The most items one write may hold; the ones past SHELF_SLOTS count in the total but have no room on the shelf. */
 export const MAX_CART_ITEMS = 50;
 
-const webUrl = z.url({ protocol: /^https?$/ }).max(2000);
+export const webUrl = z.url({ protocol: /^https?$/ }).max(2000);
 const timestamp = z.iso.datetime();
 const priceTwd = z.number().int().nonnegative().max(100_000_000);
-const qty = z.number().int().min(1).max(999);
+const MAX_QTY = 999;
+export const cartQty = z.number().int().min(1).max(MAX_QTY);
 
 export const cartItemSchema = z.strictObject({
   id: z.string().min(1).max(80),
@@ -25,7 +26,7 @@ export const cartItemSchema = z.strictObject({
   imageUrl: webUrl.nullable(),
   /** The item's image with its background removed (SAM), once that job has run. */
   cutoutUrl: webUrl.nullable(),
-  qty,
+  qty: cartQty,
   addedAt: timestamp,
   shelfSlot: z.number().int().nonnegative(),
 });
@@ -48,7 +49,7 @@ export const cartItemInputSchema = z.strictObject({
   url: webUrl.optional(),
   priceTwd: priceTwd.optional(),
   imageUrl: webUrl.optional(),
-  qty: qty.default(1),
+  qty: cartQty.default(1),
 });
 export type CartItemInput = z.output<typeof cartItemInputSchema>;
 export const cartWriteSchema = z.strictObject({ items: z.array(cartItemInputSchema).max(MAX_CART_ITEMS) });
@@ -72,6 +73,9 @@ function fingerprint(text: string) {
   return (hash >>> 0).toString(36);
 }
 
+const identityOf = (entry: { title: string; store?: string | null; url?: string | null }) => fingerprint(JSON.stringify([entry.title, entry.store ?? null, entry.url ?? null]));
+const asInput = (item: CartItem): CartItemInput => ({ title: item.title, store: item.store ?? undefined, url: item.url ?? undefined, priceTwd: item.priceTwd ?? undefined, imageUrl: item.imageUrl ?? undefined, qty: item.qty });
+
 /**
  * The cart after a write that replaces its items: the same write twice gives back the same cart, revision included.
  * An item keeps its id and `addedAt` while its title, store and link stay the same; slots follow the list order.
@@ -79,7 +83,7 @@ function fingerprint(text: string) {
 export function replaceCart(previous: Cart, input: readonly CartItemInput[], now: string): Cart {
   const seen = new Map<string, number>();
   const items = input.map((entry, shelfSlot): CartItem => {
-    const identity = fingerprint(JSON.stringify([entry.title, entry.store ?? null, entry.url ?? null]));
+    const identity = identityOf(entry);
     const nth = seen.get(identity) ?? 0; seen.set(identity, nth + 1);
     const id = `item-${identity}-${nth}`, before = previous.items.find(item => item.id === id);
     return { id, title: entry.title, store: entry.store ?? null, url: entry.url ?? null, priceTwd: entry.priceTwd ?? null, imageUrl: entry.imageUrl ?? null,
@@ -88,4 +92,18 @@ export function replaceCart(previous: Cart, input: readonly CartItemInput[], now
   if (JSON.stringify(items) === JSON.stringify(previous.items)) return previous;
   const { totalTwd, fill } = cartView(items);
   return { revision: previous.revision + 1, items, totalTwd, fill, updatedAt: now };
+}
+
+/** The cart with one more of `input`: a line of the same title, store and link takes the quantity (and a newly given price or image), else the item goes last. */
+export function addCartItem(cart: Cart, input: CartItemInput, now: string): Cart {
+  const lines = cart.items.map(asInput), at = cart.items.findIndex(item => identityOf(item) === identityOf(input));
+  if (at < 0) lines.push(input);
+  else lines[at] = { ...lines[at], qty: Math.min(MAX_QTY, lines[at].qty + input.qty), priceTwd: input.priceTwd ?? lines[at].priceTwd, imageUrl: input.imageUrl ?? lines[at].imageUrl };
+  return replaceCart(cart, lines, now);
+}
+
+/** The cart with `qty` fewer of a line, or without it when `qty` is absent or covers all of it. */
+export function removeCartItem(cart: Cart, itemId: string, qty: number | undefined, now: string): Cart {
+  const lines = cart.items.flatMap(item => item.id !== itemId ? [asInput(item)] : qty === undefined || qty >= item.qty ? [] : [{ ...asInput(item), qty: item.qty - qty }]);
+  return replaceCart(cart, lines, now);
 }

@@ -3,8 +3,8 @@
   "name": "muse-cart-showroom",
   "main": "worker/index.ts",
   "compatibility_date": "2026-10-01",
-  // /api/* reaches the Worker; every other path is the built single-page app.
-  "assets": { "directory": "./dist/client", "binding": "ASSETS", "not_found_handling": "single-page-application", "run_worker_first": ["/api/*"] },
+  // /api/* and /mcp reach the Worker; every other path is the built single-page app.
+  "assets": { "directory": "./dist/client", "binding": "ASSETS", "not_found_handling": "single-page-application", "run_worker_first": ["/api/*", "/mcp"] },
   "durable_objects": { "bindings": [{ "name": "SHOWROOM", "class_name": "Showroom" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Showroom"] }],
   // Writes need CART_MCP_TOKEN, set with `wrangler secret put CART_MCP_TOKEN`; it is never written in this file.
