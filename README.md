@@ -51,6 +51,7 @@ CI（`.github/workflows/ci.yml`）在每次 push 和 pull request 跑這三項�
 | 指令 | 做什麼 |
 |---|---|
 | `npm run verify:persist` | 用真的 `wrangler dev` 寫入購物車，關掉再重開同一個 `--persist-to` 目錄，確認讀回來的購物車一樣。 |
+| `npm run verify:mcp` | 用真的 `wrangler dev` 走一遍住民的流程：`initialize`、`tools/list`、記兩件、`cart_list`、移除一件、排介紹片、查進度，再確認 `/api/cart` 讀到同一個購物車，以及沒有 token 和 token 錯誤都回 401。token 每次隨機產生，不會印出來。 |
 | `node scripts/screenshots.mjs` | 建置、啟動 `wrangler dev --env local`，等貨架擺上 5 件商品後存 `docs/screenshots/desktop.png` 和 `mobile-390.png`。 |
 | `node scripts/render-character.mjs` | 把 Kenney 的 CC0 角色算成 `public/art/characters/clerk-standee.png` 和 `clerk-portrait.png`。 |
 | `node scripts/generate-studio-set.mjs` | 用 three.js 基本形狀產生主播台棚景 `public/studio/showroom-set.glb`。 |
@@ -61,6 +62,12 @@ CI（`.github/workflows/ci.yml`）在每次 push 和 pull request 跑這三項�
 ### 正式環境的寫入權限
 
 正式環境只有帶 `Authorization: Bearer <CART_MCP_TOKEN>` 的寫入會成功，其餘回 401。用 `wrangler secret put CART_MCP_TOKEN` 設定 token；token 不放進任何檔案。`.env.example` 只列出變數名稱。
+
+`/mcp` 在任何環境都要這個 token，`env.local` 也一樣。在本機用 MCP 時，把 token 寫進 `.dev.vars`（已列在 `.gitignore`），再跑 `npm run dev:worker`：
+
+```bash
+echo "CART_MCP_TOKEN=$(openssl rand -base64 24)" > .dev.vars
+```
 
 ## `/api/cart`
 
@@ -75,6 +82,50 @@ CI（`.github/workflows/ci.yml`）在每次 push 和 pull request 跑這三項�
 - 貨架有 12 格（3 層 × 4 格）。每件依清單順序佔一格，`fill = min(1, 件數 / 12)`；超過 12 件的照樣算進總額，但擺不上貨架。
 - 同樣的內容寫兩次，回來的是同一個購物車，`revision` 不變。標題、店名和連結不變的東西，會保留原本的 `id` 和 `addedAt`。
 
+## `/mcp`
+
+住民 agent（例如 Muse Code）用這個端點把採買過的東西記進小屋。協定是 JSON-RPC over streamable HTTP，支援 `2025-11-25` 和 `2025-06-18`。每個請求都要帶 `Authorization: Bearer <CART_MCP_TOKEN>`，沒有 token、token 錯誤或伺服器沒設 token 都回 `401`。
+
+伺服器不保存 session，每個 POST 回一個 JSON。支援 `initialize`、`ping`、`tools/list`、`tools/call`。不開 SSE 串流，所以 `GET /mcp` 回 `405`。
+
+工具固定 5 支：
+
+| 工具 | 輸入 | 回傳 | 唯讀 |
+|---|---|---|---|
+| `cart_add` | `{ title, store?, url?, priceTwd?, imageUrl?, qty? }`，`qty` 預設 1 | `Cart` | 否 |
+| `cart_list` | `{}` | `Cart`，加上 `share: { url, enabled }` | 是 |
+| `cart_remove` | `{ itemId, qty? }`，不給 `qty` 就整件移除 | `Cart` | 否 |
+| `promo_generate` | `{ durationSec?, style? }`，`durationSec` 介於 15 到 45，預設 30 | `{ jobId, status: 'queued' }` | 否 |
+| `promo_status` | `{ jobId }` | `PromoJob` | 是 |
+
+- `cart_add` 遇到標題、店名、連結都相同的東西，會把數量加上去，不會多佔一格。購物車最多 50 件。
+- 分享不另開工具。分享連結只出現在 `cart_list` 的 `share.url`，格式是 `https://<主機>/s/<slug>`，不帶 query。slug 是 16 bytes 的 crypto 亂數（22 個 base64url 字元），第一次需要時產生並保存。`enabled` 預設 `false`。打開分享、選公開欄位和分享頁本身都是 S3 的事。
+- 參數不對、購物車是空的、找不到 `itemId` 或 `jobId` 時，工具回 `isError: true` 的結果，訊息寫給模型看，讓它修正後重試。工具名稱不存在時回 JSON-RPC 錯誤 `-32602`。
+- 型別在 `shared/cart.ts`、`shared/promo.ts`、`shared/share.ts`，工具在 `worker/tools.ts`，傳輸在 `worker/mcp.ts`。
+
+### 介紹片在 S2 只到排隊
+
+`promo_generate` 會建立並保存一筆真的 job。job 記下當下的 `cartRevision`、片長、風格和整個購物車快照，狀態是 `queued`、`progress` 0。同一份購物車、同樣的參數在 job 還在排隊時重送，回來的是同一個 `jobId`，避免重試時排兩支要付費的片。
+
+S2 到這裡為止。job 會一直停在 `queued`，直到 S4 的 runner 從 `/runner/next` 拉走它，依序更新成 `storyboard`、`voice`、`rendering`，最後是 `done` 或 `failed`。S2 沒有 `/runner/next`，也沒有生片、配音、SAM 去背。住民只能用 `promo_status` 輪詢，小屋不寫 webhook，也不推播。程式裡的邊界標在 `worker/tools.ts` 建立 job 的地方。
+
+### 接上 Muse Code
+
+`muse/settings.example.json` 是 Muse Code 的 `mcp_servers` 設定範例，token 用 `${CART_MCP_TOKEN}` 從環境變數帶入。skills 在 `.agents/skills/`：
+
+| skill | 做什麼 |
+|---|---|
+| `showroom-cart` | 用 `cart_add`、`cart_list`、`cart_remove` 記下、查看、移除東西 |
+| `showroom-promo` | `promo_generate` 之後每 15 秒 `promo_status`，直到 `done` 或 `failed`，回報成片和分享連結 |
+
+Demo 任務在 `muse/demo-task.txt`：
+
+```bash
+muse exec --prompt-file muse/demo-task.txt --disable-approval --max-model-steps 60 --json
+```
+
+在 S4 之前，介紹片會一直停在 `queued`，任務會照 skill 等到 20 分鐘上限後照實回報。
+
 ## 賽前搬來／賽中新寫
 
 | 部分 | 路徑 | 來源 | 賽前搬來／賽中新寫 |
@@ -85,10 +136,13 @@ CI（`.github/workflows/ci.yml`）在每次 push 和 pull request 跑這三項�
 | 介面字串、樣式 | `src/i18n/`、`src/world.css` | pa-cafe `s10-studio-desk` | 賽前搬來，只留用到的部分 |
 | Meta Model API 探針、計畫書 | `tools/meta-hackathon/probe/`、`docs/PLAN.md` | agentic-remotion-studio `meta-hackathon/2026`（0a0bc75） | 賽前搬來，刪減 |
 | 購物車資料形狀與推導、fixture | `shared/cart.ts`、`shared/fixtures/cart.ts` | 無 | 賽中新寫 |
-| Worker 與 Showroom Durable Object | `worker/`、`wrangler.jsonc` | 無 | 賽中新寫 |
+| Worker 與 Showroom Durable Object | `worker/index.ts`、`worker/showroom.ts`、`worker/env.ts`、`wrangler.jsonc` | 無 | 賽中新寫 |
+| MCP 傳輸 | `worker/mcp.ts` | 參考 pa-cafe main 的 `worker/streamable-mcp.ts`、`worker/protocol.ts` | 賽中重寫：只留 JSON-RPC 和協定協商，刪掉配對、Clerk session、簽章、版本偏差 |
+| 5 支 MCP 工具、介紹片 job、分享設定 | `worker/tools.ts`、`shared/promo.ts`、`shared/share.ts` | 無 | 賽中新寫 |
+| skills、Muse Code 設定範例、demo 任務 | `.agents/skills/`、`muse/` | 無 | 賽中新寫 |
 | 貨架商品、收銀機、HUD、輪詢 | `src/cart/`、`src/App.tsx` | 無 | 賽中新寫 |
 | 櫃台、貨架、植物、地毯的模型 | `src/room/furnitureModels.ts` | 無 | 賽中新寫 |
-| 角色算圖、棚景產生、截圖、持久化驗證 | `scripts/` | 無 | 賽中新寫 |
+| 角色算圖、棚景產生、截圖、持久化驗證、MCP 驗證 | `scripts/` | 無 | 賽中新寫 |
 | 測試 | `tests/` | 無 | 賽中新寫 |
 
 pa-cafe 房間的 import 閉包有 214 檔、約 3.6 萬行。住民、任務、額度、書櫃、多樓層、窗戶實驗和經濟機制都刪掉了，家具的 GLB 也沒有搬，櫃台、貨架和裝飾都改用程式畫。
