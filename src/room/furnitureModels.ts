@@ -37,7 +37,6 @@ function bar(item: FurnitureItem) {
   return model();
 }
 
-/** Three boards of four slots, with side panels and a back panel against the wall. */
 function shelf() {
   const { box, model } = kit(); const { width, height, depth, back, rows, board, firstBoard, rowPitch } = shelfFrame;
   const wood = '#b98352', front = back + depth / 2;

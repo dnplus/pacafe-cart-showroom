@@ -4,8 +4,8 @@ import type { StudioSet } from '../../shared/studio';
 import { studioSetAsset } from './studioSet';
 
 /**
- * Loads one of the studio sets and fits it to the cafe's furniture scale, as #582's first version did: desks raised to a
- * seated host's height with their props lifted along, monitors spread apart. The root sits at the set's origin in the room.
+ * Loads the studio set and fits it to the room's furniture scale, as pa-cafe #582's first version did: the desk raised to
+ * a seated host's height with its props lifted along. The root sits at the set's origin in the room.
  */
 export async function studioSetVisual(set: StudioSet) {
   const response = await fetch(studioSetAsset(set.preset));

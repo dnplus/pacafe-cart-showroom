@@ -3,11 +3,6 @@ import type { RoomFurnitureItem, RoomFurnitureKind, RoomTurn, RoomWall } from '.
 import { roomWalls } from '../../../shared/room-dimensions';
 
 export interface Vec { x: number; z: number }
-export type SurfaceSize = 'small' | 'appliance';
-export interface Footprint { x: number; z: number; rx: number; rz: number; shape: 'ellipse' | 'rect' | 'polygon'; points?: readonly Vec[]; padding?: number }
-export type Activity = 'gaze' | 'browse' | 'sip' | 'water' | 'sit' | 'chat';
-export type Spot = Vec & { look?: Vec; y?: number };
-export interface Poi { id: string; activity: Activity; look: Vec; spots: readonly Spot[] }
 export type Wall = RoomWall;
 export type Turn = RoomTurn;
 
@@ -15,11 +10,7 @@ export type PieceKind = RoomFurnitureKind;
 export type Item = RoomFurnitureItem;
 
 export type Interaction =
-  | { type: 'sit'; seat: Spot }
-  | { type: 'work'; at: Vec }
-  | { type: 'serve'; spot: Spot }
-  | { type: 'deliver'; spot: Vec; look: Vec; surface: { x: number; y: number; z: number }[] }
-  | { type: 'linger'; id: string; activity: Activity; spots: Spot[]; look: Vec }
+  | { type: 'serve'; spot: Vec }
   | { type: 'open'; panel: 'counter' }
   | { type: 'poke'; reaction: 'bounce' | 'sway' | 'own' };
 
@@ -27,10 +18,8 @@ export interface PieceSpec {
   kind: PieceKind;
   variants: readonly string[];
   mount: 'floor' | 'wall' | 'surface';
-  footprint: readonly Footprint[];
   hang?: { width: number; height: number; y: number; depth: number; band: 'mid' | 'high' };
-  surfaces?(item: Item): { x: number; y: number; z: number; takes?: SurfaceSize; width?: number; depth?: number; slot?: number; rotationY?: number; purpose?: string }[];
-  size?: SurfaceSize;
+  surfaces?(item: Item): { x: number; y: number; z: number }[];
   turns: boolean;
   interactions(item: Item): Interaction[];
 }

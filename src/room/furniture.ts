@@ -1,8 +1,7 @@
-import { interactionsOf, offered, pieces, type Footprint, type Item, type PieceKind, type Spot } from './pieces';
+import { interactionsOf, offered, pieces, type Item, type PieceKind } from './pieces';
 import { defaultFurniture } from '../../shared/starter-furniture';
 
 export type FurnitureKind = PieceKind;
-export type { Footprint, Spot };
 export type FurnitureItem = Item;
 
 export { defaultFurniture };

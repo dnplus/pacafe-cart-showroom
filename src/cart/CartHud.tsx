@@ -4,7 +4,6 @@ import { t } from '../i18n';
 import type { CartState } from './useCart';
 import './cart.css';
 
-/** The cart at a glance: how many things, their total and how full the shelf is, with the list one tap away. */
 export function CartHud({ state, open, onToggle }: { state: CartState; open: boolean; onToggle: () => void }) {
   const items = state.status === 'loading' ? [] : state.cart?.items ?? [];
   const view = cartView(items), percent = Math.round(view.fill * 100);

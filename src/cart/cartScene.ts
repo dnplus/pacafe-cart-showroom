@@ -34,7 +34,6 @@ function wrap(ctx: CanvasRenderingContext2D, text: string, width: number, lines:
   return out;
 }
 
-/** A labelled box: the title, the price and the quantity on a card across its front. */
 function product(item: CartItem) {
   const h = seed(item.id), colour = palette[h % palette.length];
   const width = .5 + (h >> 4) % 10 * .012, height = .36 + (h >> 8) % 14 * .013, depth = .26 + (h >> 12) % 6 * .01;
@@ -58,7 +57,6 @@ function product(item: CartItem) {
   return { node, dispose() { geometries.forEach(g => g.dispose()); materials.forEach(m => m.dispose()); textures.forEach(t => t.dispose()); } };
 }
 
-/** The cash register on the counter: a body, a drawer, a keypad and a display tilted toward the customer. */
 function register() {
   const node = new THREE.Group(); node.name = 'cart-register';
   const geometries: THREE.BufferGeometry[] = [], materials: THREE.Material[] = [];
@@ -91,7 +89,6 @@ function register() {
   };
 }
 
-/** The cart as the room draws it: one box per item in its shelf slot, and the register's total. */
 export function cartScene() {
   const products = new THREE.Group(); products.name = 'cart-products';
   const till = register();

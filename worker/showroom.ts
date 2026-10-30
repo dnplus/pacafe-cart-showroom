@@ -19,7 +19,6 @@ function mayWrite(request: Request, env: Env) {
   return Boolean(env.CART_MCP_TOKEN && sent && sameSecret(sent, env.CART_MCP_TOKEN));
 }
 
-/** The one showroom: its cart lives in this object's storage under a single key. */
 export class Showroom {
   constructor(private readonly ctx: DurableObjectState, private readonly env: Env) {}
 
