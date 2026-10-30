@@ -29,7 +29,7 @@ const call = async (name, args) => {
 
 try {
   assert.equal((await rpc('ping', {}, null)).status, 401, 'no token is refused');
-  assert.equal((await rpc('ping', {}, 'Bearer not-the-token')).status, 401, 'a wrong token is refused even though env.local opens cart writes');
+  assert.equal((await rpc('ping', {}, 'Bearer not-the-token')).status, 401, 'a wrong token is refused even though env.local opens owner access');
 
   const init = await (await rpc('initialize', { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'verify-mcp', version: '0' } })).json();
   assert.equal(init.result.protocolVersion, '2025-11-25');
@@ -43,6 +43,7 @@ try {
   assert.deepEqual(listed.items.map(item => item.title), ['陶瓷馬克杯', '亞麻餐墊']);
   assert.match(listed.share.url, /^http:\/\/127\.0\.0\.1:\d+\/s\/[A-Za-z0-9_-]{22}$/, 'share url is origin + /s/<slug>');
   assert.equal(listed.share.enabled, false, 'sharing starts disabled');
+  assert.equal(listed.share.prices, 'hidden', 'visitors see no prices until the owner picks otherwise');
   assert.equal((await call('cart_list', {})).share.url, listed.share.url, 'the slug is stable');
 
   const removed = await call('cart_remove', { itemId: listed.items[1].id });
@@ -55,9 +56,9 @@ try {
   assert.equal(job.cartRevision, removed.revision, 'the job is for the cart as it was queued');
 
   const api = await (await fetch(`${worker.origin}/api/cart`)).json();
-  assert.deepEqual(api, removed, 'GET /api/cart returns the cart the agent wrote');
+  assert.deepEqual(api, removed, 'GET /api/cart (open to the owner in env.local) returns the cart the agent wrote');
 
-  console.log(JSON.stringify({ tools: tools.map(tool => tool.name), items: api.items.map(item => `${item.title} x${item.qty}`), shareUrl: listed.share.url.replace(/\/s\/.+$/, '/s/<22 chars>'), shareEnabled: listed.share.enabled, job: { id: job.id, status: job.status, cartRevision: job.cartRevision }, unauthorized: [401, 401] }, null, 2));
+  console.log(JSON.stringify({ tools: tools.map(tool => tool.name), items: api.items.map(item => `${item.title} x${item.qty}`), shareUrl: listed.share.url.replace(/\/s\/.+$/, '/s/<22 chars>'), shareEnabled: listed.share.enabled, sharePrices: listed.share.prices, job: { id: job.id, status: job.status, cartRevision: job.cartRevision }, unauthorized: [401, 401] }, null, 2));
 } finally {
   await worker.stop();
   fs.rmSync(persistTo, { recursive: true, force: true });
