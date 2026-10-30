@@ -1,2 +1,109 @@
-# muse-cart-showroom
-Muse cart showroom: a visible, gamified PA Cafe-style shopping-cart room (hackathon)
+# muse-cart-showroom／小屋購物車
+
+> 本專案不是 Meta Muse 產品的整合，也沒有結帳。採買由使用者自己的 Muse 完成；小屋購物車只把「囤在購物車裡的東西」畫成看得見的房間。住民 agent 用 Meta Model API／Muse Code（muse-wonder-1.0、muse-spark-1.3）當大腦。
+
+小屋購物車是一個 3D 小房間。Muse 採買時記下的東西會擺上櫃台後面的貨架，一件佔一格；櫃台上的收銀機顯示總額，囤得越多，貨架越滿。房間每 2 秒讀一次購物車，所以新記下的東西會自己出現。
+
+| 桌機 1440×900 | 手機 390×844 |
+|---|---|
+| ![桌機截圖：貨架上五件商品、櫃台收銀機顯示 NT$ 7,460、店員和左邊的主播台棚景](docs/screenshots/desktop.png) | ![手機截圖：上方是件數、總額、填滿度，下方是貨架、收銀機和店員](docs/screenshots/mobile-390.png) |
+
+## 在本機執行
+
+需要 Node 26。
+
+1. 安裝套件。
+
+   ```bash
+   npm ci
+   ```
+
+2. 建置前端，再用 wrangler 在本機跑 Worker 和 Durable Object。
+
+   ```bash
+   npm run dev:worker
+   ```
+
+   打開 http://127.0.0.1:8877 。`dev:worker` 用 `wrangler.jsonc` 的 `env.local`：任何人都能寫入購物車，第一次讀取時放進 5 件 fixture（`shared/fixtures/cart.ts`）。資料存在 `.local/state`。
+
+3. 寫入購物車。下一次輪詢（每 2 秒一次）時，貨架就換上新的東西。
+
+   ```bash
+   curl -X POST http://127.0.0.1:8877/api/cart \
+     -H 'content-type: application/json' \
+     -d '{"items":[{"title":"陶瓷馬克杯","store":"小島陶房","priceTwd":420,"qty":2},{"title":"亞麻餐墊","priceTwd":290}]}'
+   ```
+
+要改前端並即時重新整理，在另一個終端機跑 `npm run dev`。Vite 會把 `/api` 轉給 8877 埠上的 `dev:worker`。
+
+### 檢查
+
+```bash
+npm run build       # vite build，輸出到 dist/client
+npm run typecheck   # tsc --noEmit
+npm test            # vitest run
+```
+
+CI（`.github/workflows/ci.yml`）在每次 push 和 pull request 跑這三項，不需要 secret，也不需要瀏覽器。
+
+### 腳本
+
+| 指令 | 做什麼 |
+|---|---|
+| `npm run verify:persist` | 用真的 `wrangler dev` 寫入購物車，關掉再重開同一個 `--persist-to` 目錄，確認讀回來的購物車一樣。 |
+| `node scripts/screenshots.mjs` | 建置、啟動 `wrangler dev --env local`，等貨架擺上 5 件商品後存 `docs/screenshots/desktop.png` 和 `mobile-390.png`。 |
+| `node scripts/render-character.mjs` | 把 Kenney 的 CC0 角色算成 `public/art/characters/clerk-standee.png` 和 `clerk-portrait.png`。 |
+| `node scripts/generate-studio-set.mjs` | 用 three.js 基本形狀產生主播台棚景 `public/studio/showroom-set.glb`。 |
+| `node tools/meta-hackathon/probe/run-all.ts --dry-run` | 不呼叫 API，印出 Meta Model API 探針的請求和費用估算。見 [探針說明](tools/meta-hackathon/probe/README.md)。 |
+
+截圖和算圖腳本需要 Playwright 的 Chromium（`npx playwright-core install chromium`），用 SwiftShader 在沒有 GPU 的機器上畫 WebGL。
+
+### 正式環境的寫入權限
+
+正式環境只有帶 `Authorization: Bearer <CART_MCP_TOKEN>` 的寫入會成功，其餘回 401。用 `wrangler secret put CART_MCP_TOKEN` 設定 token；token 不放進任何檔案。`.env.example` 只列出變數名稱。
+
+## `/api/cart`
+
+| 請求 | 回應 |
+|---|---|
+| `GET /api/cart` | `200`，`Cart`。 |
+| `POST /api/cart`，body `{ "items": CartItemInput[] }` | `200`，取代後的 `Cart`。body 不對回 `400`，沒有 token 回 `401`。 |
+
+- `CartItemInput` 是 `{ title, store?, url?, priceTwd?, imageUrl?, qty? }`，`qty` 預設 1，`url` 和 `imageUrl` 只接受 http 或 https。一次最多 50 件。
+- `Cart` 是 `{ revision, items: CartItem[], totalTwd, fill, updatedAt }`。`CartItem` 多了 `id`、`cutoutUrl`、`addedAt`、`shelfSlot`。schema 在 `shared/cart.ts`。
+- `totalTwd` 是每件 `priceTwd × qty` 的總和，沒標價的算 0。
+- 貨架有 12 格（3 層 × 4 格）。每件依清單順序佔一格，`fill = min(1, 件數 / 12)`；超過 12 件的照樣算進總額，但擺不上貨架。
+- 同樣的內容寫兩次，回來的是同一個購物車，`revision` 不變。標題、店名和連結不變的東西，會保留原本的 `id` 和 `addedAt`。
+
+## 賽前搬來／賽中新寫
+
+| 部分 | 路徑 | 來源 | 賽前搬來／賽中新寫 |
+|---|---|---|---|
+| 3D 房間：相機、燈光、地板牆面、日光、站立卡、棚景載入、觸控相機 | `src/room/`（`furnitureModels.ts` 除外）、`src/video/ease.ts`、`src/browserStorage.ts` | pa-cafe `s10-studio-desk`（a48a6b66） | 賽前搬來，刪減 |
+| 剪輯桌與房間角落元件 | `src/components/` | pa-cafe `s10-studio-desk` | 賽前搬來，刪減 |
+| 房間共用設定 | `shared/` 的 `room-*.ts`、`scenery.ts`、`performance-script.ts`、`locales.ts`、`sprites.ts`、`safe-decode.ts`、`studio.ts`、`domain.ts`、`starter-furniture.ts` | pa-cafe `s10-studio-desk` | 賽前搬來，刪減 |
+| 介面字串、樣式 | `src/i18n/`、`src/world.css` | pa-cafe `s10-studio-desk` | 賽前搬來，只留用到的部分 |
+| Meta Model API 探針、計畫書 | `tools/meta-hackathon/probe/`、`docs/PLAN.md` | agentic-remotion-studio `meta-hackathon/2026`（0a0bc75） | 賽前搬來，刪減 |
+| 購物車資料形狀與推導、fixture | `shared/cart.ts`、`shared/fixtures/cart.ts` | 無 | 賽中新寫 |
+| Worker 與 Showroom Durable Object | `worker/`、`wrangler.jsonc` | 無 | 賽中新寫 |
+| 貨架商品、收銀機、HUD、輪詢 | `src/cart/`、`src/App.tsx` | 無 | 賽中新寫 |
+| 櫃台、貨架、植物、地毯的模型 | `src/room/furnitureModels.ts` | 無 | 賽中新寫 |
+| 角色算圖、棚景產生、截圖、持久化驗證 | `scripts/` | 無 | 賽中新寫 |
+| 測試 | `tests/` | 無 | 賽中新寫 |
+
+pa-cafe 房間的 import 閉包有 214 檔、約 3.6 萬行。住民、任務、額度、書櫃、多樓層、窗戶實驗和經濟機制都刪掉了，家具的 GLB 也沒有搬，櫃台、貨架和裝飾都改用程式畫。
+
+## 開源素材
+
+| 素材 | 用在哪裡 | 出處 | 作者 | 授權 |
+|---|---|---|---|---|
+| Starter Kit 3D Platformer 的 `character.glb`、`Textures/colormap.png` | 店員立牌和頭像（`scripts/render-character.mjs` 算圖） | https://github.com/KenneyNL/Starter-Kit-3D-Platformer ，commit 3fa8a04b | Kenney | CC0 1.0 |
+| Nunito Sans（`@fontsource-variable/nunito-sans` 5.3.0） | 介面字型 | https://github.com/Fonthausen/NunitoSans | The Nunito Sans Project Authors | SIL OFL 1.1 |
+| Lucide 圖示（`lucide-react` 1.54.0） | 介面圖示 | https://github.com/lucide-icons/lucide | Lucide Icons and Contributors | ISC |
+| 主播台棚景 `public/studio/showroom-set.glb` | 房間左邊的棚景 | 本 repo，`scripts/generate-studio-set.mjs` | muse-cart-showroom authors | Apache-2.0（原創） |
+
+所有第三方素材和套件列在 [THIRD_PARTY.md](THIRD_PARTY.md)。
+
+## 授權
+
+Apache-2.0，見 [LICENSE](LICENSE) 和 [NOTICE](NOTICE)。
