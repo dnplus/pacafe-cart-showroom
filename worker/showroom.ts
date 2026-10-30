@@ -2,6 +2,7 @@ import { cartWriteSchema, emptyCart, replaceCart, type Cart } from '../shared/ca
 import { fixtureCartItems } from '../shared/fixtures/cart';
 import { isFinished, type PromoRecord } from '../shared/promo';
 import { newShareSettings, sharePath, shareSettingsSchema, shareUpdateSchema, shareUrl, shareView, type ShareSettings } from '../shared/share';
+import { emptyUnbox, markOpened, openedIn, unboxStateSchema, unboxWriteSchema } from '../shared/unbox';
 import { hasToken, isOwner, sameSecret, unauthorized } from './auth';
 import type { Env } from './env';
 import { invalidBody, json, readJson } from './http';
@@ -12,6 +13,7 @@ import { tools, type Store } from './tools';
 
 const CART_KEY = 'cart';
 const SHARE_KEY = 'share';
+const UNBOX_KEY = 'unbox';
 const LATEST_PROMO_KEY = 'promo:latest';
 /** Ids of the jobs not yet done or failed, oldest first: what /runner/next takes from. */
 const PROMO_QUEUE_KEY = 'promo:queue';
@@ -92,6 +94,22 @@ export class Showroom {
     return json({ ...next, url: shareUrl(origin, next.slug) });
   }
 
+  /** Which parcels the owner has opened: GET reads, POST marks more as opened. Only items still in the cart count. */
+  private async unbox(request: Request) {
+    if (request.method !== 'GET' && request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405, { allow: 'GET, POST' });
+    if (!isOwner(request, this.env)) return unauthorized();
+    const [cart, stored] = await Promise.all([this.read(), this.ctx.storage.get(UNBOX_KEY)]);
+    const current = stored === undefined ? emptyUnbox() : unboxStateSchema.parse(stored);
+    if (request.method === 'GET') return json(openedIn(current, cart.items));
+    const sent = await readJson(request);
+    if (!sent) return json({ error: 'invalid_json' }, 400);
+    const parsed = unboxWriteSchema.safeParse(sent.body);
+    if (!parsed.success) return invalidBody(parsed.error);
+    const next = markOpened(current, cart.items, parsed.data.itemIds, new Date().toISOString());
+    if (JSON.stringify(next) !== JSON.stringify(current)) await this.ctx.storage.put(UNBOX_KEY, next);
+    return json(next);
+  }
+
   async fetch(request: Request): Promise<Response> {
     const { pathname } = new URL(request.url);
     if (pathname === '/mcp') return hasToken(request, this.env) ? handleMcp(request, tools, this.store()) : unauthorized();
@@ -99,6 +117,7 @@ export class Showroom {
     if (pathname === '/api/promo') return promoApi(request, this.env, this.store());
     if (pathname.startsWith('/s/')) return this.shared(request, pathname);
     if (pathname === '/api/share') return this.share(request);
+    if (pathname === '/api/unbox') return this.unbox(request);
     if (pathname !== '/api/cart') return json({ error: 'not_found' }, 404);
     if (request.method !== 'GET' && request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405, { allow: 'GET, POST' });
     if (!isOwner(request, this.env)) return unauthorized();

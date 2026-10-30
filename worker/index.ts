@@ -41,7 +41,7 @@ export default {
     }
     if (pathname.startsWith('/media/')) return serveMedia(request, env);
     if (pathname === '/api/promo' || pathname.startsWith('/runner/')) return showroom(env).fetch(request);
-    if (pathname === '/api/cart' || pathname === '/api/share' || pathname === '/mcp') return showroom(env).fetch(request);
+    if (pathname === '/api/cart' || pathname === '/api/share' || pathname === '/api/unbox' || pathname === '/mcp') return showroom(env).fetch(request);
     if (pathname.startsWith('/api/')) return Response.json({ error: 'not_found' }, { status: 404 });
     return env.ASSETS.fetch(request);
   },
