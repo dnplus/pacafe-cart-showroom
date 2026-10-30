@@ -1,10 +1,8 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { cartView, formatTwd, SHELF_COLUMNS, SHELF_SLOTS, type CartItem } from '../../shared/cart';
+import { SHELF_COLUMNS, SHELF_SLOTS } from '../../shared/cart';
 import { shelfFrame } from '../room/furnitureModels';
-
-/** What the register's display reads: the cart's total, worked out the same way as everywhere else in the room. */
-export const registerText = (items: readonly CartItem[]) => formatTwd(cartView(items).totalTwd);
+import type { Shelf, ShelfItem } from './shelf';
 
 /** Where slot `slot` stands in the shelf's own frame: rows fill from the top board down, left to right. */
 export function shelfSlotPosition(slot: number) {
@@ -13,7 +11,7 @@ export function shelfSlotPosition(slot: number) {
 }
 
 const palette = ['#e58f6b', '#6f9fc4', '#e2b64f', '#8bb174', '#b48ac8', '#d9707f', '#5fa8a0', '#c99c6b'];
-/** A stable number per item, so a product keeps its box and colour across polls. */
+/** A stable number per title, so a product keeps its box and colour across polls, and looks the same to the owner and to visitors. */
 const seed = (text: string) => { let h = 2166136261; for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619); return h >>> 0; };
 
 function canvasTexture(width: number, height: number, paint: (ctx: CanvasRenderingContext2D) => void) {
@@ -34,11 +32,11 @@ function wrap(ctx: CanvasRenderingContext2D, text: string, width: number, lines:
   return out;
 }
 
-function product(item: CartItem) {
-  const h = seed(item.id), colour = palette[h % palette.length];
+function product(item: ShelfItem, slot: number) {
+  const h = seed(item.title), colour = palette[h % palette.length];
   const width = .5 + (h >> 4) % 10 * .012, height = .36 + (h >> 8) % 14 * .013, depth = .26 + (h >> 12) % 6 * .01;
   const geometries: THREE.BufferGeometry[] = [], materials: THREE.Material[] = [], textures: THREE.Texture[] = [];
-  const node = new THREE.Group(); node.name = `cart-item:${item.id}`;
+  const node = new THREE.Group(); node.name = `cart-item:${slot}`;
   const body = new THREE.Mesh(new RoundedBoxGeometry(width, height, depth, 2, .025), new THREE.MeshStandardMaterial({ color: colour, roughness: .55 }));
   body.position.y = height / 2; body.castShadow = true; body.receiveShadow = true; node.add(body);
   geometries.push(body.geometry); materials.push(body.material);
@@ -47,8 +45,12 @@ function product(item: CartItem) {
     ctx.fillStyle = '#2f3d35'; ctx.font = font(800, 44); ctx.textBaseline = 'top';
     wrap(ctx, item.title, 288, 2).forEach((line, k) => ctx.fillText(line, 16, 18 + k * 52));
     ctx.fillStyle = colour; ctx.fillRect(16, 134, 288, 6);
-    ctx.fillStyle = '#9a4e2f'; ctx.font = font(900, 50);
-    ctx.fillText(item.priceTwd === null ? '—' : formatTwd(item.priceTwd), 16, 156);
+    const room = item.qty > 1 ? 210 : 288;
+    if (item.price !== null) {
+      let size = 50; ctx.fillStyle = '#9a4e2f'; ctx.font = font(900, size);
+      while (size > 30 && ctx.measureText(item.price).width > room) { size -= 4; ctx.font = font(900, size); }
+      ctx.fillText(item.price, 16, 156 + (50 - size) / 2, room);
+    }
     if (item.qty > 1) { ctx.textAlign = 'right'; ctx.fillStyle = '#2f3d35'; ctx.font = font(900, 44); ctx.fillText(`×${item.qty}`, 304, 160); }
   });
   const card = new THREE.Mesh(new THREE.PlaneGeometry(width * .9, Math.min(height * .82, width * .9 * .75)), new THREE.MeshBasicMaterial({ map: label, toneMapped: false }));
@@ -92,22 +94,21 @@ function register() {
 export function cartScene() {
   const products = new THREE.Group(); products.name = 'cart-products';
   const till = register();
-  let drawn = new Map<string, { key: string; view: ReturnType<typeof product> }>();
+  let drawn = new Map<number, { key: string; view: ReturnType<typeof product> }>();
   return {
     products, register: till.node,
-    /** Draws `items`; true when anything on the shelf changed. */
-    show(items: readonly CartItem[]) {
-      till.show(registerText(items));
-      const next = new Map<string, { key: string; view: ReturnType<typeof product> }>();
+    /** Draws `shelf`; true when anything on the shelf changed. */
+    show(shelf: Shelf) {
+      till.show(shelf.register);
+      const next = new Map<number, { key: string; view: ReturnType<typeof product> }>();
       let changed = false;
-      for (const item of items) {
-        if (item.shelfSlot >= SHELF_SLOTS) continue;
-        const key = JSON.stringify([item.title, item.priceTwd, item.qty]); let entry = drawn.get(item.id);
+      shelf.items.slice(0, SHELF_SLOTS).forEach((item, slot) => {
+        const key = JSON.stringify([item.title, item.price, item.qty]); let entry = drawn.get(slot);
         if (entry && entry.key !== key) { entry.view.node.removeFromParent(); entry.view.dispose(); entry = undefined; }
-        if (!entry) { entry = { key, view: product(item) }; products.add(entry.view.node); changed = true; }
-        const at = shelfSlotPosition(item.shelfSlot); entry.view.node.position.set(at.x, at.y, at.z);
-        next.set(item.id, entry);
-      }
+        if (!entry) { entry = { key, view: product(item, slot) }; products.add(entry.view.node); changed = true; }
+        const at = shelfSlotPosition(slot); entry.view.node.position.set(at.x, at.y, at.z);
+        next.set(slot, entry);
+      });
       for (const [id, entry] of drawn) if (!next.has(id)) { entry.view.node.removeFromParent(); entry.view.dispose(); changed = true; }
       drawn = next;
       products.userData.count = drawn.size;

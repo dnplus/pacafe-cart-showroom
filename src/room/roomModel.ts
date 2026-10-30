@@ -13,8 +13,8 @@ import { clampRoomAngle, clampRoomZoom, frameRoom, roomFov } from './roomCamera'
 import type { SceneryId } from '../../shared/scenery';
 import { barSpots, defaultFurniture, interactionsOf, pieces as catalog, type FurnitureItem, type FurnitureKind } from './furniture';
 import { furnitureModel, type FurnitureModel } from './furnitureModels';
-import { cartScene, registerText } from '../cart/cartScene';
-import type { CartItem } from '../../shared/cart';
+import { cartScene } from '../cart/cartScene';
+import type { Shelf } from '../cart/shelf';
 import { hangOnWall } from './pieces';
 import { cameraView, Card, dress, frameOf, illustrationFrame, measureImage, orientCard, releaseCardPlane, singleLayout, standeeMaterial, type Layout, type StandeeUniforms } from './standee';
 import { baristaBodies } from './barista';
@@ -33,7 +33,7 @@ export type GlowTarget = 'counter' | 'shelf';
 export interface CameraView { angle: number; zoom: number; panX: number; panY: number }
 export interface RoomDebugApi { scene: THREE.Scene; camera: THREE.PerspectiveCamera; renderer: THREE.WebGLRenderer; render(): void; actor: THREE.Object3D }
 export type RoomDebugHook = (api: RoomDebugApi) => void;
-export interface RoomRenderer { brightness(value: number): void; finish?(choice: RoomFinishChoice): void; update(scenery: SceneryId): void; motion(paused: boolean): void; graphics?(profile: GraphicsProfile): void; sleep?(asleep: boolean): void; open(listener: (panel: 'counter') => void): void; barista(character: Character, appearance?: BaristaAppearance): void; view(angle: number): void; zoomAt(factor: number, clientX: number, clientY: number): void; zoomBy(factor: number): void; panBy(dx: number, dy: number): void; resetView(): void; cameraView?(): CameraView; restoreView?(view: CameraView): void; glowTarget(target: GlowTarget, reason: 'hover' | 'focus', on: boolean): void; present?(spot: string | null): void; shoot?(shot: PresenterShot | null): void; studioSet?(set: StudioSet | null): void; perform?(act: PerformanceAct, elapsed: number): void; furniture(items: FurnitureItem[]): void; /** Puts the cart's items on the shelf and its total on the register. */ cart(items: readonly CartItem[]): void; capture?(width: number, height: number, background: string): HTMLCanvasElement | null; pokeAt(clientX: number, clientY: number): string | null; dispose(): void }
+export interface RoomRenderer { brightness(value: number): void; finish?(choice: RoomFinishChoice): void; update(scenery: SceneryId): void; motion(paused: boolean): void; graphics?(profile: GraphicsProfile): void; sleep?(asleep: boolean): void; open(listener: (panel: 'counter') => void): void; barista(character: Character, appearance?: BaristaAppearance): void; view(angle: number): void; zoomAt(factor: number, clientX: number, clientY: number): void; zoomBy(factor: number): void; panBy(dx: number, dy: number): void; resetView(): void; cameraView?(): CameraView; restoreView?(view: CameraView): void; glowTarget(target: GlowTarget, reason: 'hover' | 'focus', on: boolean): void; present?(spot: string | null): void; shoot?(shot: PresenterShot | null): void; studioSet?(set: StudioSet | null): void; perform?(act: PerformanceAct, elapsed: number): void; furniture(items: FurnitureItem[]): void; /** Puts the products on the shelf and the register's text on its display. */ shelf(shelf: Shelf): void; capture?(width: number, height: number, background: string): HTMLCanvasElement | null; pokeAt(clientX: number, clientY: number): string | null; dispose(): void }
 
 
 /** A front camera on the presenter: the script's zoom 1–3, and how far it has turned from the host (0) to the spot's desk (1). */
@@ -495,9 +495,9 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
       if (JSON.stringify(items) !== layoutKey) { layFurniture(items); frameCamera(); }
       anchors(); render();
     },
-    cart(items) {
-      if (cart.show(items)) { const shelf = shelfPiece(); if (shelf) glow.invalidate(shelf.node); seatCart(); placeGlow(); }
-      host.dataset.cartShelf = String(cart.products.userData.count ?? 0); host.dataset.register = registerText(items);
+    shelf(shelf) {
+      if (cart.show(shelf)) { const shelf = shelfPiece(); if (shelf) glow.invalidate(shelf.node); seatCart(); placeGlow(); }
+      host.dataset.cartShelf = String(cart.products.userData.count ?? 0); host.dataset.register = shelf.register;
       renderer.shadowMap.needsUpdate = true; anchors(); render();
     },
     motion(next) { paused = next; },

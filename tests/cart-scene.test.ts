@@ -1,16 +1,45 @@
 import { describe, expect, it } from 'vitest';
-import { emptyCart, replaceCart, SHELF_COLUMNS, SHELF_SLOTS } from '../shared/cart';
+import { emptyCart, replaceCart, SHELF_COLUMNS, SHELF_SLOTS, type CartItemInput } from '../shared/cart';
 import { fixtureCartItems } from '../shared/fixtures/cart';
-import { registerText, shelfSlotPosition } from '../src/cart/cartScene';
+import { DEFAULT_NICKNAME, shareView, type PriceMode } from '../shared/share';
+import { shelfSlotPosition } from '../src/cart/cartScene';
+import { ownerShelf, sharedShelf } from '../src/cart/shelf';
+import { t } from '../src/i18n';
 import { shelfFrame } from '../src/room/furnitureModels';
 
-describe('the register', () => {
-  it('shows the cart total, formatted as the room writes amounts', () => {
-    expect(registerText(replaceCart(emptyCart(), fixtureCartItems, '2026-10-30T03:00:00.000Z').items)).toBe('NT$ 7,460');
+const cartOf = (items: readonly CartItemInput[]) => replaceCart(emptyCart(), items, '2026-10-30T03:00:00.000Z');
+const mixed = cartOf([{ title: 'mug', priceTwd: 420, qty: 2 }, { title: 'sample', qty: 1 }, { title: 'chair', priceTwd: 125_000, qty: 1 }]);
+const visitorShelf = (prices: PriceMode, cart = mixed) => sharedShelf(shareView(cart, { slug: 'A'.repeat(22), enabled: true, prices, nickname: DEFAULT_NICKNAME }));
+
+describe('the owner\'s shelf', () => {
+  it('shows the cart total on the register, formatted as the room writes amounts', () => {
+    expect(ownerShelf(cartOf(fixtureCartItems)).register).toBe('NT$ 7,460');
   });
   it('counts quantities and shows zero for an empty cart', () => {
-    expect(registerText(replaceCart(emptyCart(), [{ title: 'socks', priceTwd: 1250, qty: 4 }], '2026-10-30T03:00:00.000Z').items)).toBe('NT$ 5,000');
-    expect(registerText([])).toBe('NT$ 0');
+    expect(ownerShelf(cartOf([{ title: 'socks', priceTwd: 1250, qty: 4 }])).register).toBe('NT$ 5,000');
+    expect(ownerShelf(emptyCart()).register).toBe('NT$ 0');
+  });
+  it('labels every product with its price, or a dash when it has none', () => {
+    expect(ownerShelf(mixed).items).toEqual([{ title: 'mug', qty: 2, price: 'NT$ 420' }, { title: 'sample', qty: 1, price: '—' }, { title: 'chair', qty: 1, price: 'NT$ 125,000' }]);
+  });
+});
+
+describe('a visitor\'s shelf', () => {
+  it('draws no price and counts items on the register when prices are hidden', () => {
+    const shelf = visitorShelf('hidden');
+    expect(shelf.items.map(item => item.price)).toEqual([null, null, null]);
+    expect(shelf.register).toBe(t('{count} items', { count: 3 }));
+    expect(JSON.stringify(shelf)).not.toMatch(/NT\$|420|125/);
+  });
+  it('draws buckets, open-ended past the last step, when prices are ranges', () => {
+    const shelf = visitorShelf('range');
+    expect(shelf.items.map(item => item.price)).toEqual(['NT$ 300–500', '—', t('{amount}+', { amount: 'NT$ 100,000' })]);
+    expect(shelf.register).toBe(t('{amount}+', { amount: 'NT$ 100,000' }));
+    expect(visitorShelf('range', cartOf([{ title: 'sample', qty: 1 }])).register).toBe('—');
+  });
+  it('draws what the owner sees when prices are exact', () => {
+    expect(visitorShelf('exact')).toEqual(ownerShelf(mixed));
+    expect(visitorShelf('exact', cartOf([{ title: 'sample', qty: 1 }])).register).toBe('—');
   });
 });
 
