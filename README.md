@@ -53,7 +53,9 @@ CI（`.github/workflows/ci.yml`）在每次 push 和 pull request 跑這三項�
 | `npm run verify:persist` | 用真的 `wrangler dev` 寫入購物車，關掉再重開同一個 `--persist-to` 目錄，確認讀回來的購物車一樣。 |
 | `npm run verify:mcp` | 用真的 `wrangler dev` 走一遍住民的流程：`initialize`、`tools/list`、記兩件、`cart_list`、移除一件、排介紹片、查進度，再確認 `/api/cart` 讀到同一個購物車，以及沒有 token 和 token 錯誤都回 401。token 每次隨機產生，不會印出來。 |
 | `npm run verify:adapter` | 對真的 `wrangler dev` 跑 `adapter/cli.ts --dry-run`，再用本機的假 Model API 跑一輪，確認東西進了購物車。見 [adapter 說明](adapter/README.md)。 |
+| `npm run verify:share` | 用真的 `wrangler dev`（有 token、`OPEN_OWNER_ACCESS=false`，跟正式環境一樣）走分享流程：`/api/cart` 沒 token 回 401；開分享後依序切 hidden、range、exact 檢查 `/s/<slug>` 的 JSON；關分享後回 404。 |
 | `node scripts/screenshots.mjs` | 建置、啟動 `wrangler dev --env local`，等貨架擺上 5 件商品後存 `docs/screenshots/desktop.png` 和 `mobile-390.png`。 |
+| `npm run screenshots:share` | 存房間分享面板和訪客分享頁的截圖（1440 和 390 寬，range 模式）到 `docs/screenshots/`。設了 `SHARE_SCREENSHOTS_COPY_TO` 會另外複製一份到那個目錄。 |
 | `node scripts/render-character.mjs` | 把 Kenney 的 CC0 角色算成 `public/art/characters/clerk-standee.png` 和 `clerk-portrait.png`。 |
 | `node scripts/generate-studio-set.mjs` | 用 three.js 基本形狀產生主播台棚景 `public/studio/showroom-set.glb`。 |
 | `node tools/meta-hackathon/probe/run-all.ts --dry-run` | 不呼叫 API，印出 Meta Model API 探針的請求和費用估算。見 [探針說明](tools/meta-hackathon/probe/README.md)。 |
@@ -95,9 +97,13 @@ echo "CART_MCP_TOKEN=$(openssl rand -base64 24)" > .dev.vars
 | `GET /s/<slug>`，瀏覽器 | 分享開著時回 app 的 `index.html`，`<title>` 和 `og:title` 是「{暱稱} 的小屋購物車」，`og:description` 是「{n} 件東西」，不放價格；其餘回同一個純文字 404 頁。 |
 
 - `prices` 是 `hidden`（只有品名、圖片、數量）、`range`（每件和總額給區間，如 `NT$ 300–500`）或 `exact`（精確價格和總額）。`nickname` 1 到 24 字，預設「屋主」。
-- `ShareView` 每種模式各有一個嚴格的形狀（`shared/share.ts`）：`hidden` 沒有任何價格欄位，`range` 只有 `priceRange` 和 `totalRange`。沒有 item id、店名、revision。商品連結去掉 query、`#` 和帳號密碼。
+- `ShareView` 用 `mode` 標明模式，每種模式各有一個嚴格的形狀（`shared/share.ts`）：`hidden` 沒有任何價格欄位，`range` 只有 `priceRange` 和 `totalRange`。沒有 item id、店名、revision。商品連結去掉 query、`#` 和帳號密碼；圖片網址照原樣給（有去背圖時給去背圖）。
 - `/s/` 的回應都帶 `cache-control: no-store`、`vary: accept`、`referrer-policy: no-referrer`、`x-robots-tag: noindex`。slug 錯、格式不對、從沒建立、已關閉，回的 404 一模一樣。只接受 `GET`。
 - `npm run verify:share` 用真的 `wrangler dev`（有 token、不開 `OPEN_OWNER_ACCESS`）走一遍上面全部；`npm run screenshots:share` 存分享面板和分享頁的截圖。
+
+| 房間的分享面板 | 訪客的分享頁 |
+|---|---|
+| ![桌機截圖：右側分享面板，開放分享、選了價格區間，暱稱小島，下方有分享連結、預覽和下載分享卡；房間收銀機顯示 NT$ 5,000–10,000](docs/screenshots/room-share-settings-1440.png) | ![桌機截圖：小島 的小屋購物車，總額 NT$ 5,000–10,000，清單每件只顯示價格區間和看商品連結](docs/screenshots/share-page-1440.png) |
 
 ## `/mcp`
 
@@ -110,13 +116,13 @@ echo "CART_MCP_TOKEN=$(openssl rand -base64 24)" > .dev.vars
 | 工具 | 輸入 | 回傳 | 唯讀 |
 |---|---|---|---|
 | `cart_add` | `{ title, store?, url?, priceTwd?, imageUrl?, qty? }`，`qty` 預設 1 | `Cart` | 否 |
-| `cart_list` | `{}` | `Cart`，加上 `share: { url, enabled }` | 是 |
+| `cart_list` | `{}` | `Cart`，加上 `share: { url, enabled, prices }` | 是 |
 | `cart_remove` | `{ itemId, qty? }`，不給 `qty` 就整件移除 | `Cart` | 否 |
 | `promo_generate` | `{ durationSec?, style? }`，`durationSec` 介於 15 到 45，預設 30 | `{ jobId, status: 'queued' }` | 否 |
 | `promo_status` | `{ jobId }` | `PromoJob` | 是 |
 
 - `cart_add` 遇到標題、店名、連結都相同的東西，會把數量加上去，不會多佔一格。購物車最多 50 件。
-- 分享不另開工具。分享連結只出現在 `cart_list` 的 `share.url`，格式是 `https://<主機>/s/<slug>`，不帶 query。slug 是 16 bytes 的 crypto 亂數（22 個 base64url 字元），第一次需要時產生並保存。`enabled` 預設 `false`。打開分享、選公開欄位和分享頁本身都是 S3 的事。
+- 分享不另開工具。分享連結只出現在 `cart_list` 的 `share.url`，格式是 `https://<主機>/s/<slug>`，不帶 query。slug 是 16 bytes 的 crypto 亂數（22 個 base64url 字元），第一次需要時產生並保存。`enabled` 預設 `false`，`prices` 預設 `hidden`。開關分享、選價格顯示方式和暱稱只能由屋主在房間裡做，見上面的「分享」。
 - 參數不對、購物車是空的、找不到 `itemId` 或 `jobId` 時，工具回 `isError: true` 的結果，訊息寫給模型看，讓它修正後重試。工具名稱不存在時回 JSON-RPC 錯誤 `-32602`。
 - 型別在 `shared/cart.ts`、`shared/promo.ts`、`shared/share.ts`，工具在 `worker/tools.ts`，傳輸在 `worker/mcp.ts`。
 
