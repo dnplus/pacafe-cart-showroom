@@ -6,6 +6,7 @@ import { useCart } from './cart/useCart';
 import { RoomZones } from './components/RoomZones';
 import { t } from './i18n';
 import { saveOwnerKey } from './owner';
+import { PromoPanel } from './promo/PromoPanel';
 import { RoomScene, type RoomControls } from './room/RoomScene';
 import { showroomStudioSet } from './room/studioSet';
 import { SharingSettings } from './share/SharingSettings';
@@ -29,6 +30,7 @@ function Showroom() {
   return <main className="agent-house-app showroom">
     <CartHud state={state} open={listOpen} onToggle={() => setListOpen(open => !open)} unlock={key => { saveOwnerKey(key); retry(); }} sharing={sharing} onShare={() => setSharing(open => !open)}>
       {sharing && <SharingSettings cart={cart} controls={controls} onPreview={setPreview} close={() => setSharing(false)} />}
+      <PromoPanel count={cart?.items.length ?? 0} />
     </CartHud>
     <section className="world-stage game-stage" aria-label={t('Cart showroom')}>
       <RoomZones>
