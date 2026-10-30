@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { cartQty, webUrl, type Cart, type CartItem } from './cart';
+import { cartQty, webUrl, type Cart, type CartItem } from './cart.ts';
 
 /** What a visitor learns about prices: nothing, a bucket per item and for the total, or the exact amounts. */
 export const priceModes = ['hidden', 'range', 'exact'] as const;

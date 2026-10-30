@@ -28,6 +28,7 @@
     "shared",
     "worker",
     "adapter",
+    "runner",
     "tests",
     "tools",
     "vite.config.ts",

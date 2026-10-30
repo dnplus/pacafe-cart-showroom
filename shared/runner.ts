@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { promoJobSchema, PROMO_STATUSES } from './promo';
-import { shareViewSchema } from './share';
+import { promoJobSchema, PROMO_STATUSES } from './promo.ts';
+import { shareViewSchema } from './share.ts';
 
 /**
  * The contract between the worker and the S4 promo runner (runner/). Every route needs `Authorization: Bearer <CART_MCP_TOKEN>`,

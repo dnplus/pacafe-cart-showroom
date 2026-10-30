@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { webUrl, type Cart } from './cart';
+import { webUrl, type Cart } from './cart.ts';
 
 export const PROMO_STATUSES = ['queued', 'storyboard', 'voice', 'rendering', 'done', 'failed'] as const;
 
