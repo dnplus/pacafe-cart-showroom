@@ -1,9 +1,8 @@
 import { spawn, spawnSync } from 'node:child_process';
 import net from 'node:net';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { root } from './root.mjs';
 
-export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const bin = name => path.join(root, 'node_modules/.bin', name);
 
 export function build() {

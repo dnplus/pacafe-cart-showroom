@@ -3,7 +3,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { build, root, startWorker } from './lib/wrangler.mjs';
+import { root } from './lib/root.mjs';
+import { build, startWorker } from './lib/wrangler.mjs';
 
 const items = [
   { title: '陶瓷馬克杯', store: '小島陶房', url: 'https://example.com/xiaodao/mug', priceTwd: 420, qty: 2 },
