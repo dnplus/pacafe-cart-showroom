@@ -58,7 +58,8 @@ CI（`.github/workflows/ci.yml`）在每次 push 和 pull request 跑這三項�
 | `node scripts/screenshots.mjs` | 建置、啟動 `wrangler dev --env local`，先把 5 個快遞箱都記成拆過，等貨架擺上 5 件商品後存 `docs/screenshots/desktop.png` 和 `mobile-390.png`。 |
 | `npm run screenshots:share` | 存房間分享面板和訪客分享頁的截圖（1440 和 390 寬，range 模式）到 `docs/screenshots/`。設了 `SHARE_SCREENSHOTS_COPY_TO` 會另外複製一份到那個目錄。 |
 | `node scripts/screenshots-unbox.mjs` | 用真的 `wrangler dev` 跑一遍拆快遞：桌機用滑鼠、390 寬用真的觸控事件（CDP）劃開一件、沒劃完就放手、劃開上架、再一鍵秒開，每一步存一張圖到 `UNBOX_SCREENSHOTS_DIR`（預設 `.local/screenshots-unbox`）。設 `UNBOX_REDUCED_MOTION=1` 會開「減少動態」再跑一次。 |
-| `node scripts/render-character.mjs` | 把 Kenney 的 CC0 角色算成 `public/art/characters/clerk-standee.png` 和 `clerk-portrait.png`。 |
+| `node scripts/render-character.mjs` | 把 Kenney 的 CC0 角色算成 `public/art/characters/clerk-standee.png`、`clerk-portrait.png`，和綠色版 `clerk-mint-*.png`。 |
+| `node scripts/screenshots-cast.mjs` | 存角色面板和房間（換店員前後、C 位剪影、沒金鑰的說明、用假 Meta API 生成的角色、訪客頁）的截圖到 `$CAST_SCREENSHOTS_DIR`，1440 和 390 寬各一套。 |
 | `node scripts/generate-studio-set.mjs` | 用 three.js 基本形狀產生主播台棚景 `public/studio/showroom-set.glb`。 |
 | `node tools/meta-hackathon/probe/run-all.ts --dry-run` | 不呼叫 API，印出 Meta Model API 探針的請求和費用估算。見 [探針說明](tools/meta-hackathon/probe/README.md)。 |
 
@@ -122,6 +123,35 @@ echo "CART_MCP_TOKEN=$(openssl rand -base64 24)" > .dev.vars
 | 房間的分享面板 | 訪客的分享頁 |
 |---|---|
 | ![桌機截圖：右側分享面板，開放分享、選了價格區間，暱稱小島，下方有分享連結、預覽和下載分享卡；房間收銀機顯示 NT$ 5,000–10,000](docs/screenshots/room-share-settings-1440.png) | ![桌機截圖：小島 的小屋購物車，總額 NT$ 5,000–10,000，清單每件只顯示價格區間和看商品連結](docs/screenshots/share-page-1440.png) |
+
+## 角色與 C 位
+
+屋主在房間按「角色」打開面板。選擇存在屋主設定裡（Durable Object 的 `cast`），重新整理和換裝置都會保留。
+
+**櫃台後的店員。** 有四個可選，圖都不是從別的專案搬來的：
+
+| id | 名稱 | 來源 |
+|---|---|---|
+| `clerk` | 店員 | Kenney 的 CC0 角色 |
+| `clerk-mint` | 薄荷店員 | 同一個 Kenney 角色，紫色換成綠色（`scripts/render-character.mjs`） |
+| `apron` | 圍裙店員 | 用程式畫的 SVG（`src/room/characterArt.ts`） |
+| `cap` | 帽子店員 | 用程式畫的 SVG（`src/room/characterArt.ts`） |
+
+**C 位是屋主本人。** 房間中間（櫃台左前方的地板）站一個代表屋主的立牌，名牌是分享設定的暱稱，預設「屋主」。還沒有自己的角色時，站的是程式畫的中性剪影。屋主可以選一張自己的照片，勾選「這是我本人，並同意用這張照片生成角色」，按「請 Muse 生成」：伺服器透過 Meta Model API 使用 Meta 的 Muse 模型（`muse-image-1.0`）畫一張 chibi 全身立牌。
+
+| 請求 | 回應 |
+|---|---|
+| `GET /api/cast`（屋主） | `200`，`{ character, owner, nickname, spriteGeneration }`。`owner` 是 `{ kind: 'placeholder' }` 或 `{ kind: 'generated', key, generatedAt, model }`。 |
+| `PUT /api/cast`（屋主），body `{ character }` | `200`，同上。`character` 不在清單裡回 `400`。 |
+| `POST /api/cast/owner-sprite`（屋主），multipart：`photo`（JPEG 或 PNG，2 MB 以內）、`consent=true` | `200`，同上。沒勾同意或照片不對回 `400`，太大回 `413`，沒設 Meta 金鑰回 `503`，模型失敗回 `502`。 |
+| `DELETE /api/cast/owner-sprite`（屋主） | 改回剪影，並刪掉生成的圖。 |
+
+- 沒有 `META_API_KEY` 和 `META_API_BASE_URL`（都用 `wrangler secret put` 設）時，`GET /api/cast` 回 `spriteGeneration: { available: false, reason: 'needs_meta_api_key' }`，面板的按鈕是灰的並說明要設什麼；`POST` 回 `503`，完全不呼叫外部 API。
+- 送出的請求固定帶 `enable_image_search: false`，prompt 是固定範本，不含任何品牌或產品名稱。模型的錯誤內容和金鑰都不會回給前端；失敗一律是 `502 { error: 'generation_failed' }`。
+- 生成的 PNG 存在 R2 的 `owner/sprite-<uuid>.png`，`customMetadata` 記 `aiGenerated: 'true'`、`model`、`generatedAt`、`enableImageSearch: 'false'`。照片只在這次請求裡轉給模型，不存。面板在圖旁標「AI 生成（Muse Image）」。
+- **隱私：生成的角色只出現在屋主自己的房間。** 讀圖走 `/media/owner/...`，要屋主金鑰，前端用 `ownerFetch` 取回再轉成 object URL。訪客的 `/s/<slug>` 回應和頁面都不含它，C 位一律畫剪影、名牌是分享暱稱。分享面板開著時，房間也照訪客看到的樣子畫（剪影加預設店員），下載的分享卡才不會漏出來。
+- 訪客看到的店員目前一律是預設的「店員」，不跟著屋主的選擇走。
+- `node scripts/screenshots-cast.mjs` 用本機假的 Meta API（127.0.0.1，假金鑰，程式畫的 PNG）存面板和房間的截圖到 `$CAST_SCREENSHOTS_DIR`，不會打真的 API。
 
 ## `/mcp`
 

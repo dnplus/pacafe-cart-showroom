@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { ChevronDown, ChevronUp, KeyRound, Share2, ShoppingBasket } from 'lucide-react';
+import { ChevronDown, ChevronUp, KeyRound, Share2, ShoppingBasket, UsersRound } from 'lucide-react';
 import { cartView, formatTwd } from '../../shared/cart';
 import { t } from '../i18n';
 import { hasOwnerKey } from '../owner';
@@ -20,7 +20,7 @@ function OwnerKeyForm({ unlock }: { unlock: (key: string) => void }) {
   </form>;
 }
 
-export function CartHud({ state, open, onToggle, unlock, sharing, onShare, children }: { state: CartState; open: boolean; onToggle: () => void; unlock: (key: string) => void; sharing: boolean; onShare: () => void; children?: ReactNode }) {
+export function CartHud({ state, open, onToggle, unlock, sharing, onShare, casting = false, onCast, children }: { state: CartState; open: boolean; onToggle: () => void; unlock: (key: string) => void; sharing: boolean; onShare: () => void; casting?: boolean; onCast?: () => void; children?: ReactNode }) {
   if (state.status === 'locked') return <aside className="cart-hud" aria-label={t('Cart showroom')} data-testid="cart-hud">
     <header className="cart-hud-head">
       <span className="cart-hud-mark" aria-hidden="true"><ShoppingBasket size={18} /></span>
@@ -35,6 +35,7 @@ export function CartHud({ state, open, onToggle, unlock, sharing, onShare, child
       <span className="cart-hud-mark" aria-hidden="true"><ShoppingBasket size={18} /></span>
       <span><strong>{t('Cart showroom')}</strong><small>{t('Things your Muse noted while shopping')}</small></span>
       {state.status !== 'loading' && <button type="button" className="cart-share" aria-expanded={sharing} aria-controls="share-panel" onClick={onShare} data-testid="share-button"><Share2 size={15} aria-hidden="true" />{t('Share')}</button>}
+      {state.status !== 'loading' && onCast && <button type="button" className="cart-share" aria-expanded={casting} aria-controls="cast-panel" onClick={onCast} data-testid="cast-button"><UsersRound size={15} aria-hidden="true" />{t('Cast')}</button>}
     </header>
     <dl className="cart-stats">
       <div><dt>{t('Items')}</dt><dd data-testid="hud-count">{view.count}</dd></div>

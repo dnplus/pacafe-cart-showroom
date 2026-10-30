@@ -3,7 +3,7 @@ import type { StudioSet } from '../../shared/studio';
 import type { PresenterShot } from './roomModel';
 import { TouchCamera } from './touchCamera';
 import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type FocusEvent, type PointerEvent, type Ref } from 'react';
-import { BatteryMedium, RotateCcw, Store } from 'lucide-react';
+import { BatteryMedium, RotateCcw, Store, User } from 'lucide-react';
 import type { BaristaAppearance, Character } from '../../shared/domain';
 import type { Shelf } from '../cart/shelf';
 import type { SceneryId } from '../../shared/scenery';
@@ -16,6 +16,7 @@ import { defaultFurniture, type FurnitureItem } from './furniture';
 import { t } from '../i18n';
 import { RoomZone } from '../components/RoomZones';
 import { graphicsProfile, useGraphicsQuality } from './graphicsQuality';
+import './owner.css';
 
 const clampViewAngle = (angle: number) => Math.max(minRoomAngle, Math.min(maxRoomAngle, angle));
 
@@ -25,7 +26,7 @@ const emptyShelf: Shelf = { items: [], register: '' };
 export interface RoomControls { turn(delta: number): void; zoom(factor: number): void; pan?(dx: number, dy: number): void; reset(): void; /** Puts the barista on the presenter spot behind this piece, or back to the counter with null. */ present?(spot: string | null): void; /** The act to play on stage, `elapsed` seconds into it; a long cue keeps the same act running. */ baristaAction?(act: PerformanceAct, elapsed: number): void; capture?(width: number, height: number, background: string): HTMLCanvasElement | null; /** Points a front camera at the presenter (zoom 1–3, `toward` 0 the host … 1 the spot's desk); null gives the room camera back. */ shoot?(shot: PresenterShot | null): void }
 export interface RoomDemoProps { demo?: boolean; asleep?: boolean; controls?: Ref<RoomControls>; /** A rehearsal of the stored script, played from `startedAt` (ms, wall clock). */ rehearsal?: { script: PerformanceScript; startedAt: number } | null; onPerformanceEnd?: () => void; /** The spot the barista waits at while the editing desk's camera is on them. */ presenter?: string | null; onReady?: () => void; onFallback?: () => void; debug?: RoomDebugHook; /** Frame the room as a canvas this many CSS pixels tall would; read once, when the room is built. */ frameHeight?: number; /** The studio set standing in the room; `furniture` already leaves out what it covers. */ studioSet?: StudioSet | null }
 
-export function RoomScene({ scenery, counter, shelf = null, barista = 'clerk', baristaAppearance, baristaName, furniture, brightness = 1, finish, hour, paused = false, uiHidden = false, demo = false, asleep = false, controls, rehearsal, onPerformanceEnd, presenter, onReady, onFallback, cameraControls = true, debug, frameHeight, studioSet }: RoomDemoProps & { cameraControls?: boolean; scenery: SceneryId; /** Opens the cart's list: the shelf, the counter, the register and the clerk all lead there. */ counter: () => void; /** What the shelf and the register show; null draws them empty. */ shelf?: Shelf | null; barista?: Character; baristaAppearance?: BaristaAppearance; baristaName?: string; furniture?: FurnitureItem[]; brightness?: number; finish?: RoomFinishChoice; hour?: number; paused?: boolean; uiHidden?: boolean }) {
+export function RoomScene({ scenery, counter, shelf = null, barista = 'clerk', baristaAppearance, baristaName, furniture, brightness = 1, finish, hour, paused = false, uiHidden = false, demo = false, asleep = false, controls, rehearsal, onPerformanceEnd, presenter, onReady, onFallback, cameraControls = true, debug, frameHeight, studioSet, owner }: RoomDemoProps & { cameraControls?: boolean; scenery: SceneryId; /** Opens the cart's list: the shelf, the counter, the register and the clerk all lead there. */ counter: () => void; /** What the shelf and the register show; null draws them empty. */ shelf?: Shelf | null; barista?: Character; baristaAppearance?: BaristaAppearance; baristaName?: string; furniture?: FurnitureItem[]; brightness?: number; finish?: RoomFinishChoice; hour?: number; paused?: boolean; uiHidden?: boolean; /** The figure standing for the owner at the room's centre: its nameplate, its sprite (an image URL; null draws the placeholder) and what a click on the plate does. */ owner?: { name: string; sprite: string | null; open?: () => void } }) {
   const initialRoom = useRef({ furniture, brightness, debug, frameHeight, studioSet });
   useLayoutEffect(() => { initialRoom.current = { furniture, brightness, debug, frameHeight, studioSet }; }, [furniture, brightness, debug, frameHeight, studioSet]);
   const host = useRef<HTMLDivElement>(null); const room = useRef<RoomRenderer | null>(null); const worldRef = useRef<HTMLDivElement>(null);
@@ -63,6 +64,7 @@ export function RoomScene({ scenery, counter, shelf = null, barista = 'clerk', b
   useEffect(() => { room.current?.update(scenery); }, [scenery, ready]);
   useEffect(() => { room.current?.view(angle); }, [angle, ready]);
   useEffect(() => { room.current?.barista(barista, baristaAppearance); }, [barista, baristaAppearance, ready]);
+  useEffect(() => { room.current?.owner?.(owner?.sprite ?? null); }, [owner?.sprite, ready]);
   useEffect(() => { room.current?.studioSet?.(studioSet ?? null); }, [studioSet, ready]);
   useEffect(() => { room.current?.furniture(furniture ?? [...defaultFurniture]); }, [furniture, ready]);
   const shown = shelf ?? emptyShelf;
@@ -170,11 +172,14 @@ export function RoomScene({ scenery, counter, shelf = null, barista = 'clerk', b
     {!fallback && cameraControls && <RoomZone zone="top-left"><div hidden={uiHidden || !ready} className="camera-controls" role="toolbar" aria-label={t('Camera controls')}>
       <button type="button" className="round-control" onClick={resetView} aria-label={t('Reset room view')} title={t('Reset room view')}><RotateCcw size={18} /></button>
     </div></RoomZone>}
-    {fallback && <div className="fallback-art"><div className="fallback-barista" style={{ left: `${anchors.barista.x}%`, top: `${anchors.barista.y}%` }}><img className="sprite" src={baristaArt[barista].standee} alt={baristaArt[barista].label} onError={event => { event.currentTarget.src = residentSilhouette; }} /></div></div>}
+    {fallback && <div className="fallback-art"><div className="fallback-barista" style={{ left: `${anchors.barista.x}%`, top: `${anchors.barista.y}%` }}><img className="sprite" src={baristaArt[barista].standee} alt={t(baristaArt[barista].label)} onError={event => { event.currentTarget.src = residentSilhouette; }} /></div></div>}
     <div hidden={uiHidden} className={`world-controls ${ready ? 'ready' : ''}`}>
       <button className="physical-board-target counter-target" style={boardPosition(anchors.counter)} onClick={counter} onPointerEnter={() => glow('counter', 'hover', true)} onPointerLeave={() => glow('counter', 'hover', false)} onFocus={event => focusGlow('counter', event)} onBlur={() => glow('counter', 'focus', false)} aria-label={t('Counter and register. Show the list')} />
       <button className="physical-board-target shelf-target" style={boardPosition(anchors.shelf)} onClick={counter} onPointerEnter={() => glow('shelf', 'hover', true)} onPointerLeave={() => glow('shelf', 'hover', false)} onFocus={event => focusGlow('shelf', event)} onBlur={() => glow('shelf', 'focus', false)} aria-label={t('Shelf: {count} items. Show the list', { count: shown.items.length })} />
       <button className="barista-target" style={{ left: `${anchors.barista.x}%`, top: `${anchors.barista.y}%`, width: `${anchors.barista.width ?? 6}%`, height: `${(anchors.barista.height ?? 20) * .5}%` }} onClick={counter} aria-label={baristaName ?? t('Clerk')}><span className="barista-plate"><Store size={13} aria-hidden="true" />{baristaName ?? t('Clerk')}</span></button>
+      {owner && anchors.owner && (owner.open
+        ? <button className="barista-target owner-target" style={{ left: `${anchors.owner.x}%`, top: `${anchors.owner.y}%`, width: `${anchors.owner.width ?? 6}%`, height: `${(anchors.owner.height ?? 20) * .5}%` }} onClick={owner.open} aria-label={owner.name}><span className="barista-plate"><User size={13} aria-hidden="true" />{owner.name}</span></button>
+        : <span className="barista-target owner-target owner-target-still" style={{ left: `${anchors.owner.x}%`, top: `${anchors.owner.y}%`, width: `${anchors.owner.width ?? 6}%`, height: `${(anchors.owner.height ?? 20) * .5}%` }}><span className="barista-plate"><User size={13} aria-hidden="true" />{owner.name}</span></span>)}
       {shown.register && <button className="register-tag" data-testid="register-tag" style={{ left: `${anchors.register.x + (anchors.register.width ?? 0) / 2}%`, top: `${anchors.register.y}%` }} onClick={counter} aria-label={t('Register: {total}. Show the list', { total: shown.register })}>{shown.register}</button>}
     </div>
     {onAir && !uiHidden && !presenter && <RoomZone zone="top-left"><div className="studio-on-air" role="status" data-testid="studio-on-air">
