@@ -26,7 +26,7 @@
 
    打開 http://127.0.0.1:8877 。`dev:worker` 用 `wrangler.jsonc` 的 `env.local`（`OPEN_OWNER_ACCESS=true`）：這台機器上的任何人都算屋主，可以讀寫購物車和分享設定，第一次讀取時放進 5 件 fixture（`shared/fixtures/cart.ts`）。資料存在 `.local/state`。
 
-3. 寫入購物車。下一次輪詢（每 2 秒一次）時，貨架就換上新的東西。
+3. 寫入購物車。下一次輪詢（每 2 秒一次）時，櫃台就多一個快遞箱；拆開之後，東西才擺上貨架（見下面的「拆快遞」）。
 
    ```bash
    curl -X POST http://127.0.0.1:8877/api/cart \
@@ -55,8 +55,9 @@ CI（`.github/workflows/ci.yml`）在每次 push 和 pull request 跑這三項�
 | `npm run verify:runner` | 用真的 `wrangler dev` 扮演 runner：排隊、`/runner/next` 認領、回報 `storyboard`、`voice`、`rendering`、上傳假的 mp4 和 jpg、`done`，再確認 `promo_status`、`/api/promo` 和 `/media/promo/...` 看到同一支片、讀到上傳的位元組；也檢查沒 token 回 401、沒有 job 回 204、沒上傳就 `done` 回 409。token 隨機產生，不會印出來。 |
 | `npm run verify:adapter` | 對真的 `wrangler dev` 跑 `adapter/cli.ts --dry-run`，再用本機的假 Model API 跑一輪，確認東西進了購物車。見 [adapter 說明](adapter/README.md)。 |
 | `npm run verify:share` | 用真的 `wrangler dev`（有 token、`OPEN_OWNER_ACCESS=false`，跟正式環境一樣）走分享流程：`/api/cart` 沒 token 回 401；開分享後依序切 hidden、range、exact 檢查 `/s/<slug>` 的 JSON；關分享後回 404。 |
-| `node scripts/screenshots.mjs` | 建置、啟動 `wrangler dev --env local`，等貨架擺上 5 件商品後存 `docs/screenshots/desktop.png` 和 `mobile-390.png`。 |
+| `node scripts/screenshots.mjs` | 建置、啟動 `wrangler dev --env local`，先把 5 個快遞箱都記成拆過，等貨架擺上 5 件商品後存 `docs/screenshots/desktop.png` 和 `mobile-390.png`。 |
 | `npm run screenshots:share` | 存房間分享面板和訪客分享頁的截圖（1440 和 390 寬，range 模式）到 `docs/screenshots/`。設了 `SHARE_SCREENSHOTS_COPY_TO` 會另外複製一份到那個目錄。 |
+| `node scripts/screenshots-unbox.mjs` | 用真的 `wrangler dev` 跑一遍拆快遞：桌機用滑鼠、390 寬用真的觸控事件（CDP）劃開一件、沒劃完就放手、劃開上架、再一鍵秒開，每一步存一張圖到 `UNBOX_SCREENSHOTS_DIR`（預設 `.local/screenshots-unbox`）。設 `UNBOX_REDUCED_MOTION=1` 會開「減少動態」再跑一次。 |
 | `node scripts/render-character.mjs` | 把 Kenney 的 CC0 角色算成 `public/art/characters/clerk-standee.png` 和 `clerk-portrait.png`。 |
 | `node scripts/generate-studio-set.mjs` | 用 three.js 基本形狀產生主播台棚景 `public/studio/showroom-set.glb`。 |
 | `node tools/meta-hackathon/probe/run-all.ts --dry-run` | 不呼叫 API，印出 Meta Model API 探針的請求和費用估算。見 [探針說明](tools/meta-hackathon/probe/README.md)。 |
@@ -85,6 +86,22 @@ echo "CART_MCP_TOKEN=$(openssl rand -base64 24)" > .dev.vars
 - `totalTwd` 是每件 `priceTwd × qty` 的總和，沒標價的算 0。
 - 貨架有 12 格（3 層 × 4 格）。每件依清單順序佔一格，`fill = min(1, 件數 / 12)`；超過 12 件的照樣算進總額，但擺不上貨架。
 - 同樣的內容寫兩次，回來的是同一個購物車，`revision` 不變。標題、店名和連結不變的東西，會保留原本的 `id` 和 `addedAt`。
+
+## 拆快遞：`/api/unbox`
+
+購物車裡的東西不是直接擺上貨架，而是先變成快遞箱送到櫃台。屋主用手指或滑鼠沿著膠帶劃開，商品跳出來飛上貨架；箱子多的時候有「一鍵秒開（N 件）」，全部一起拆。全部拆完後，櫃台的快遞介面自己收起來。
+
+| 請求 | 回應 |
+|---|---|
+| `GET /api/unbox`（屋主） | `200`，`{ opened: { <itemId>: <ISO 時間> } }`。只列還在購物車裡的東西。 |
+| `POST /api/unbox`（屋主），body `{ "itemIds": string[] }`（1 到 50 個） | `200`，新的 `{ opened }`。body 不對回 `400`，沒有 token 回 `401`。 |
+
+- 沒有紀錄的東西就是箱子。第一次載入時 fixture 的 5 件全是箱子。紀錄存在 Durable Object 的 `unbox` key，形狀在 `shared/unbox.ts`。
+- `POST` 可以重送：已經拆過的保留原本的時間，不在購物車裡的 id 直接略過，同時刪掉已經不在購物車的紀錄。
+- 屋主的貨架只畫拆過的商品；收銀機的總額照舊算整個購物車。訪客的分享頁和 `/s/<slug>` 不變，看得到整個購物車。
+- 每個箱子走 `arriving`、`atCounter`、`slicing`、`opened`、`shelved` 五個階段（`src/cart/unbox.ts` 的 reducer）。膠帶劃過 85% 就打開；沒劃完就放手，箱子回到 `atCounter`，劃痕歸零，下一次重劃。商品跳出來的動畫放完、`POST` 成功之後才變 `shelved` 並出現在貨架上；寫入失敗會每 2 秒重試，箱子留在畫面上。
+- 介面疊在 `main` 底下、房間外面，所以一指劃動不會被房間的雙指相機手勢吃掉。箱子可以用鍵盤的 Enter 或空白鍵打開；系統開了「減少動態」就沒有動畫。
+- 測試用的掛鉤：`data-testid="unbox"`（介面）、`unbox-box`（每個箱子，帶 `data-item-id`、`data-phase`）、`unbox-tape`（膠帶）、`unbox-all`（秒開鈕）。
 
 ## 分享：`/api/share` 和 `/s/<slug>`
 
@@ -193,7 +210,7 @@ muse exec --prompt-file muse/demo-task.txt --disable-approval --max-model-steps 
 | 5 支 MCP 工具、介紹片 job、分享設定 | `worker/tools.ts`、`shared/promo.ts`、`shared/share.ts` | 無 | 賽中新寫 |
 | skills、Muse Code 設定範例、demo 任務 | `.agents/skills/`、`muse/` | 無 | 賽中新寫 |
 | Model API function calling 轉 MCP 的備援 | `adapter/` | 無 | 賽中新寫 |
-| 貨架商品、收銀機、HUD、輪詢 | `src/cart/`、`src/App.tsx` | 無 | 賽中新寫 |
+| 貨架商品、收銀機、HUD、輪詢、拆快遞 | `src/cart/`、`src/App.tsx`、`shared/unbox.ts` | 無 | 賽中新寫 |
 | 櫃台、貨架、植物、地毯的模型 | `src/room/furnitureModels.ts` | 無 | 賽中新寫 |
 | 角色算圖、棚景產生、截圖、持久化驗證、MCP 驗證 | `scripts/` | 無 | 賽中新寫 |
 | 測試 | `tests/` | 無 | 賽中新寫 |

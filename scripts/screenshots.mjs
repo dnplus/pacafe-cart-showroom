@@ -1,5 +1,5 @@
 // Builds the app, runs it on `wrangler dev --env local` (which seeds the five-item fixture), and saves the room at
-// desktop and phone sizes to docs/screenshots once the shelf holds five products. Run: node scripts/screenshots.mjs
+// desktop and phone sizes to docs/screenshots once the shelf holds five products (after opening the five parcels through /api/unbox). Run: node scripts/screenshots.mjs
 // Needs Playwright's Chromium (npx playwright-core install chromium) on the machine; CI does not run this.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -17,6 +17,9 @@ fs.mkdirSync(path.join(root, '.local'), { recursive: true });
 const persistTo = fs.mkdtempSync(path.join(root, '.local', 'screenshots-'));
 build();
 const worker = await startWorker(persistTo);
+// The owner's shelf only draws unboxed items, so open the fixture's parcels first; scripts/screenshots-unbox.mjs shows the parcels themselves.
+const { items } = await (await fetch(`${worker.origin}/api/cart`)).json();
+await fetch(`${worker.origin}/api/unbox`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ itemIds: items.map(item => item.id) }) });
 const browser = await launchBrowser();
 const report = [];
 try {
