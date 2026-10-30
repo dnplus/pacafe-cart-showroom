@@ -75,6 +75,7 @@ describe('worker', () => {
     const fake: Env = {
       SHOWROOM: { idFromName: (name: string) => { asked.push(`id:${name}`); return name; }, get: (id: string) => ({ fetch: async () => { asked.push(`room:${id}`); return Response.json({} as Cart); } }) } as unknown as DurableObjectNamespace,
       ASSETS: { fetch: async () => { asked.push('assets'); return new Response('app'); } } as unknown as Fetcher,
+      MEDIA: {} as R2Bucket,
     };
     const run = (path: string) => worker.fetch(new Request(`https://showroom.test${path}`) as Parameters<typeof worker.fetch>[0], fake);
     await run('/api/cart'); await run('/api/share'); await run('/mcp'); await run('/'); await run('/some/page');

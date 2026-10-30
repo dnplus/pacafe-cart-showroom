@@ -3,15 +3,19 @@
   "name": "pacafe-cart-showroom",
   "main": "worker/index.ts",
   "compatibility_date": "2026-10-01",
-  // /api/*, /mcp and the share pages /s/* reach the Worker; every other path is the built single-page app.
-  "assets": { "directory": "./dist/client", "binding": "ASSETS", "not_found_handling": "single-page-application", "run_worker_first": ["/api/*", "/mcp", "/s/*"] },
+  // /api/*, /mcp, the share pages /s/*, stored media /media/* and the promo runner's /runner/* reach the Worker; every other path is the built single-page app.
+  "assets": { "directory": "./dist/client", "binding": "ASSETS", "not_found_handling": "single-page-application", "run_worker_first": ["/api/*", "/mcp", "/s/*", "/media/*", "/runner/*"] },
   "durable_objects": { "bindings": [{ "name": "SHOWROOM", "class_name": "Showroom" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Showroom"] }],
+  // Promo videos and the owner's generated sprite, served by worker/media.ts.
+  "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "pacafe-cart-showroom-media" }],
   // The owner's routes need CART_MCP_TOKEN, set with `wrangler secret put CART_MCP_TOKEN`; it is never written in this file.
+  // META_API_KEY and META_API_BASE_URL are secrets too, set the same way; without them the owner's sprite button says what it needs.
   "env": {
     "local": {
       "name": "pacafe-cart-showroom-local",
       "durable_objects": { "bindings": [{ "name": "SHOWROOM", "class_name": "Showroom" }] },
+      "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "pacafe-cart-showroom-media-local" }],
       "vars": {
         // Local only: anyone on this machine is the owner, and a showroom never written starts with the five-item fixture.
         "OPEN_OWNER_ACCESS": "true",

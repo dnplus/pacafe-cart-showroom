@@ -1,5 +1,6 @@
 import { shareViewSchema, type ShareView } from '../shared/share';
 import type { Env } from './env';
+import { serveMedia } from './media';
 
 // The Workers runtime binds the Durable Object class by name (wrangler.jsonc `class_name`), so the entry module exports it.
 export { Showroom } from './showroom';
@@ -38,6 +39,7 @@ export default {
       for (const [name, value] of Object.entries(shareHeaders)) headers.set(name, value);
       return new Response(answer.body, { status: answer.status, headers });
     }
+    if (pathname.startsWith('/media/')) return serveMedia(request, env);
     if (pathname === '/api/cart' || pathname === '/api/share' || pathname === '/mcp') return showroom(env).fetch(request);
     if (pathname.startsWith('/api/')) return Response.json({ error: 'not_found' }, { status: 404 });
     return env.ASSETS.fetch(request);
