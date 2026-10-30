@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { sharePath, shareView, type ShareSettings } from '../shared/share';
 import { CartHud } from './cart/CartHud';
+import { UnboxTray } from './cart/UnboxTray';
 import { ownerShelf, sharedShelf } from './cart/shelf';
 import { useCart } from './cart/useCart';
 import { useUnbox } from './cart/useUnbox';
@@ -39,5 +40,6 @@ function Showroom() {
         <RoomScene scenery="peach" shelf={shelf} controls={controls} counter={() => setListOpen(true)} baristaName={t('Clerk')} studioSet={showroomStudioSet} hour={14} />
       </RoomZones>
     </section>
+    {!sharing && <UnboxTray {...unbox} items={cart?.items ?? []} />}
   </main>;
 }

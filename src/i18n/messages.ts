@@ -94,5 +94,12 @@ export const messages = [
   ['Could not queue the video. Try again.', '排不進去，請再試一次。'],
   ['Cannot check the video right now. Trying again.', '暫時查不到影片進度，會再試。'],
   ['Video progress', '影片進度'],
+  ['Parcels at the counter', '櫃台的快遞'],
+  ['Swipe along the tape to cut it open', '沿著膠帶劃開'],
+  ['Open all at once ({count})', '一鍵秒開（{count} 件）'],
+  ['Parcel: {title}. Swipe along the tape, or press Enter to open it.', '快遞：{title}。沿著膠帶劃開，或按 Enter 打開。'],
+  ['Parcel waiting its turn', '排隊中的快遞'],
+  ['From {store}', '寄件：{store}'],
+  ['Could not save what you opened. Trying again.', '拆開的結果存不進去，會再試一次。'],
 ] as const;
 export type TextKey = typeof messages[number][0];
