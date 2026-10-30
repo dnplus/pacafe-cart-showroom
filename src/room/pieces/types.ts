@@ -1,7 +1,4 @@
 import type * as THREE from 'three';
-import type { LampView } from '../lighting';
-import type { Locale } from '../../../shared/locales';
-import type { Theme } from '../theme';
 import type { RoomFurnitureItem, RoomFurnitureKind, RoomTurn, RoomWall } from '../../../shared/room-settings';
 import { roomWalls } from '../../../shared/room-dimensions';
 
@@ -23,17 +20,8 @@ export type Interaction =
   | { type: 'serve'; spot: Spot }
   | { type: 'deliver'; spot: Vec; look: Vec; surface: { x: number; y: number; z: number }[] }
   | { type: 'linger'; id: string; activity: Activity; spots: Spot[]; look: Vec }
-  | { type: 'open'; panel: 'energy' | 'counter' | 'notice' }
+  | { type: 'open'; panel: 'counter' }
   | { type: 'poke'; reaction: 'bounce' | 'sway' | 'own' };
-
-export interface RoomState { locale: Locale; theme: Theme; mobile: boolean; board: { lines: string[]; active: boolean; indicators?: string[]; residents?: { name: string; points: number; energy: string }[] }; tint: string;
-  notices?: string[] }
-export interface PieceView {
-  node: THREE.Group;
-  refresh?(state: RoomState): void;
-  react?(since: number, calm: boolean): void;
-  lamp?: LampView;
-}
 
 export interface PieceSpec {
   kind: PieceKind;

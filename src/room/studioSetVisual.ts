@@ -23,23 +23,9 @@ export async function studioSetVisual(set: StudioSet) {
     object.position.y += .2225 - new THREE.Box3().setFromObject(object, true).min.y;
     for (const name of props) node(name).position.y += top - before.max.y;
   };
-  if (set.preset === 'presenter') {
-    desk('host_desk', 1.1, ['host_monitor', 'host_desktop_microphone', 'host_coffee_mug', 'host_desk_plant']);
-    node('host_monitor').position.x = -.82; node('host_monitor').position.z = .06;
-    node('host_desk_plant').position.z = -.23;
-  } else if (set.preset === 'gaming') {
-    desk('gaming_desk', 1.1, ['gaming_dual_monitor_arm', 'gaming_monitor_left', 'gaming_monitor_right', 'gaming_boom_microphone', 'gaming_keyboard', 'gaming_mouse', 'gaming_streamdeck', 'gaming_headphone_stand', 'gaming_mug']);
-    // The monitors sit off to the side, turned toward the host, so they never cover the host from the front camera.
-    const workstation = new THREE.Group(); root.add(workstation);
-    for (const name of ['gaming_dual_monitor_arm', 'gaming_monitor_left', 'gaming_monitor_right']) workstation.attach(node(name));
-    workstation.scale.setScalar(.6); workstation.rotation.y = Math.PI / 3; workstation.position.set(-1.15, 1.1 * .4, 0);
-  } else {
-    const props = ['course_laptop', 'course_gooseneck_microphone', 'course_tea_cup'];
-    desk('course_lectern', 1.05, props);
-    for (const name of ['course_lectern', ...props]) { node(name).position.x -= 1; node(name).position.z += .25; }
-    node('course_laptop').position.x -= .4;
-    node('course_softbox').position.x -= .55; node('course_softbox').position.z += .45;
-  }
+  desk('host_desk', 1.1, ['host_monitor', 'host_desktop_microphone', 'host_coffee_mug', 'host_desk_plant']);
+  node('host_monitor').position.x = -.82; node('host_monitor').position.z = .06;
+  node('host_desk_plant').position.z = -.23;
   root.position.set(set.x, 0, set.z);
   root.updateMatrixWorld(true);
   root.traverse(object => { if (object instanceof THREE.Mesh) { object.castShadow = true; object.receiveShadow = true; } });

@@ -1,4 +1,4 @@
-import type { Accent } from './house.ts';
+type Accent = 'peach' | 'sage' | 'lilac';
 
 export interface SceneryTheme { wall: string; floor: string; board: string; light: string }
 export interface Scenery { id: string; name: string; accent: Accent; price: number; theme: SceneryTheme }

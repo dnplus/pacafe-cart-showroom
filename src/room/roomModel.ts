@@ -1,5 +1,3 @@
-import { SEATING_FLOOR_Y } from '../../shared/seating-profiles';
-import { prepareWindowTransmission } from './windowTransmission';
 import { STUDIO_SET_SPOT, type StudioSet } from '../../shared/studio';
 import { hostPlace, studioSetDesk } from './studioSet';
 import { studioSetVisual } from './studioSetVisual';
@@ -13,24 +11,19 @@ import { frameSignature } from './frameSignature';
 import { graphicsProfile, type GraphicsProfile } from './graphicsQuality';
 import { clampRoomAngle, clampRoomZoom, frameRoom, roomFov } from './roomCamera';
 import type { SceneryId } from '../../shared/scenery';
-import { barSpots, defaultFurniture, interactionsOf, pieces as catalog, slotOf, type FurnitureItem, type FurnitureKind } from './furniture';
-import { assetFurnitureView } from './assets/overlays';
+import { barSpots, defaultFurniture, interactionsOf, pieces as catalog, type FurnitureItem, type FurnitureKind } from './furniture';
+import { furnitureModel, type FurnitureModel } from './furnitureModels';
 import { hangOnWall } from './pieces';
 import { cameraView, Card, dress, frameOf, illustrationFrame, measureImage, orientCard, releaseCardPlane, singleLayout, standeeMaterial, type Layout, type StandeeUniforms } from './standee';
 import { baristaBodies } from './barista';
 import { buildLight, buildStage } from './light';
-import { roomFloor, roomSize, roomWalls } from '../../shared/room-dimensions';
+import { floorTop, roomFloor, roomSize, roomWalls } from '../../shared/room-dimensions';
 import { daylight, type Daylight } from './daylight';
-import { isWindowFurniture, placedWindows, type WindowAnchor } from './windowLighting';
 import { defaultRoomBrightness, minRoomBrightness, maxRoomBrightness } from '../../shared/room-lighting-settings';
 import { themeFor, type Theme } from './theme';
 import { FinishSurfaces } from './finishSurfaces';
 import type { RoomFinishChoice } from '../../shared/room-finishes';
 import { glowLayer, type GlowTone } from './glow';
-import { FurnitureAssetPool } from './assets/pool';
-import { FurnitureVisual } from './assets/visual';
-import { furnitureVisualRequest } from './assets/bindings';
-import { furnitureMarker } from './assets/marker';
 
 export interface Anchor { x: number; y: number; scale: number; width?: number; height?: number }
 export interface RoomAnchors { counter: Anchor; barista: Anchor }
@@ -94,7 +87,6 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
   box(thickness, height, roomSize.depth - .1, leftWall, left.x - thickness / 2, top - height / 2, roomSize.centreZ, .07).castShadow = false;
   box(roomSize.width - .2, .14, .1, cream, roomSize.centreX, .35, back.z + .05); box(.1, .14, roomSize.depth - .3, cream, left.x + .05, .35, roomSize.centreZ);
   const light = buildLight(scene, renderer, group, track); light.shadowDetail(graphics.shadows === 'simple');
-  const models = new FurnitureAssetPool();
   const furnitureRoot = new THREE.Group(); group.add(furnitureRoot);
   const boundedBrightness = (value: number) => Number.isFinite(value) ? Math.max(minRoomBrightness, Math.min(maxRoomBrightness, value)) : defaultRoomBrightness;
   let roomBrightness = boundedBrightness(options.brightness ?? defaultRoomBrightness); host.dataset.brightness = String(roomBrightness);
@@ -102,12 +94,11 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
   /** The studio set standing in the room; furniture it covers is already left out of `furniture`. */
   let studioSet = options.studioSet ?? null, setView: Awaited<ReturnType<typeof studioSetVisual>> | undefined, setGeneration = 0;
   let presenterShot: PresenterShot | null = null;
-  const overlayShared = { maxAnisotropy: renderer.capabilities.getMaxAnisotropy() };
   mergeStatic(group, new Set([furnitureRoot, closedFloor]));
   let furniture: FurnitureItem[] = [...defaultFurniture];
-  type LivePiece = { item: FurnitureItem; node: THREE.Group; view: FurnitureVisual; key: string; poked: number };
+  type LivePiece = { item: FurnitureItem; node: THREE.Group; model: FurnitureModel; key: string; poked: number };
   const live = new Map<string, LivePiece>();
-  let windows: WindowAnchor[] = []; let lightingDirty = true;
+  let lightingDirty = true;
   const glow = glowLayer(); let hovered: string | null = null;
   const targetLit: Record<GlowTarget, Set<'hover' | 'focus'>> = { counter: new Set() };
   function placeGlow() {
@@ -119,41 +110,29 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
     glow.set(targets);
   }
   const pieceKey = (item: FurnitureItem) => `${item.kind}:${item.variant}:${item.size ?? 1}:${item.wall ?? ''}`;
-  function placePiece(item: FurnitureItem, node: THREE.Group, host?: FurnitureItem) {
-    if (isWindowFurniture(item.kind)) lightingDirty = true;
+  function placePiece(item: FurnitureItem, node: THREE.Group) {
     const spec = catalog[item.kind];
     if (spec.mount === 'wall') { hangOnWall(node, item.wall ?? 'back', item.wall === 'left' ? item.z : item.x, spec.hang!); return; }
-    const at = spec.mount === 'surface' ? slotOf(item, furniture, host) : null;
-    node.userData.baseY = at?.y ?? 0; node.position.set(at?.x ?? item.x, node.userData.baseY, at?.z ?? item.z); node.userData.baseRotationY = (at?.rotationY ?? 0) - item.turn * Math.PI / 2; node.rotation.set(0, node.userData.baseRotationY, 0);
+    node.userData.baseY = 0; node.position.set(item.x, 0, item.z); node.userData.baseRotationY = -item.turn * Math.PI / 2; node.rotation.set(0, node.userData.baseRotationY, 0);
   }
   function buildPiece(item: FurnitureItem): LivePiece {
-    const view = new FurnitureVisual({
-      id: item.id, models,
-      asset: (node, asset) => {
-        const disposeGlass = isWindowFurniture(piece.item.kind) ? prepareWindowTransmission(node) : undefined;
-        try { const view = assetFurnitureView(piece.item, node, overlayShared, asset); return { ...view, dispose() { view.dispose(); disposeGlass?.(); } }; }
-        catch (error) { disposeGlass?.(); throw error; }
-      },
-      marker: status => furnitureMarker(catalog[piece.item.kind], status),
-      beforeSwap: () => glow.invalidate(view.node),
-      afterSwap: () => { lightingDirty = true; placeGlow(); anchors(); renderer.shadowMap.needsUpdate = true; render(); },
-    });
-    const node = view.node; furnitureRoot.add(node); placePiece(item, node);
-    const piece: LivePiece = { item, node, view, key: pieceKey(item), poked: -Infinity };
-    return piece;
+    const model = furnitureModel(item);
+    model.node.traverse(part => { part.userData.pieceId = item.id; });
+    furnitureRoot.add(model.node); placePiece(item, model.node);
+    return { item, node: model.node, model, key: pieceKey(item), poked: -Infinity };
   }
+  function dropPiece(piece: LivePiece) { glow.invalidate(piece.node); piece.model.dispose(); live.delete(piece.item.id); }
   let bar = barSpots(furniture);
   let counter = { ...bar.counter };
   function layFurniture(items: readonly FurnitureItem[]) {
     lightingDirty = true;
     furniture = [...items]; layoutKey = JSON.stringify(items);
-    for (const [id, piece] of live) if (!items.some(item => item.id === id) || items.find(item => item.id === id)?.stowed) { piece.view.dispose(); live.delete(id); }
+    for (const [id, piece] of live) { const next = items.find(item => item.id === id); if (!next || next.stowed || pieceKey(next) !== piece.key) dropPiece(piece); }
     for (const item of items) {
       if (item.stowed) continue;
-      const key = pieceKey(item); let piece = live.get(item.id);
+      let piece = live.get(item.id);
       if (!piece) { piece = buildPiece(item); live.set(item.id, piece); }
-      piece.item = item; piece.key = key; placePiece(item, piece.node);
-      void piece.view.set(furnitureVisualRequest(item, key));
+      piece.item = item; placePiece(item, piece.node);
     }
     bar = barSpots(furniture); counter = { ...bar.counter };
     placeBarista(); placeGlow(); renderer.shadowMap.needsUpdate = true;
@@ -233,7 +212,7 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
   function presenterPlaceNow() {
     if (!presenting) return null;
     const key = `${layoutKey}|${presenting.spot}|${JSON.stringify(studioSet)}`;
-    if (presenterPlace?.key !== key) presenterPlace = { key, place: hostPlace(furniture, presenting.spot, studioSet) };
+    if (presenterPlace?.key !== key) presenterPlace = { key, place: hostPlace(presenting.spot, studioSet) };
     return presenterPlace.place;
   }
   /** Behind the bar, or on the host's mark while a performance is on; without walking art the barista is there at once. */
@@ -245,7 +224,7 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
     if (presenting) host.dataset.presenter = JSON.stringify({ spot: presenting.spot, act: presenting.act, onStage: Boolean(place), seated: false, place });
     else delete host.dataset.presenter;
   }
-  let baristaLook: Character = 'gpt'; let baristaOwn: BaristaAppearance | undefined;
+  let baristaLook: Character = 'clerk'; let baristaOwn: BaristaAppearance | undefined;
   function dressBarista() {
     const path = baristaBodies(baristaLook, baristaOwn).find(src => !failed.has(src));
     if (!path || baristaStand.userData.character !== path) {
@@ -271,7 +250,6 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
     const d = daylight(hour); lit = hour; light_ = d;
     lightingDirty = true;
     stage.glow.set(d.stage);
-    for (const piece of live.values()) piece.view.refresh?.({ locale: 'zh-TW', theme, mobile: false, board: { lines: [], active: false }, tint: d.boards });
     (baristaStand.userData.uniforms as StandeeUniforms).tint.value.set(d.tint);
     renderer.toneMappingExposure = d.exposure; renderer.shadowMap.needsUpdate = true;
   }
@@ -330,9 +308,9 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
    */
   function shootPresenter(shot: PresenterShot, width: number, height: number) {
     const place = presenterPlaceNow(); if (!place) return false;
-    const hostAt = place.seat ? new THREE.Vector3(place.seat.x, SEATING_FLOOR_Y + place.seat.height + .62, place.seat.z) : new THREE.Vector3(place.stand.x, SEATING_FLOOR_Y + 1.15, place.stand.z);
+    const hostAt = place.seat ? new THREE.Vector3(place.seat.x, floorTop + place.seat.height + .62, place.seat.z) : new THREE.Vector3(place.stand.x, floorTop + 1.15, place.stand.z);
     const desk = presenting?.spot === STUDIO_SET_SPOT && studioSet ? studioSetDesk(studioSet) : undefined;
-    const deskAt = desk ? new THREE.Vector3(desk.x, SEATING_FLOOR_Y + .95, desk.z) : hostAt.clone();
+    const deskAt = desk ? new THREE.Vector3(desk.x, floorTop + .95, desk.z) : hostAt.clone();
     const target = hostAt.clone().lerp(deskAt, shot.toward), tall = 3 / Math.max(1, shot.zoom), half = roomFov * Math.PI / 360;
     camera.zoom = 1; camera.fov = roomFov; camera.aspect = width / height; camera.near = .3; camera.far = 400; camera.updateProjectionMatrix();
     const distance = tall / 2 / Math.tan(half), pitch = .12;
@@ -405,8 +383,7 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
   }
   function prepareFrame() {
     if (lightingDirty) {
-      windows = placedWindows(live.values());
-      light.update(light_, windows, theme.light, roomBrightness); lightingDirty = false;
+      light.update(light_, [], theme.light, roomBrightness); lightingDirty = false;
       renderer.shadowMap.needsUpdate = true;
     }
   }
@@ -423,14 +400,13 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
     const calmRoom = reduced.matches || paused || graphics.calmDecor;
     for (const piece of live.values()) {
       const since = time - piece.poked;
-      if (piece.view.react) piece.view.react(since < 0 ? 1e9 : since, calmRoom);
-      if (catalog[piece.item.kind].mount === 'wall') continue;
       const settled = calmRoom || since > 2000; const node = piece.node;
-      const plant = piece.item.kind === 'plant' || piece.item.kind === 'potPlant';
-      const sway = settled || !plant ? 0 : Math.sin(since / 110) * .14 * Math.exp(-since / 500);
-      node.rotation.set(sway * .4, node.userData.baseRotationY ?? -piece.item.turn * Math.PI / 2, sway);
       const hops = interactionsOf(piece.item, 'poke')[0]?.reaction === 'bounce';
       const hop = settled || !hops ? 0 : Math.abs(Math.sin(since / 120)) * .12 * Math.exp(-since / 300);
+      if (catalog[piece.item.kind].mount === 'wall') { node.position.y = catalog[piece.item.kind].hang!.y + hop * .3; continue; }
+      const plant = piece.item.kind === 'plant';
+      const sway = settled || !plant ? 0 : Math.sin(since / 110) * .14 * Math.exp(-since / 500);
+      node.rotation.set(sway * .4, node.userData.baseRotationY ?? -piece.item.turn * Math.PI / 2, sway);
       node.position.y = (node.userData.baseY ?? 0) + hop;
     }
     if (hoverDirty) {
@@ -537,7 +513,7 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
       let lut: THREE.Texture | undefined;
       scene.traverse(node => { if (!lut && node instanceof THREE.Mesh) for (const material of [node.material].flat()) lut ??= (renderer.properties?.get(material) as { uniforms?: { dfgLUT?: { value?: THREE.Texture } } } | undefined)?.uniforms?.dfgLUT?.value; });
       lut?.dispose();
-      surfaces.dispose(); disposed = true; cancelAnimationFrame(frame); sighting?.disconnect(); document.removeEventListener('visibilitychange', visibilityChanged); observer.disconnect(); renderer.domElement.removeEventListener('webglcontextlost', contextLost); renderer.domElement.removeEventListener('pointermove', hoverMove); renderer.domElement.removeEventListener('pointerleave', hoverLeave); glow.dispose(); light.dispose(); live.forEach(piece => piece.view.dispose()); live.clear(); models.dispose(); geometries.forEach(g => g.dispose()); materials.forEach(m => m.dispose()); textures.forEach(t => t.dispose()); releaseCardPlane(); renderer.dispose();
+      surfaces.dispose(); disposed = true; cancelAnimationFrame(frame); sighting?.disconnect(); document.removeEventListener('visibilitychange', visibilityChanged); observer.disconnect(); renderer.domElement.removeEventListener('webglcontextlost', contextLost); renderer.domElement.removeEventListener('pointermove', hoverMove); renderer.domElement.removeEventListener('pointerleave', hoverLeave); glow.dispose(); light.dispose(); live.forEach(piece => piece.model.dispose()); live.clear(); geometries.forEach(g => g.dispose()); materials.forEach(m => m.dispose()); textures.forEach(t => t.dispose()); releaseCardPlane(); renderer.dispose();
       // Give the GPU context back now rather than at garbage collection: browsers allow only a handful at once.
       try { renderer.forceContextLoss(); } catch {}
       renderer.domElement.remove(); },

@@ -5,7 +5,7 @@ const COUNTER_HEIGHT = 1.05;
 const counterTop = COUNTER_HEIGHT + .08, cabinetTop = 1.19;
 
 export const bar: PieceSpec = {
-  kind: 'bar', variants: ['walnut', 'oak', 'halloween'], mount: 'floor', turns: true,
+  kind: 'bar', variants: ['walnut', 'oak'], mount: 'floor', turns: true,
   footprint: Object.values(runs).map((r): Footprint => ({ x: r.x, z: r.z, rx: r.halfX, rz: r.halfZ, shape: 'rect' })),
   interactions: item => [
     { type: 'serve', spot: local(item, -.75, -.85) },
