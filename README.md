@@ -52,6 +52,7 @@ CI（`.github/workflows/ci.yml`）在每次 push 和 pull request 跑這三項�
 |---|---|
 | `npm run verify:persist` | 用真的 `wrangler dev` 寫入購物車，關掉再重開同一個 `--persist-to` 目錄，確認讀回來的購物車一樣。 |
 | `npm run verify:mcp` | 用真的 `wrangler dev` 走一遍住民的流程：`initialize`、`tools/list`、記兩件、`cart_list`、移除一件、排介紹片、查進度，再確認 `/api/cart` 讀到同一個購物車，以及沒有 token 和 token 錯誤都回 401。token 每次隨機產生，不會印出來。 |
+| `npm run verify:adapter` | 對真的 `wrangler dev` 跑 `adapter/cli.ts --dry-run`，再用本機的假 Model API 跑一輪，確認東西進了購物車。見 [adapter 說明](adapter/README.md)。 |
 | `node scripts/screenshots.mjs` | 建置、啟動 `wrangler dev --env local`，等貨架擺上 5 件商品後存 `docs/screenshots/desktop.png` 和 `mobile-390.png`。 |
 | `node scripts/render-character.mjs` | 把 Kenney 的 CC0 角色算成 `public/art/characters/clerk-standee.png` 和 `clerk-portrait.png`。 |
 | `node scripts/generate-studio-set.mjs` | 用 three.js 基本形狀產生主播台棚景 `public/studio/showroom-set.glb`。 |
@@ -140,6 +141,7 @@ muse exec --prompt-file muse/demo-task.txt --disable-approval --max-model-steps 
 | MCP 傳輸 | `worker/mcp.ts` | 參考 pa-cafe main 的 `worker/streamable-mcp.ts`、`worker/protocol.ts` | 賽中重寫：只留 JSON-RPC 和協定協商，刪掉配對、Clerk session、簽章、版本偏差 |
 | 5 支 MCP 工具、介紹片 job、分享設定 | `worker/tools.ts`、`shared/promo.ts`、`shared/share.ts` | 無 | 賽中新寫 |
 | skills、Muse Code 設定範例、demo 任務 | `.agents/skills/`、`muse/` | 無 | 賽中新寫 |
+| Model API function calling 轉 MCP 的備援 | `adapter/` | 無 | 賽中新寫 |
 | 貨架商品、收銀機、HUD、輪詢 | `src/cart/`、`src/App.tsx` | 無 | 賽中新寫 |
 | 櫃台、貨架、植物、地毯的模型 | `src/room/furnitureModels.ts` | 無 | 賽中新寫 |
 | 角色算圖、棚景產生、截圖、持久化驗證、MCP 驗證 | `scripts/` | 無 | 賽中新寫 |
