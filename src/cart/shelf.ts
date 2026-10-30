@@ -19,7 +19,7 @@ export const ownerShelf = (cart: Cart): Shelf => ({
 
 /** A visitor's room, drawn from the narrowed view alone, so it can show no more price than the owner chose. */
 export function sharedShelf(view: ShareView): Shelf {
-  switch (view.prices) {
+  switch (view.mode) {
     case 'hidden': return { items: view.items.map(item => ({ title: item.title, qty: item.qty, price: null })), register: t('{count} items', { count: view.items.length }) };
     case 'range': return { items: view.items.map(item => ({ title: item.title, qty: item.qty, price: item.priceRange ? formatRange(item.priceRange) : NO_PRICE })), register: view.totalRange ? formatRange(view.totalRange) : NO_PRICE };
     case 'exact': return { items: view.items.map(item => ({ title: item.title, qty: item.qty, price: item.priceTwd === null ? NO_PRICE : formatTwd(item.priceTwd) })), register: view.totalTwd === null ? NO_PRICE : formatTwd(view.totalTwd) };

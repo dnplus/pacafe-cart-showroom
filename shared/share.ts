@@ -52,21 +52,21 @@ const item = { title: z.string(), imageUrl: webUrl.nullable(), url: webUrl.nulla
  * What `/s/<slug>` answers. Each mode is its own strict shape, so a hidden view has no field that could hold a price and a
  * range view none that could hold an exact one. Items are in shelf order; ids, stores and revisions stay with the owner.
  */
-export const shareViewSchema = z.discriminatedUnion('prices', [
-  z.strictObject({ prices: z.literal('hidden'), nickname: z.string(), items: z.array(z.strictObject(item)) }),
-  z.strictObject({ prices: z.literal('range'), nickname: z.string(), items: z.array(z.strictObject({ ...item, priceRange: priceRangeSchema.nullable() })), totalRange: priceRangeSchema.nullable() }),
-  z.strictObject({ prices: z.literal('exact'), nickname: z.string(), items: z.array(z.strictObject({ ...item, priceTwd: twd.nullable() })), totalTwd: twd.nullable() }),
+export const shareViewSchema = z.discriminatedUnion('mode', [
+  z.strictObject({ mode: z.literal('hidden'), nickname: z.string(), items: z.array(z.strictObject(item)) }),
+  z.strictObject({ mode: z.literal('range'), nickname: z.string(), items: z.array(z.strictObject({ ...item, priceRange: priceRangeSchema.nullable() })), totalRange: priceRangeSchema.nullable() }),
+  z.strictObject({ mode: z.literal('exact'), nickname: z.string(), items: z.array(z.strictObject({ ...item, priceTwd: twd.nullable() })), totalTwd: twd.nullable() }),
 ]);
 export type ShareView = z.infer<typeof shareViewSchema>;
 
 /** The cart narrowed to what the owner chose to show. The worker answers visitors with it, and the room draws the card and preview from it. */
-export function shareView(cart: Cart, { prices, nickname }: ShareSettings): ShareView {
+export function shareView(cart: Cart, { prices: mode, nickname }: ShareSettings): ShareView {
   const shown = (entry: CartItem) => ({ title: entry.title, imageUrl: entry.cutoutUrl ?? entry.imageUrl, url: publicLink(entry.url), qty: entry.qty });
   const priced = cart.items.filter(entry => entry.priceTwd !== null);
   const total = priced.length ? priced.reduce((sum, entry) => sum + entry.priceTwd! * entry.qty, 0) : null;
-  switch (prices) {
-    case 'hidden': return { prices, nickname, items: cart.items.map(shown) };
-    case 'range': return { prices, nickname, items: cart.items.map(entry => ({ ...shown(entry), priceRange: entry.priceTwd === null ? null : priceRange(entry.priceTwd) })), totalRange: total === null ? null : priceRange(total) };
-    case 'exact': return { prices, nickname, items: cart.items.map(entry => ({ ...shown(entry), priceTwd: entry.priceTwd })), totalTwd: total };
+  switch (mode) {
+    case 'hidden': return { mode, nickname, items: cart.items.map(shown) };
+    case 'range': return { mode, nickname, items: cart.items.map(entry => ({ ...shown(entry), priceRange: entry.priceTwd === null ? null : priceRange(entry.priceTwd) })), totalRange: total === null ? null : priceRange(total) };
+    case 'exact': return { mode, nickname, items: cart.items.map(entry => ({ ...shown(entry), priceTwd: entry.priceTwd })), totalTwd: total };
   }
 }

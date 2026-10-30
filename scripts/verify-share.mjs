@@ -56,8 +56,9 @@ try {
 
   await settle({ enabled: true, prices: 'hidden', nickname: '小島' });
   const hiddenText = await (await visit(link)).text(), hidden = JSON.parse(hiddenText);
-  assert.equal(hidden.prices, 'hidden');
-  assert.deepEqual(keysOf(hidden).filter(key => /price|total/i.test(key)), ['prices'], 'hidden: no field that could hold a price');
+  assert.equal(hidden.mode, 'hidden');
+  assert.deepEqual(keysOf(hidden).filter(key => /price|total/i.test(key)), [], 'hidden: no field that could hold a price');
+  assert.doesNotMatch(hiddenText, /price|total/i, 'hidden: the words price and total appear nowhere in the answer');
   for (const amount of exact) assert.ok(!hasNumber(hiddenText, amount), `hidden: ${amount} appears nowhere`);
   assert.equal(hidden.items[0].url, 'https://shop.example/p/1', 'the product link loses its query, fragment and credentials');
   for (const leak of ['ref=abc', 'uid=42', 'frag', 'user:pw', '小島陶房', ...cart.items.map(item => item.id)]) assert.ok(!hiddenText.includes(leak), `${leak} stays private`);

@@ -14,7 +14,7 @@ type Load = { status: 'loading' } | { status: 'ready'; view: ShareView } | { sta
 
 const priceOf = (item: ShareView['items'][number]) => 'priceRange' in item ? item.priceRange ? formatRange(item.priceRange) : t('No price')
   : 'priceTwd' in item ? item.priceTwd === null ? t('No price') : formatTwd(item.priceTwd) : null;
-const totalOf = (view: ShareView) => view.prices === 'range' ? view.totalRange ? formatRange(view.totalRange) : '—' : view.prices === 'exact' ? view.totalTwd === null ? '—' : formatTwd(view.totalTwd) : null;
+const totalOf = (view: ShareView) => view.mode === 'range' ? view.totalRange ? formatRange(view.totalRange) : '—' : view.mode === 'exact' ? view.totalTwd === null ? '—' : formatTwd(view.totalTwd) : null;
 
 function Thumb({ src }: { src: string | null }) {
   const [broken, setBroken] = useState(false);
@@ -23,7 +23,7 @@ function Thumb({ src }: { src: string | null }) {
 
 function SharePanel({ view, open, onToggle }: { view: ShareView; open: boolean; onToggle: () => void }) {
   const total = totalOf(view);
-  return <aside className="cart-hud share-hud" aria-label={t("{nickname}'s cart showroom", { nickname: view.nickname })} data-testid="share-hud" data-prices={view.prices}>
+  return <aside className="cart-hud share-hud" aria-label={t("{nickname}'s cart showroom", { nickname: view.nickname })} data-testid="share-hud" data-mode={view.mode}>
     <header className="cart-hud-head">
       <span className="cart-hud-mark" aria-hidden="true"><ShoppingBasket size={18} /></span>
       <span><h1>{t("{nickname}'s cart showroom", { nickname: view.nickname })}</h1><small>{t('Things their Muse noted while shopping')}</small></span>

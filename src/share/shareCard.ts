@@ -10,8 +10,8 @@ const CARD_BACKGROUND = '#fff7e9';
 
 /** The words on the card, from the narrowed view: a price line only in the modes that show one. */
 export function cardWords(view: ShareView) {
-  const price = view.prices === 'range' && view.totalRange ? t('Total about {amount}', { amount: formatRange(view.totalRange) })
-    : view.prices === 'exact' && view.totalTwd !== null ? t('Total {amount}', { amount: formatTwd(view.totalTwd) }) : null;
+  const price = view.mode === 'range' && view.totalRange ? t('Total about {amount}', { amount: formatRange(view.totalRange) })
+    : view.mode === 'exact' && view.totalTwd !== null ? t('Total {amount}', { amount: formatTwd(view.totalTwd) }) : null;
   return { brand: 'muse-cart-showroom', title: t("{nickname}'s cart showroom", { nickname: view.nickname }), count: t('{count} things', { count: view.items.length }), price, note: t('Things their Muse noted while shopping') };
 }
 

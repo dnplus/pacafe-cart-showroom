@@ -119,10 +119,11 @@ describe('/s/<slug>', () => {
     const { slug } = (await json('/api/share', { headers: owner })).body;
     await settle({ enabled: true, prices: 'hidden', nickname: '屋主' });
     const text = await (await visit(`/s/${slug}`)).text(), view = JSON.parse(text);
-    expect(shareViewSchema.parse(view).prices).toBe('hidden');
-    expect(Object.keys(view).sort()).toEqual(['items', 'nickname', 'prices']);
+    expect(shareViewSchema.parse(view).mode).toBe('hidden');
+    expect(Object.keys(view).sort()).toEqual(['items', 'mode', 'nickname']);
     expect(keysOf(view.items).filter(key => /price|total/i.test(key))).toEqual([]);
-    expect(keysOf(view).filter(key => /price|total/i.test(key))).toEqual(['prices']);
+    expect(keysOf(view).filter(key => /price|total/i.test(key))).toEqual([]);
+    expect(text).not.toMatch(/price|total/i);
     for (const amount of exactAmounts) expect(hasNumber(text, amount)).toBe(false);
     expect(view.items.map((item: { title: string; qty: number }) => [item.title, item.qty])).toEqual([['陶瓷馬克杯', 2], ['亞麻餐墊', 1], ['試用包', 3]]);
   });
@@ -133,9 +134,9 @@ describe('/s/<slug>', () => {
     const { slug } = (await json('/api/share', { headers: owner })).body;
     await settle({ enabled: true, prices: 'range', nickname: '屋主' });
     const text = await (await visit(`/s/${slug}`)).text(), view = shareViewSchema.parse(JSON.parse(text));
-    expect(view).toMatchObject({ prices: 'range', totalRange: { minTwd: 1000, maxTwd: 3000 } });
+    expect(view).toMatchObject({ mode: 'range', totalRange: { minTwd: 1000, maxTwd: 3000 } });
     expect(view.items.map(item => 'priceRange' in item && item.priceRange)).toEqual([{ minTwd: 300, maxTwd: 500 }, { minTwd: 1000, maxTwd: 3000 }, null]);
-    expect(keysOf(JSON.parse(text)).filter(key => /price|total/i.test(key)).sort()).toEqual(['priceRange', 'priceRange', 'priceRange', 'prices', 'totalRange']);
+    expect(keysOf(JSON.parse(text)).filter(key => /price|total/i.test(key)).sort()).toEqual(['priceRange', 'priceRange', 'priceRange', 'totalRange']);
     for (const amount of exactAmounts) expect(hasNumber(text, amount)).toBe(false);
   });
 
@@ -145,8 +146,8 @@ describe('/s/<slug>', () => {
     const { slug } = (await json('/api/share', { headers: owner })).body;
     await settle({ enabled: true, prices: 'exact', nickname: '屋主' });
     const view = shareViewSchema.parse(await (await visit(`/s/${slug}`)).json());
-    expect(view.prices === 'exact' && view.items.map(item => item.priceTwd)).toEqual(cart.items.map(item => item.priceTwd));
-    expect(view.prices === 'exact' && view.totalTwd).toBe(cart.totalTwd);
+    expect(view.mode === 'exact' && view.items.map(item => item.priceTwd)).toEqual(cart.items.map(item => item.priceTwd));
+    expect(view.mode === 'exact' && view.totalTwd).toBe(cart.totalTwd);
   });
 
   it('hands out product links without query, fragment or credentials, and nothing that names the owner\'s items', async () => {
