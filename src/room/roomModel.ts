@@ -355,6 +355,7 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
     const box = new THREE.Box3(), narrow = host.clientWidth < 700;
     for (const piece of live.values()) if (!narrow || piece.item.kind === 'bar' || piece.item.kind === 'beanShelf') box.expandByObject(piece.node);
     if (!narrow && setView) box.expandByObject(setView.root);
+    if (narrow) box.expandByObject(ownerStand);
     if (box.isEmpty()) return undefined;
     return [0, 1].flatMap(x => [0, 1].flatMap(y => [0, 1].map(z => new THREE.Vector3(x ? box.max.x : box.min.x, y ? box.max.y : box.min.y, z ? box.max.z : box.min.z))));
   }
