@@ -52,6 +52,7 @@ CI（`.github/workflows/ci.yml`）在每次 push 和 pull request 跑這三項�
 |---|---|
 | `npm run verify:persist` | 用真的 `wrangler dev` 寫入購物車，關掉再重開同一個 `--persist-to` 目錄，確認讀回來的購物車一樣。 |
 | `npm run verify:mcp` | 用真的 `wrangler dev` 走一遍住民的流程：`initialize`、`tools/list`、記兩件、`cart_list`、移除一件、排介紹片、查進度，再確認 `/api/cart` 讀到同一個購物車，以及沒有 token 和 token 錯誤都回 401。token 每次隨機產生，不會印出來。 |
+| `npm run verify:runner` | 用真的 `wrangler dev` 扮演 runner：排隊、`/runner/next` 認領、回報 `storyboard`、`voice`、`rendering`、上傳假的 mp4 和 jpg、`done`，再確認 `promo_status`、`/api/promo` 和 `/media/promo/...` 看到同一支片、讀到上傳的位元組；也檢查沒 token 回 401、沒有 job 回 204、沒上傳就 `done` 回 409。token 隨機產生，不會印出來。 |
 | `npm run verify:adapter` | 對真的 `wrangler dev` 跑 `adapter/cli.ts --dry-run`，再用本機的假 Model API 跑一輪，確認東西進了購物車。見 [adapter 說明](adapter/README.md)。 |
 | `npm run verify:share` | 用真的 `wrangler dev`（有 token、`OPEN_OWNER_ACCESS=false`，跟正式環境一樣）走分享流程：`/api/cart` 沒 token 回 401；開分享後依序切 hidden、range、exact 檢查 `/s/<slug>` 的 JSON；關分享後回 404。 |
 | `node scripts/screenshots.mjs` | 建置、啟動 `wrangler dev --env local`，等貨架擺上 5 件商品後存 `docs/screenshots/desktop.png` 和 `mobile-390.png`。 |
@@ -126,11 +127,39 @@ echo "CART_MCP_TOKEN=$(openssl rand -base64 24)" > .dev.vars
 - 參數不對、購物車是空的、找不到 `itemId` 或 `jobId` 時，工具回 `isError: true` 的結果，訊息寫給模型看，讓它修正後重試。工具名稱不存在時回 JSON-RPC 錯誤 `-32602`。
 - 型別在 `shared/cart.ts`、`shared/promo.ts`、`shared/share.ts`，工具在 `worker/tools.ts`，傳輸在 `worker/mcp.ts`。
 
-### 介紹片在 S2 只到排隊
+### 介紹片：排隊、runner 和房間的一鍵生片
 
-`promo_generate` 會建立並保存一筆真的 job。job 記下當下的 `cartRevision`、片長、風格和整個購物車快照，狀態是 `queued`、`progress` 0。同一份購物車、同樣的參數在 job 還在排隊時重送，回來的是同一個 `jobId`，避免重試時排兩支要付費的片。
+`promo_generate` 會建立並保存一筆真的 job。job 記下當下的 `cartRevision`、片長、風格和整個購物車快照，狀態是 `queued`、`progress` 0。同一份購物車、同樣的參數在 job 還在排隊時重送，回來的是同一個 `jobId`，避免重試時排兩支要付費的片。工具和房間的按鈕共用同一個 `queuePromo()`（`worker/promo.ts`），所以兩邊排的是同一種 job。
 
-S2 到這裡為止。job 會一直停在 `queued`，直到 S4 的 runner 從 `/runner/next` 拉走它，依序更新成 `storyboard`、`voice`、`rendering`，最後是 `done` 或 `failed`。S2 沒有 `/runner/next`，也沒有生片、配音、SAM 去背。住民只能用 `promo_status` 輪詢，小屋不寫 webhook，也不推播。程式裡的邊界標在 `worker/tools.ts` 建立 job 的地方。
+片不是 worker 做的。worker 只管排隊、發工作和收成品；算圖在屋主自己的電腦上由 runner（`npm run runner`）做，它用 token 來 pull。沒開 runner 時 job 會一直停在 `queued`，住民只能用 `promo_status` 輪詢，小屋不寫 webhook，也不推播。worker 和 runner 之間的合約寫在 `shared/runner.ts`，worker 這邊在 `worker/runner.ts`。
+
+**排隊和租約。** 還沒做完的 job 依排入順序存在 `promo:queue`（id 陣列），做完（`done` 或 `failed`）就移出。`POST /runner/next` 取出最早一個「還在排隊」或「租約已過期」的 job，設成 `storyboard`、`progress` 0，記下租約，回傳 `RunnerClaim`。租約每次認領和每次更新都延長 `RUNNER_LEASE_MS`（20 分鐘），租約和認領時間放在 `PromoRecord`，不會出現在 `promo_status`。runner 掛掉安靜超過租約後，下一次 `/runner/next` 會把那個 job 從 `storyboard` 重做一次，所以認領是 idempotent 的：沒過期時再叫一次拿不到同一個 job。這一輪重做時 `progress` 會回到 0，`costUsd` 保留上一輪的值，直到新的 runner 回報。
+
+**runner 看到的購物車。** claim 裡的 `view` 是 `shareView(job 排入時的購物車, 屋主現在的分享設定)`：只有屋主選的價格模式和暱稱，不管分享有沒有打開。價格選隱藏時，claim 裡沒有任何價格欄位，影片就拿不到價格。
+
+| 路由 | 做什麼 |
+|---|---|
+| `POST /runner/next` | 200 `RunnerClaim`，沒有 job 時 204。 |
+| `POST /runner/jobs/<id>` | body 是 `RunnerUpdate`，回 200 `PromoJob`。照 `PROMO_STEPS` 檢查，不能這樣走回 409，job 不存在回 404，body 不對回 400。 |
+| `PUT /runner/jobs/<id>/media/<name>` | 原始檔案，`name` 是 `video.mp4`、`thumbnail.jpg` 或 `qa.json`，大小上限 50 MB，只在 job 正在做（不是 `queued`、也還沒到終點）時收，回 `{ key, url }`。檔案存在 R2 的 `promo/<id>/<name>`。 |
+
+三條路由都要 `Authorization: Bearer <CART_MCP_TOKEN>`，`env.local` 也一樣。更新規則：
+
+- 同一個狀態內 `progress` 只會前進。回報的值比已存的小，worker 保留已存的值、仍回 200，因為 runner 分不出重送和錯誤，回 409 只會讓它誤以為整個 job 壞了。換到新狀態時 `progress` 從回報的值開始。
+- `done` 不帶網址。worker 先確認 `promo/<id>/video.mp4` 和 `thumbnail.jpg` 都已在 R2，缺任何一個就回 409，再用請求的 origin 組出 `output.videoUrl` 和 `thumbnailUrl`，加上 runner 給的 `sha256`、`durationSec`。所以不會有沒有影片的 done job。
+- `failed` 存 runner 給的 `error`。`costUsd` 每次都存 runner 回報的累計值。
+- 影片檔走 `/media/promo/<id>/video.mp4`，知道 job id 的人都能讀，支援 byte range，所以可以拖進度。
+
+**房間的一鍵生片。** HUD 的「介紹影片」面板（`src/promo/PromoPanel.tsx`）只給屋主：
+
+| 路由 | 做什麼 |
+|---|---|
+| `POST /api/promo` | body 是 `{ durationSec?, style? }`（跟 `promo_generate` 一樣），回 `{ jobId, status }`。購物車是空的回 409 `empty_cart`。 |
+| `GET /api/promo` | 最新一筆 `PromoJob`，沒排過就是 `null`。 |
+
+按下「一鍵生片」排隊，之後每 3 秒讀一次 `GET /api/promo`，到 `done` 或 `failed` 停。面板顯示排隊中、分鏡、配音、算圖、完成或失敗，加進度條；完成時顯示縮圖當封面的影片（可播放）和下載連結；失敗時顯示錯誤和「重試」。購物車是空的時按鈕停用並說明原因。面板上有一句說明：影片在屋主自己的電腦上由 runner 製作，沒開 runner 時會停在排隊中。
+
+`npm run verify:runner` 用 HTTP 扮演 runner 走完整條路，見上面的腳本表。
 
 ### 接上 Muse Code
 
@@ -147,7 +176,7 @@ Demo 任務在 `muse/demo-task.txt`：
 muse exec --prompt-file muse/demo-task.txt --disable-approval --max-model-steps 60 --json
 ```
 
-在 S4 之前，介紹片會一直停在 `queued`，任務會照 skill 等到 20 分鐘上限後照實回報。
+介紹片要屋主的電腦開著 runner（`npm run runner`）才做得出來。沒開 runner 時 job 會停在 `queued`，任務會照 skill 等到 20 分鐘上限後照實回報。
 
 ## 賽前搬來／賽中新寫
 
