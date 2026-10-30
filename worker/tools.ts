@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { addCartItem, cartItemInputSchema, cartQty, MAX_CART_ITEMS, removeCartItem, type Cart } from '../shared/cart';
-import { promoRequestSchema, queuedPromoJob, type PromoRecord } from '../shared/promo';
+import { promoJobId, promoRequestSchema, queuedPromoJob, type PromoRecord } from '../shared/promo';
 import { shareUrl, type ShareSettings } from '../shared/share';
 
 export interface Store {
@@ -74,7 +74,7 @@ export const tools: readonly Tool[] = [
   }),
   tool({
     name: 'promo_status', title: '查詢影片進度', description: '用 promo_generate 回傳的 jobId 查介紹影片的狀態、進度和成品連結。',
-    input: z.strictObject({ jobId: z.string().min(1).max(100) }), annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    input: z.strictObject({ jobId: promoJobId }), annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     async run(store, args) {
       const record = await store.promo(args.jobId);
       if (!record) throw new ToolError(`找不到 jobId「${args.jobId}」，請用 promo_generate 回傳的 jobId。`);

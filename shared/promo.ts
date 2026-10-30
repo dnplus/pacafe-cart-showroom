@@ -12,8 +12,11 @@ export const promoRequestSchema = z.strictObject({
 });
 export type PromoRequest = z.output<typeof promoRequestSchema>;
 
+/** `promo-<uuid>`, so a job id can never name another storage key such as `promo:latest`. */
+export const promoJobId = z.string().regex(/^promo-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+
 export const promoJobSchema = z.strictObject({
-  id: z.string().min(1).max(100),
+  id: promoJobId,
   /** The cart revision the video is made from. */
   cartRevision: z.number().int().nonnegative(),
   durationSec: z.number().int().min(15).max(45),

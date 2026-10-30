@@ -132,7 +132,7 @@ describe('/mcp', () => {
     const missing = await call('cart_remove', { itemId: 'item-nope-0' });
     expect(missing.isError).toBe(true);
     expect((await call('cart_list')).structuredContent.items).toHaveLength(1);
-    expect((await call('promo_status', { jobId: 'promo-nope' })).isError).toBe(true);
+    for (const jobId of ['promo-nope', 'latest', '00000000-0000-4000-8000-000000000000', 'promo-00000000-0000-4000-8000-000000000000']) expect((await call('promo_status', { jobId })).isError).toBe(true);
   });
 
   it('refuses an item past the largest cart', async () => {
