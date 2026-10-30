@@ -6,7 +6,7 @@ pacafe-cart-showroom is licensed under Apache-2.0 (see `LICENSE` and `NOTICE`). 
 
 | Asset | Where it is used | Source | Author | License |
 |---|---|---|---|---|
-| `character.glb` and `Textures/colormap.png` from Starter Kit 3D Platformer, unchanged, in `assets/third-party/kenney-platformer-kit/` | Rendered by `scripts/render-character.mjs` to `public/art/characters/clerk-standee.png` and `clerk-portrait.png`, the clerk behind the counter | https://github.com/KenneyNL/Starter-Kit-3D-Platformer at commit `3fa8a04b1c01ab23db43123d4ce814a34c3fc7f0` | Kenney (https://kenney.nl) | CC0 1.0. The kit's README: "Assets included in this package (2D sprites, 3D models and sound effects) are CC0 licensed". The kit's code is MIT and is not used here. |
+| `character.glb` and `Textures/colormap.png` from Starter Kit 3D Platformer, unchanged, in `assets/third-party/kenney-platformer-kit/` | Rendered by `scripts/render-character.mjs` to `public/art/characters/clerk-standee.png` and `clerk-portrait.png`, the clerk behind the counter, and its green variant `clerk-mint-*.png` | https://github.com/KenneyNL/Starter-Kit-3D-Platformer at commit `3fa8a04b1c01ab23db43123d4ce814a34c3fc7f0` | Kenney (https://kenney.nl) | CC0 1.0. The kit's README: "Assets included in this package (2D sprites, 3D models and sound effects) are CC0 licensed". The kit's code is MIT and is not used here. |
 | Nunito Sans variable font, through `@fontsource-variable/nunito-sans` 5.3.0 | The interface font, bundled into `dist/client` | https://github.com/Fonthausen/NunitoSans, packaged by https://github.com/fontsource/font-files | The Nunito Sans Project Authors | SIL Open Font License 1.1 |
 
 The SHA-256 of each Kenney file is in `assets/third-party/kenney-platformer-kit/README.md`, and `scripts/render-character.mjs` refuses to run on any other file.
@@ -53,3 +53,5 @@ Both projects have the same owner as this repository, and the ported code is inc
 - `public/studio/showroom-set.glb`, the presenter studio set, is generated from three.js primitives by `scripts/generate-studio-set.mjs`. Apache-2.0.
 - The counter, cart shelf, plant, rug, product boxes and cash register are drawn in code by `src/room/furnitureModels.ts` and `src/cart/cartScene.ts`. Apache-2.0.
 - `docs/screenshots/*.png` are screenshots of this app made by `scripts/screenshots.mjs`. Apache-2.0.
+- `public/art/characters/clerk-mint-standee.png` and `clerk-mint-portrait.png` are the Kenney character above with its purple palette cells turned to green (the face and the white parts keep their colours), rendered by `scripts/render-character.mjs`. Kenney's CC0 allows changing the model, and the result is released under Apache-2.0 here.
+- The 圍裙店員 and 帽子店員 clerks and the owner's placeholder figure are drawn in code as SVG by `src/room/characterArt.ts` and `src/room/silhouette.ts`. Apache-2.0. They are neutral figures: no character, logo or mascot of any company, and nothing was copied from another project's art.

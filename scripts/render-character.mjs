@@ -1,5 +1,6 @@
 // Renders Kenney's CC0 platformer character (assets/third-party/kenney-platformer-kit) to the clerk's transparent
-// full-body standee and square portrait in public/art/characters, with three.js in headless Chromium.
+// full-body standee and square portrait in public/art/characters, with three.js in headless Chromium. Each variant
+// is the same model with the purple palette cells turned to another hue (CC0 allows changing it); the orange face stays.
 // Run: node scripts/render-character.mjs (needs Playwright's Chromium: npx playwright-core install chromium).
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
@@ -15,14 +16,34 @@ for (const [file, sha] of Object.entries(expected)) {
   if (actual !== sha) throw new Error(`${kit}/${file} is not the CC0 file this script was made for (sha256 ${actual})`);
 }
 
+const variants = [{ id: 'clerk', hue: 0 }, { id: 'clerk-mint', hue: -125 }];
+
 const page = `<!doctype html><html><body style="margin:0;background:transparent">
 <script type="importmap">{ "imports": { "three": "/node_modules/three/build/three.module.js", "three/addons/": "/node_modules/three/examples/jsm/" } }</script>
 <script type="module">
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-window.render = async () => {
+const turnPurple = (image, degrees) => {
+  const canvas = document.createElement('canvas'); canvas.width = image.width; canvas.height = image.height;
+  const ctx = canvas.getContext('2d'); ctx.drawImage(image, 0, 0);
+  const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height), d = pixels.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const [r, g, b] = [d[i], d[i + 1], d[i + 2]].map(v => v / 255), max = Math.max(r, g, b), min = Math.min(r, g, b), c = max - min;
+    if (c < .08) continue;
+    let h = max === r ? ((g - b) / c + 6) % 6 : max === g ? (b - r) / c + 2 : (r - g) / c + 4; h *= 60;
+    if (h < 240 || h > 300) continue;
+    const l = (max + min) / 2, s = c / (1 - Math.abs(2 * l - 1)), to = (h + degrees + 360) % 360;
+    const k = n => { const a = (n + to / 30) % 12; return l - s * Math.min(l, 1 - l) * Math.max(-1, Math.min(a - 3, 9 - a, 1)); };
+    d[i] = Math.round(k(0) * 255); d[i + 1] = Math.round(k(8) * 255); d[i + 2] = Math.round(k(4) * 255);
+  }
+  ctx.putImageData(pixels, 0, 0);
+  const map = new THREE.CanvasTexture(canvas); map.flipY = false; map.colorSpace = THREE.SRGBColorSpace;
+  return map;
+};
+window.render = async hue => {
   const gltf = await new GLTFLoader().loadAsync('/${kit}/character.glb');
   const model = gltf.scene;
+  if (hue) model.traverse(part => { if (part.isMesh && part.material.map) { part.material = part.material.clone(); part.material.map = turnPurple(part.material.map.image, hue); } });
   // The 'idle' clip at its first frame: arms down, the pose a clerk stands in behind the counter.
   const mixer = new THREE.AnimationMixer(model), idle = gltf.animations.find(clip => clip.name === 'idle');
   if (idle) { mixer.clipAction(idle).play(); mixer.setTime(0); }
@@ -56,13 +77,15 @@ try {
   const problems = []; tab.on('pageerror', error => problems.push(error.message));
   await tab.goto(`${server.origin}/__render-character.html`);
   await tab.waitForFunction(() => window.ready === true);
-  const images = await tab.evaluate(() => window.render());
-  if (problems.length) throw new Error(problems.join('\n'));
   const out = path.join(root, 'public/art/characters');
   fs.mkdirSync(out, { recursive: true });
-  for (const [name, url] of Object.entries(images)) {
-    const file = path.join(out, `clerk-${name}.png`);
-    fs.writeFileSync(file, Buffer.from(url.split(',')[1], 'base64'));
-    console.log(path.relative(root, file), fs.statSync(file).size, 'bytes');
+  for (const { id, hue } of variants) {
+    const images = await tab.evaluate(degrees => window.render(degrees), hue);
+    if (problems.length) throw new Error(problems.join('\n'));
+    for (const [name, url] of Object.entries(images)) {
+      const file = path.join(out, `${id}-${name}.png`);
+      fs.writeFileSync(file, Buffer.from(url.split(',')[1], 'base64'));
+      console.log(path.relative(root, file), fs.statSync(file).size, 'bytes');
+    }
   }
 } finally { await browser.close(); await server.close(); }
