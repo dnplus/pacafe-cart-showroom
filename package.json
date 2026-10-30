@@ -10,7 +10,8 @@
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "verify:persist": "node scripts/verify-persist.mjs"
+    "verify:persist": "node scripts/verify-persist.mjs",
+    "verify:mcp": "node scripts/verify-mcp.mjs"
   },
   "dependencies": {
     "@fontsource-variable/nunito-sans": "5.3.0",

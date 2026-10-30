@@ -16,10 +16,10 @@ export function freePort() {
   });
 }
 
-/** `wrangler dev --env local --local` on a free port, persisting to `persistTo`; resolves once it serves the app. */
-export async function startWorker(persistTo) {
+/** `wrangler dev --env local --local` on a free port, persisting to `persistTo` with `vars` set over wrangler.jsonc's; resolves once it serves the app. */
+export async function startWorker(persistTo, vars = {}) {
   const port = await freePort();
-  const child = spawn(bin('wrangler'), ['dev', '--env', 'local', '--local', '--ip', '127.0.0.1', '--port', String(port), '--inspector-port', '0', '--persist-to', persistTo, '--show-interactive-dev-session=false'], {
+  const child = spawn(bin('wrangler'), ['dev', '--env', 'local', '--local', '--ip', '127.0.0.1', '--port', String(port), '--inspector-port', '0', '--persist-to', persistTo, '--show-interactive-dev-session=false', ...Object.entries(vars).flatMap(([name, value]) => ['--var', `${name}:${value}`])], {
     cwd: root, env: { ...process.env, WRANGLER_SEND_METRICS: 'false', CI: '1' }, stdio: ['ignore', 'pipe', 'pipe'],
   });
   let log = '';

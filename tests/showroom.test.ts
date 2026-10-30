@@ -4,13 +4,8 @@ import { fixtureCartItems } from '../shared/fixtures/cart';
 import type { Env } from '../worker/env';
 import { Showroom } from '../worker/showroom';
 import worker from '../worker/index';
+import { memoryState } from './memory-state';
 
-/** Durable Object storage as the KV API shows it: values come back as copies, as they do from the real store. */
-function memoryState() {
-  const data = new Map<string, unknown>();
-  const storage = { async get(key: string) { return structuredClone(data.get(key)); }, async put(key: string, value: unknown) { data.set(key, structuredClone(value)); } };
-  return { storage } as unknown as DurableObjectState;
-}
 const env = (vars: Partial<Env> = {}) => vars as Env;
 const url = 'https://showroom.test/api/cart';
 const get = (room: Showroom) => room.fetch(new Request(url));
@@ -73,15 +68,15 @@ describe('Showroom', () => {
 });
 
 describe('worker', () => {
-  it('sends /api/cart to the default showroom and every other path to the app', async () => {
+  it('sends /api/cart and /mcp to the default showroom and every other path to the app', async () => {
     const asked: string[] = [];
     const fake: Env = {
       SHOWROOM: { idFromName: (name: string) => { asked.push(`id:${name}`); return name; }, get: (id: string) => ({ fetch: async () => { asked.push(`room:${id}`); return Response.json({} as Cart); } }) } as unknown as DurableObjectNamespace,
       ASSETS: { fetch: async () => { asked.push('assets'); return new Response('app'); } } as unknown as Fetcher,
     };
     const run = (path: string) => worker.fetch(new Request(`https://showroom.test${path}`) as Parameters<typeof worker.fetch>[0], fake);
-    await run('/api/cart'); await run('/'); await run('/some/page');
-    expect(asked).toEqual(['id:default', 'room:default', 'assets', 'assets']);
+    await run('/api/cart'); await run('/mcp'); await run('/'); await run('/some/page');
+    expect(asked).toEqual(['id:default', 'room:default', 'id:default', 'room:default', 'assets', 'assets']);
     expect((await run('/api/other')).status).toBe(404);
   });
 });

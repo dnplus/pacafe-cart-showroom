@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cartView, cartWriteSchema, emptyCart, formatTwd, replaceCart, SHELF_SLOTS, type CartItemInput } from '../shared/cart';
+import { addCartItem, cartView, cartWriteSchema, emptyCart, formatTwd, removeCartItem, replaceCart, SHELF_SLOTS, type CartItemInput } from '../shared/cart';
 import { fixtureCartItems } from '../shared/fixtures/cart';
 
 const at = '2026-10-30T03:00:00.000Z', later = '2026-10-30T04:00:00.000Z';
@@ -46,6 +46,43 @@ describe('replaceCart', () => {
   it('tells two identical lines apart', () => {
     const cart = write([{ title: 'tea', qty: 1 }, { title: 'tea', qty: 1 }]);
     expect(new Set(cart.items.map(item => item.id)).size).toBe(2);
+  });
+});
+
+describe('addCartItem', () => {
+  it('puts a new item last, after the ones already there', () => {
+    const cart = addCartItem(write(fixtureCartItems), { title: 'pen', priceTwd: 25, qty: 2 }, later);
+    expect(cart.items.map(item => item.title)).toEqual([...fixtureCartItems.map(item => item.title), 'pen']);
+    expect(cart.items.at(-1)).toMatchObject({ qty: 2, shelfSlot: 5, addedAt: later });
+    expect(cart.revision).toBe(2);
+  });
+  it('adds to the quantity of the same title, store and link, keeping its id and first-seen time', () => {
+    const first = write([{ title: 'tea', store: 'corner shop', priceTwd: 120, qty: 2 }, { title: 'pen', qty: 1 }]);
+    const next = addCartItem(first, { title: 'tea', store: 'corner shop', qty: 3 }, later);
+    expect(next.items).toHaveLength(2);
+    expect(next.items[0]).toMatchObject({ id: first.items[0].id, addedAt: at, qty: 5, priceTwd: 120 });
+    expect(addCartItem(first, { title: 'tea', store: 'corner shop', priceTwd: 99, qty: 1 }, later).items[0].priceTwd).toBe(99);
+  });
+  it('treats another store or link as another item, and stops at the largest quantity', () => {
+    const first = write([{ title: 'tea', qty: 998 }]);
+    expect(addCartItem(first, { title: 'tea', store: 'elsewhere', qty: 1 }, later).items).toHaveLength(2);
+    expect(addCartItem(first, { title: 'tea', qty: 5 }, later).items[0].qty).toBe(999);
+  });
+});
+
+describe('removeCartItem', () => {
+  const cart = write([{ title: 'tea', qty: 3 }, { title: 'pen', qty: 1 }]);
+  it('takes some of the quantity off, or the whole line when none or all is asked for', () => {
+    expect(removeCartItem(cart, cart.items[0].id, 2, later).items[0]).toMatchObject({ id: cart.items[0].id, qty: 1 });
+    expect(removeCartItem(cart, cart.items[0].id, 3, later).items.map(item => item.title)).toEqual(['pen']);
+    expect(removeCartItem(cart, cart.items[0].id, undefined, later).items.map(item => item.title)).toEqual(['pen']);
+    expect(removeCartItem(cart, cart.items[0].id, 10, later).items).toHaveLength(1);
+  });
+  it('keeps the totals and shelf slots of what is left', () => {
+    const both = write([{ title: 'tea', priceTwd: 100, qty: 1 }, { title: 'pen', priceTwd: 25, qty: 2 }]);
+    const dropped = removeCartItem(both, both.items[0].id, undefined, later);
+    expect(dropped).toMatchObject({ totalTwd: 50, revision: 2 });
+    expect(dropped.items[0]).toMatchObject({ title: 'pen', shelfSlot: 0 });
   });
 });
 
