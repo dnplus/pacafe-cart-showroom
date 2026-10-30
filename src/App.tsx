@@ -3,6 +3,7 @@ import { sharePath, shareView, type ShareSettings } from '../shared/share';
 import { CartHud } from './cart/CartHud';
 import { ownerShelf, sharedShelf } from './cart/shelf';
 import { useCart } from './cart/useCart';
+import { useUnbox } from './cart/useUnbox';
 import { RoomZones } from './components/RoomZones';
 import { t } from './i18n';
 import { saveOwnerKey } from './owner';
@@ -26,7 +27,8 @@ function Showroom() {
   const controls = useRef<RoomControls>(null);
   const cart = state.status === 'ready' || state.status === 'offline' ? state.cart : null;
   // While the share panel is open the room draws what a visitor would see, so the card it captures shows no more than that.
-  const shelf = useMemo(() => !cart ? null : preview ? sharedShelf(shareView(cart, preview)) : ownerShelf(cart), [cart, preview]);
+  const unbox = useUnbox(cart);
+  const shelf = useMemo(() => !cart ? null : preview ? sharedShelf(shareView(cart, preview)) : ownerShelf(cart, unbox.shelved), [cart, preview, unbox.shelved]);
   return <main className="agent-house-app showroom">
     <CartHud state={state} open={listOpen} onToggle={() => setListOpen(open => !open)} unlock={key => { saveOwnerKey(key); retry(); }} sharing={sharing} onShare={() => setSharing(open => !open)}>
       {sharing && <SharingSettings cart={cart} controls={controls} onPreview={setPreview} close={() => setSharing(false)} />}

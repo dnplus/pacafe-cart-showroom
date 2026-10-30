@@ -11,9 +11,9 @@ const NO_PRICE = '—';
 /** `NT$ 1,000–3,000`, or `NT$ 100,000 以上` past the last step. */
 export const formatRange = ({ minTwd, maxTwd }: PriceRange) => maxTwd === null ? t('{amount}+', { amount: formatTwd(minTwd) }) : `${formatTwd(minTwd)}–${maxTwd.toLocaleString('en-US')}`;
 
-/** The owner's room: every price and the cart's total. */
-export const ownerShelf = (cart: Cart): Shelf => ({
-  items: cart.items.map(item => ({ title: item.title, qty: item.qty, price: item.priceTwd === null ? NO_PRICE : formatTwd(item.priceTwd) })),
+/** The owner's room: every price and the cart's total. Only items already unboxed stand on the shelf; the register counts the whole cart. */
+export const ownerShelf = (cart: Cart, unboxed: ReadonlySet<string>): Shelf => ({
+  items: cart.items.filter(item => unboxed.has(item.id)).map(item => ({ title: item.title, qty: item.qty, price: item.priceTwd === null ? NO_PRICE : formatTwd(item.priceTwd) })),
   register: formatTwd(cartView(cart.items).totalTwd),
 });
 
