@@ -27,6 +27,7 @@
     "src",
     "shared",
     "worker",
+    "adapter",
     "tests",
     "tools",
     "vite.config.ts",
