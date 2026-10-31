@@ -2,11 +2,9 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { SHELF_SLOTS } from '../../shared/cart';
 import { registerModel, shelfSlot } from '../room/furnitureModels';
-import type { Shelf, ShelfItem } from './shelf';
+import { seed, shelfColour, type Shelf, type ShelfItem } from './shelf';
 
-const palette = ['#e58f6b', '#6f9fc4', '#e2b64f', '#8bb174', '#b48ac8', '#d9707f', '#5fa8a0', '#c99c6b'];
 /** A stable number per title, so a product keeps its box and colour across polls, and looks the same to the owner and to visitors. */
-const seed = (text: string) => { let h = 2166136261; for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619); return h >>> 0; };
 
 function canvasTexture(width: number, height: number, paint: (ctx: CanvasRenderingContext2D) => void) {
   const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
@@ -58,31 +56,38 @@ function paintCard(ctx: CanvasRenderingContext2D, item: ShelfItem, colour: strin
   if (item.qty > 1) { ctx.textAlign = 'right'; ctx.fillStyle = '#2f3d35'; ctx.font = font(900, picture ? 38 : 44); ctx.fillText(`×${item.qty}`, 304, y + 4); }
 }
 
-export function productBox(item: ShelfItem, space: { width: number; height: number; depth: number }, loadImage?: Shelf['loadImage'], labelScale = 1) {
-  const h = seed(item.title), colour = palette[h % palette.length];
-  const wanted = { width: .5 + (h >> 4) % 10 * .012, height: .36 + (h >> 8) % 14 * .013, depth: .26 + (h >> 12) % 6 * .01 };
-  const fit = Math.min(1, space.width * .9 / wanted.width, space.height * .9 / wanted.height, space.depth * .9 / wanted.depth);
-  const width = wanted.width * fit, height = wanted.height * fit, depth = wanted.depth * fit;
-  const geometries: THREE.BufferGeometry[] = [], materials: THREE.Material[] = [], textures: THREE.Texture[] = [];
-  const node = new THREE.Group(); node.name = 'cart-item';
-  const body = new THREE.Mesh(new RoundedBoxGeometry(width, height, depth, 2, .025), new THREE.MeshStandardMaterial({ color: colour, roughness: .55 }));
-  body.position.y = height / 2; body.castShadow = true; body.receiveShadow = true; node.add(body);
-  geometries.push(body.geometry); materials.push(body.material);
+/** The product's picture card, painted at once and repainted when its picture loads. */
+export function cardFace(item: ShelfItem, loadImage?: Shelf['loadImage'], labelScale = 1) {
+  const colour = shelfColour(item);
   const canvas = document.createElement('canvas'); canvas.width = CARD_W * labelScale; canvas.height = CARD_H * labelScale;
   const ctx = canvas.getContext('2d')!; ctx.scale(labelScale, labelScale); paintCard(ctx, item, colour, null);
-  const label = new THREE.CanvasTexture(canvas); label.colorSpace = THREE.SRGBColorSpace; label.anisotropy = 4;
-  const card = new THREE.Mesh(new THREE.PlaneGeometry(width * .9, Math.min(height * .82, width * .9 * .75)), new THREE.MeshBasicMaterial({ map: label, toneMapped: false }));
-  card.position.set(0, height / 2, depth / 2 + .003); node.add(card);
-  geometries.push(card.geometry); materials.push(card.material); textures.push(label);
-  node.traverse(part => { part.userData.cartKey = item.key; });
+  const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace; texture.anisotropy = 4;
   let disposed = false;
   const fetchPicture = (retries: number) => void loadImage!(item.image!).then(picture => {
     if (disposed) return;
     if (!picture) { if (retries) setTimeout(() => { if (!disposed) fetchPicture(retries - 1); }, PICTURE_RETRY_MS); return; }
-    paintCard(ctx, item, colour, picture); label.needsUpdate = true;
+    paintCard(ctx, item, colour, picture); texture.needsUpdate = true;
   });
   if (item.image && loadImage) fetchPicture(2);
-  return { node, height, dispose() { disposed = true; geometries.forEach(g => g.dispose()); materials.forEach(m => m.dispose()); textures.forEach(t => t.dispose()); } };
+  return { texture, aspect: CARD_W / CARD_H, dispose() { disposed = true; texture.dispose(); } };
+}
+
+export function productBox(item: ShelfItem, space: { width: number; height: number; depth: number }, loadImage?: Shelf['loadImage'], labelScale = 1) {
+  const h = seed(item.title), colour = shelfColour(item);
+  const wanted = { width: .5 + (h >> 4) % 10 * .012, height: .36 + (h >> 8) % 14 * .013, depth: .26 + (h >> 12) % 6 * .01 };
+  const fit = Math.min(1, space.width * .9 / wanted.width, space.height * .9 / wanted.height, space.depth * .9 / wanted.depth);
+  const width = wanted.width * fit, height = wanted.height * fit, depth = wanted.depth * fit;
+  const geometries: THREE.BufferGeometry[] = [], materials: THREE.Material[] = [];
+  const node = new THREE.Group(); node.name = 'cart-item';
+  const body = new THREE.Mesh(new RoundedBoxGeometry(width, height, depth, 2, .025), new THREE.MeshStandardMaterial({ color: colour, roughness: .55 }));
+  body.position.y = height / 2; body.castShadow = true; body.receiveShadow = true; node.add(body);
+  geometries.push(body.geometry); materials.push(body.material);
+  const face = cardFace(item, loadImage, labelScale);
+  const card = new THREE.Mesh(new THREE.PlaneGeometry(width * .9, Math.min(height * .82, width * .9 * .75)), new THREE.MeshBasicMaterial({ map: face.texture, toneMapped: false }));
+  card.position.set(0, height / 2, depth / 2 + .003); node.add(card);
+  geometries.push(card.geometry); materials.push(card.material);
+  node.traverse(part => { part.userData.cartKey = item.key; });
+  return { node, height, dispose() { face.dispose(); geometries.forEach(g => g.dispose()); materials.forEach(m => m.dispose()); } };
 }
 
 function product(item: ShelfItem, slot: number, loadImage?: Shelf['loadImage']) {

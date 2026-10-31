@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import type { Packaging } from '../../shared/packaging';
 import { rarityOf } from '../../shared/packaging';
-import { productBox } from './cartScene';
+import { cardFace } from './cartScene';
+import { shelfColour } from './shelf';
 import type { ImageLoader } from './productImage';
 import type { ShelfItem } from './shelf';
 
@@ -16,7 +17,6 @@ export interface StageOptions {
 }
 export interface ParcelStage { open(index: number): void; shake(index: number | null): void; dispose(): void }
 
-const BOX = { kraft: 0xd3a56b, sky: 0x8fb4d4, mint: 0x8cc2a2, blush: 0xe3a6a8, butter: 0xecca6e, lilac: 0xae9fd0 } as const;
 const TAPE = { cream: 0xf0e2b8, red: 0xd95d52, brown: 0xa07850, blue: 0x6c9bc4, washi: 0xf4b9c9 } as const;
 const GOLD = 0xffd14a;
 const W = 1.6, H = 1.0, D = 1.1, FLAP_T = .05;
@@ -41,25 +41,13 @@ function raysTexture(colour: string) {
   ctx.globalCompositeOperation = 'destination-in'; ctx.fillStyle = fade; ctx.fillRect(-128, -128, 256, 256);
   return new THREE.CanvasTexture(canvas);
 }
-function labelTexture(store: string | null) {
-  const canvas = document.createElement('canvas'); canvas.width = 320; canvas.height = 200;
-  const ctx = canvas.getContext('2d')!;
-  ctx.fillStyle = '#fffdf5'; ctx.fillRect(0, 0, 320, 200);
-  ctx.fillStyle = '#d95d52'; ctx.fillRect(0, 0, 320, 26);
-  ctx.fillStyle = '#2f3d35'; ctx.font = '900 34px "Nunito Sans Variable", "PingFang TC", sans-serif'; ctx.textBaseline = 'top';
-  ctx.fillText(store ? store.slice(0, 9) : 'MUSE ♥', 18, 40, 284);
-  ctx.font = '800 20px "Nunito Sans Variable", sans-serif'; ctx.fillStyle = '#8a6c4a'; ctx.fillText('EXPRESS · FRAGILE', 18, 88);
-  for (let x = 18, k = 0; x < 300; k++) { const w = 2 + (k * 7) % 5; ctx.fillStyle = '#2f3d35'; ctx.fillRect(x, 124, w, 52); x += w + 3 + (k * 3) % 4; }
-  const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace; texture.anisotropy = 4;
-  return texture;
-}
 
 interface Flap { pivot: THREE.Group; axis: 'x' | 'z'; sign: number; max: number; delay: number }
 interface Slot {
   parcel: StageParcel; index: number; group: THREE.Group; body: THREE.MeshStandardMaterial; flaps: Flap[]; tape: THREE.Mesh[]; tapeMat: THREE.MeshStandardMaterial;
   filler: { mesh: THREE.InstancedMesh; pos: Float32Array; vel: Float32Array; launched: boolean; update(dt: number, t: number): void };
   rare: boolean; fine: boolean; opened: number | null; shaking: boolean; origin: THREE.Vector3; scale: number;
-  product?: { built: ReturnType<typeof productBox>; node: THREE.Group }; burst?: { flash: THREE.Sprite; rays: THREE.Mesh; sparks: THREE.Points; dirs: Float32Array; aura: THREE.Sprite };
+  product?: { built: { dispose(): void }; node: THREE.Group }; burst?: { flash: THREE.Sprite; rays: THREE.Mesh; sparks: THREE.Points; dirs: Float32Array; aura: THREE.Sprite };
 }
 
 export function createParcelStage(host: HTMLElement, parcels: readonly StageParcel[], options: StageOptions): ParcelStage {
@@ -81,11 +69,11 @@ export function createParcelStage(host: HTMLElement, parcels: readonly StageParc
   const raysTex = own(raysTexture('rgba(255,243,184,.9)')), goldRaysTex = own(raysTexture('rgba(255,209,74,.95)'));
   const bodyGeo = own(new RoundedBoxGeometry(W, H, D, 4, .07)), insideGeo = own(new THREE.PlaneGeometry(W - .2, D - .2));
   const majorGeo = own(new RoundedBoxGeometry(W + .02, FLAP_T, D / 2 + .01, 2, .02)), minorGeo = own(new RoundedBoxGeometry(D / 2 + .01, FLAP_T, D, 2, .02));
-  const tapeGeo = own(new THREE.BoxGeometry((W + .12) / 2, .02, .24)), labelGeo = own(new THREE.PlaneGeometry(.62, .39)), shadowGeo = own(new THREE.PlaneGeometry(1, 1)), raysGeo = own(new THREE.PlaneGeometry(1, 1));
+  const tapeGeo = own(new THREE.BoxGeometry((W + .12) / 2, .02, .24)), labelGeo = own(new THREE.PlaneGeometry(W * .62, W * .62 * .75)), shadowGeo = own(new THREE.PlaneGeometry(1, 1)), raysGeo = own(new THREE.PlaneGeometry(1, 1));
   const insideMat = own(new THREE.MeshStandardMaterial({ color: 0x2b1d10, roughness: 1 }));
   const shadowMat = own(new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false }));
 
-  const cols = many ? (parcels.length <= 5 ? parcels.length : Math.ceil(parcels.length / 2)) : 1, rows = many ? Math.ceil(parcels.length / cols) : 1;
+  const narrow = host.clientWidth < host.clientHeight, cols = many ? (parcels.length <= 5 && !narrow ? parcels.length : Math.ceil(parcels.length / 2)) : 1, rows = many ? Math.ceil(parcels.length / cols) : 1;
   const stepX = 2.05, stepZ = 1.8, scale = many ? Math.min(1, 4.6 / Math.max(4.6, cols * 1.1)) * 1 : 1;
   const floorMat = own(new THREE.MeshStandardMaterial({ color: 0xf4ead2, roughness: .9 })), ringMat = own(new THREE.MeshStandardMaterial({ color: 0xd98b5f, roughness: .8 }));
   const floor = many
@@ -95,9 +83,9 @@ export function createParcelStage(host: HTMLElement, parcels: readonly StageParc
   if (!many) { const ring = new THREE.Mesh(own(new THREE.TorusGeometry(1.95, .035, 8, 64)), ringMat); ring.rotation.x = Math.PI / 2; ring.position.y = .002; scene.add(ring); }
 
   const slots: Slot[] = parcels.map((parcel, index) => {
-    const { box, tape, filler, sticker } = parcel.packaging;
+    const { tape, filler, sticker } = parcel.packaging, shelf = shelfColour(parcel.product);
     const group = new THREE.Group(), cardboard = (colour: number, lift = 0) => own(new THREE.MeshStandardMaterial({ color: new THREE.Color(colour).lerp(new THREE.Color(0xffffff), lift), roughness: .85 }));
-    const bodyMat = cardboard(BOX[box]), flapMat = cardboard(BOX[box], .18), tapeMat = own(new THREE.MeshStandardMaterial({ color: TAPE[tape], roughness: .5, transparent: true }));
+    const bodyMat = cardboard(new THREE.Color(shelf).getHex()), flapMat = cardboard(new THREE.Color(shelf).getHex(), .18), tapeMat = own(new THREE.MeshStandardMaterial({ color: TAPE[tape], roughness: .5, transparent: true }));
     const body = new THREE.Mesh(bodyGeo, bodyMat); body.position.y = H / 2; group.add(body);
     const inside = new THREE.Mesh(insideGeo, insideMat); inside.rotation.x = -Math.PI / 2; inside.position.y = H + .004; group.add(inside);
     const flaps: Flap[] = [];
@@ -110,7 +98,8 @@ export function createParcelStage(host: HTMLElement, parcels: readonly StageParc
     hinge(majorGeo, 'x', 1, [0, 0, D / 2], [0, 0, -D / 4], .06, 2.0, 0);
     hinge(majorGeo, 'x', -1, [0, 0, -D / 2], [0, 0, D / 4], .06, 2.0, .03);
     const tapes = [-1, 1].map(side => { const m = new THREE.Mesh(tapeGeo, tapeMat); m.position.set(side * (W + .12) / 4, H + .13, 0); group.add(m); return m; });
-    const label = new THREE.Mesh(labelGeo, own(new THREE.MeshStandardMaterial({ map: own(labelTexture(parcel.store)), roughness: .6 }))); label.position.set(W * .2, H * .45, D / 2 + .004); group.add(label);
+    const face = own(cardFace(parcel.product, options.loadImage, 2));
+    const label = new THREE.Mesh(labelGeo, own(new THREE.MeshBasicMaterial({ map: face.texture, toneMapped: false }))); label.position.set(0, H * .47, D / 2 + .004); group.add(label);
     const shadow = new THREE.Mesh(shadowGeo, shadowMat); shadow.rotation.x = -Math.PI / 2; shadow.scale.set(W * 1.9, D * 2.2, 1); shadow.position.y = .004; group.add(shadow);
 
     const count = many ? 30 : 56, random = rand(index * 7919 + 13);
@@ -145,19 +134,35 @@ export function createParcelStage(host: HTMLElement, parcels: readonly StageParc
 
   // The parcels are framed in the host box, but the canvas covers the window so bursts and the outer parcels spill past it.
   const fit = () => {
-    const frame = host.getBoundingClientRect(), w = frame.width || 1, h = frame.height || 1, W = innerWidth, H = innerHeight;
+    // Sizes come from layout and the centre from the rect, so an entrance scale on the host does not shrink the framing.
+    const frame = host.getBoundingClientRect(), w = host.clientWidth || 1, h = host.clientHeight || 1, W = innerWidth, H = innerHeight;
+    const cx = frame.left + frame.width / 2, cy = frame.top + frame.height / 2;
     renderer.setSize(W, H, false);
-    Object.assign(renderer.domElement.style, { left: `${-frame.left}px`, top: `${-frame.top}px`, width: `${W}px`, height: `${H}px` });
+    Object.assign(renderer.domElement.style, { left: `${w / 2 - cx}px`, top: `${h / 2 - cy}px`, width: `${W}px`, height: `${H}px` });
     camera.aspect = w / h;
-    const halfW = many ? (cols * stepX + .6) / 2 * scale : 2.15, halfH = many ? (rows * stepZ + 2.4) / 2 : 2.0, t = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-    const dist = Math.max(halfW / (t * camera.aspect), halfH / t) * 1.08, target = many ? new THREE.Vector3(0, .9, 0) : new THREE.Vector3(0, 1.25, 0);
+    const halfW = many ? (cols * stepX + .8) / 2 : 2.15, halfH = many ? (rows * stepZ + 2.4) / 2 : 2.0, t = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    const dist = Math.max(halfW / (t * camera.aspect), halfH / t) * 1.08 + (rows * stepZ + .6) / 2, target = many ? new THREE.Vector3(0, .9, 0) : new THREE.Vector3(0, 1.25, 0);
     camera.position.set(0, target.y + dist * .36, dist * .93); camera.lookAt(target); camera.updateProjectionMatrix();
-    const px = 2 * camera.near * t / h, cx = frame.left + w / 2, cy = frame.top + h / 2;
+    const px = 2 * camera.near * t / h;
     camera.projectionMatrix.makePerspective(-cx * px, (W - cx) * px, cy * px, (cy - H) * px, camera.near, camera.far);
     camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
   };
   fit();
   const observer = new ResizeObserver(fit); observer.observe(host); addEventListener('resize', fit);
+
+  const CARD = 1.5;
+  const revealCard = (slot: Slot) => {
+    const face = cardFace(slot.parcel.product, options.loadImage, 3), h = CARD / face.aspect;
+    const frame = new THREE.MeshStandardMaterial({ color: slot.rare ? GOLD : slot.fine ? 0xf4b9c9 : 0xfffaf0, roughness: .35, metalness: slot.rare ? .45 : 0, emissive: slot.rare ? 0x6b4a00 : 0x000000 });
+    const back = new THREE.MeshStandardMaterial({ color: shelfColour(slot.parcel.product), roughness: .6 }), front = new THREE.MeshBasicMaterial({ map: face.texture, toneMapped: false, transparent: true });
+    const bodyGeo = new RoundedBoxGeometry(CARD + .12, h + .12, .04, 2, .03), faceGeo = new THREE.PlaneGeometry(CARD, h);
+    const node = new THREE.Group(), card = new THREE.Group(); card.position.y = h / 2 + .06; node.add(card);
+    card.add(new THREE.Mesh(bodyGeo, frame));
+    const shown = new THREE.Mesh(faceGeo, front); shown.position.z = .021; card.add(shown);
+    const behind = new THREE.Mesh(faceGeo, back); behind.position.z = -.021; behind.rotation.y = Math.PI; card.add(behind);
+    card.rotation.x = -.18;
+    return { node, dispose() { face.dispose(); [frame, back, front].forEach(m => m.dispose()); bodyGeo.dispose(); faceGeo.dispose(); } };
+  };
 
   const sparkCount = 46;
   const startBurst = (slot: Slot) => {
@@ -255,8 +260,7 @@ export function createParcelStage(host: HTMLElement, parcels: readonly StageParc
       const slot = slots[index]; if (!slot || slot.opened !== null) return;
       slot.opened = performance.now() / 1000; slot.shaking = false;
       slot.filler.mesh.visible = !reduced;
-      const built = productBox(slot.parcel.product, { width: 1.25, height: 1.0, depth: .85 }, options.loadImage, 2);
-      built.node.visible = false; scene.add(built.node); slot.product = { built, node: built.node };
+      const built = revealCard(slot); built.node.visible = false; scene.add(built.node); slot.product = { built, node: built.node };
       if (reduced) setFade(built.node, 0);
       if (!reduced) startBurst(slot);
     },

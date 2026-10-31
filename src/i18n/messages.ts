@@ -99,7 +99,6 @@ export const messages = [
   ['Open all at once ({count})', '一鍵秒開（{count} 件）'],
   ['Parcel: {title}. Swipe along the tape, or press Enter to open it.', '快遞：{title}。沿著膠帶劃開，或按 Enter 打開。'],
   ['Parcel waiting its turn', '排隊中的快遞'],
-  ['From {store}', '寄件：{store}'],
   ['Could not save what you opened. Trying again.', '拆開的結果存不進去，會再試一次。'],
   ['Apron clerk', '圍裙店員'],
   ['Cap clerk', '帽子店員'],

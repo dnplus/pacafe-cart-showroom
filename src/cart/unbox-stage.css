@@ -74,4 +74,4 @@
 .stage-info a{display:inline-flex;align-items:center;gap:.3em;padding:.3em .9em;border-radius:999px;background:var(--forest);color:#fff;font-weight:850;font-size:.85em;text-decoration:none}
 .stage-sticker-anchor{position:absolute;left:60%;top:50%;font-size:1em}
 @keyframes hud-in{0%,28%{opacity:0;transform:translateY(1em)}40%,84%{opacity:1;transform:none}94%,100%{opacity:0}}
-@media(max-width:700px){.stage-note{top:2%;width:min(14em,70%)}.stage-sticker-anchor{left:40%}}
+@media(max-width:700px){.stage-note{top:auto;bottom:27%;width:min(14em,70%)}.stage-sticker-anchor{left:40%}}

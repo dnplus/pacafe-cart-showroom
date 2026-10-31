@@ -5,6 +5,7 @@ import { t } from '../i18n';
 import { ProductThumb } from './ProductThumb';
 import { Sticker } from './stickers';
 import type { TrayItem } from './trayItem';
+import { shelfColour } from './shelf';
 import { STAGGERED, type Box } from './unbox';
 import './unbox-tray.css';
 import './stickers.css';
@@ -12,10 +13,10 @@ import './stickers.css';
 export const style = (vars: Record<string, string | number>) => vars as CSSProperties;
 
 export function Parcel({ box, item, index = 0, variant, rarity, children }: { box: Box; item: TrayItem; index?: number; variant: 'front' | 'mini'; rarity?: Rarity; children?: ReactNode }) {
-  return <div className={`parcel parcel-${variant}`} data-testid="unbox-box" data-item-id={box.id} data-phase={box.phase} data-box={item.packaging.box} data-tape={item.packaging.tape} data-filler={item.packaging.filler} data-progress={box.phase === 'slicing' ? box.progress.toFixed(2) : undefined} data-rarity={rarity}
-    style={style({ '--p': box.phase === 'slicing' ? box.progress : 0, '--i': Math.min(index, STAGGERED) })} aria-label={variant === 'mini' ? t('Parcel waiting its turn') : undefined}>
+  return <div className={`parcel parcel-${variant}`} data-testid="unbox-box" data-item-id={box.id} data-phase={box.phase} data-tape={item.packaging.tape} data-filler={item.packaging.filler} data-progress={box.phase === 'slicing' ? box.progress.toFixed(2) : undefined} data-rarity={rarity}
+    style={style({ '--c': shelfColour(item), '--p': box.phase === 'slicing' ? box.progress : 0, '--i': Math.min(index, STAGGERED) })} aria-label={variant === 'mini' ? t('Parcel waiting its turn') : undefined}>
     <i className="parcel-inside" /><i className="parcel-filler" /><i className="flap flap-back" /><i className="flap flap-front" />
-    <div className="parcel-body">{item.store && <span className="parcel-label">{t('From {store}', { store: item.store })}</span>}</div>
+    <div className="parcel-body"><span className="parcel-label"><b>{item.title}</b>{item.price && <small>{item.price}</small>}</span></div>
     <div className="parcel-tape" data-testid={variant === 'front' ? 'unbox-tape' : undefined}><i className="parcel-cut" /></div>
     {variant === 'front' && <Scissors className="parcel-scissors" aria-hidden="true" />}
     {children}

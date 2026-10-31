@@ -4,6 +4,10 @@ import { t } from '../i18n';
 import { ownerImageLoader, type ImageLoader } from './productImage';
 
 /** `key` names the product in a click on it: an owner's item id, a visitor's slot number. */
+const palette = ['#e58f6b', '#6f9fc4', '#e2b64f', '#8bb174', '#b48ac8', '#d9707f', '#5fa8a0', '#c99c6b'];
+export const seed = (text: string) => { let h = 2166136261; for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619); return h >>> 0; };
+/** The colour a product's box has on the shelf, its parcel and its card. */
+export const shelfColour = (item: { title: string }) => palette[seed(item.title) % palette.length];
 export interface ShelfItem { key: string; title: string; qty: number; price: string | null; image: string | null; /** Just unboxed in this room: the box drops onto its slot instead of standing there already. */ lands?: boolean }
 /** What the room shows: one item per shelf slot in list order (those past SHELF_SLOTS are not drawn) and the register's display. */
 export interface Shelf { items: readonly ShelfItem[]; register: string; loadImage?: ImageLoader }

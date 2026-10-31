@@ -40,8 +40,8 @@ try {
       if (reduced) await owner.emulateMedia({ reducedMotion: 'reduce' });
       await owner.goto(`${worker.origin}/?lang=en`); await ready(owner);
       await owner.waitForSelector(`${hit}[data-phase="atCounter"]`, { timeout: 30_000 }); await owner.waitForTimeout(1200);
-      const boxes = await owner.locator('[data-testid="unbox-box"]').evaluateAll(nodes => nodes.map(node => [node.dataset.box, node.dataset.tape, node.dataset.filler].join('/')));
-      assert.ok(new Set(boxes.map(entry => entry.split('/')[0])).size >= 3, `parcels differ by store: ${boxes}`);
+      const boxes = await owner.locator('[data-testid="unbox-box"]').evaluateAll(nodes => nodes.map(node => [node.style.getPropertyValue('--c'), node.dataset.tape, node.dataset.filler].join('/')));
+      assert.ok(new Set(boxes.map(entry => entry.split('/')[0])).size >= 3, `parcels take their shelf colours: ${boxes}`);
       await shoot(owner, '1-parcels');
 
       await openFront(owner);
