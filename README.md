@@ -262,7 +262,7 @@ npm run runner -- --once       # 做完一個 job（或沒有 job）就結束
 | 變數 | 做什麼 |
 |---|---|
 | `META_API_KEY`、`META_API_BASE_URL` | 兩個都有時，字幕和看片用 Spark（`muse-spark-1.3`）。缺任何一個就用本地 fallback 字幕和 mock 看片規則，不花錢。Spark 回錯、漏了某一景，或在價格隱藏時寫出價格，這一步就退回本地版本。 |
-| `TTS_PROVIDER` | `none`（預設，只出字幕）、`elevenlabs`（要 `ELEVENLABS_API_KEY`、`ELEVENLABS_VOICE_ID`）或 `minimax`（要 `MINIMAX_API_KEY`，`MINIMAX_VOICE_ID` 選填）。金鑰缺了就改用 `none`，log 只寫缺哪個變數名稱。配音的費用記在屋主自己的帳號，不算進 `costUsd`。 |
+| `TTS_PROVIDER` | `none`（預設，只出字幕）、`elevenlabs`（要 `ELEVENLABS_API_KEY`、`ELEVENLABS_VOICE_ID`）或 `minimax`（要 `MINIMAX_API_KEY`，`MINIMAX_VOICE_ID` 選填，`MINIMAX_REGION` 是 `global`（預設，api.minimax.io）或 `mainland`（api.minimaxi.com））。金鑰缺了就改用 `none`，log 只寫缺哪個變數名稱。配音的費用記在屋主自己的帳號，不算進 `costUsd`。房間的「連結」面板選了配音時，job 用面板的設定，這些環境變數只在面板選「不配音」時才用。 |
 | `RUNNER_WORK_DIR` | 工作目錄，預設 `.local/runner`。每個 job 一個子目錄，認領時先清空，所以重做的 job 從乾淨的目錄開始。 |
 
 一個 job 依序經過這幾步，每一步都回報給 worker：
@@ -277,6 +277,12 @@ npm run runner -- --once       # 做完一個 job（或沒有 job）就結束
 錯誤訊息回報給 worker 和印到 log 之前，會先把 `META_API_KEY`、`ELEVENLABS_API_KEY`、`MINIMAX_API_KEY`、`CART_MCP_TOKEN` 的值換成 `[REDACTED]`。
 
 ### 接上 Muse Code
+
+房間 HUD 的「連結」面板有兩塊：
+
+- **店員 Muse**：小屋的 MCP 網址、可以直接貼進 Muse Code 的 `mcp_servers` 設定（瀏覽器存了屋主金鑰時，複製的內容會帶上它，畫面上只顯示點點）、要給 Muse 的兩個 skill，和一句試用的話。Muse 每次呼叫 `/mcp`，小屋都會記下時間、`initialize` 報的 client 名稱版本和最後用的工具；面板每 3 秒讀一次 `GET /api/muse`，10 分鐘內有呼叫就亮綠燈，店員和屋主也會冒「♥」。
+- **介紹影片配音**：選不配音、MiniMax 或 ElevenLabs，填 API 金鑰、聲音和 MiniMax 的平台（國際版或中國大陸版，選錯會回 1004）。`PUT /api/voice` 存在 Durable Object；之後 `GET /api/voice` 只回金鑰最後四碼，沒填金鑰的更新會沿用舊的。「試聽一句」打 `POST /api/voice/test`，用存好的設定念一句，成功就播出來，失敗就顯示供應商回的狀態碼和訊息（金鑰會換成 `[REDACTED]`），結果也會記下來。金鑰只會放進 runner 認領 job 時拿到的 claim（要 token），runner 也會把它從 log 和錯誤訊息裡拿掉。
+
 
 `muse/settings.example.json` 是 Muse Code 的 `mcp_servers` 設定範例，token 用 `${CART_MCP_TOKEN}` 從環境變數帶入。skills 在 `.agents/skills/`：
 

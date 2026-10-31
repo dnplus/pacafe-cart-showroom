@@ -10,6 +10,7 @@ import { handleMcp } from './mcp';
 import { promoApi } from './promo';
 import { runnerApi } from './runner';
 import { castPath, handleCast } from './cast';
+import { connections, connectionsPath } from './connections';
 import { DEFAULT_NICKNAME } from '../shared/share';
 import { cartImageUrls, serveImage, shareImageUrls } from './imageProxy';
 import { withProductImages } from './productPage';
@@ -133,8 +134,10 @@ export class Showroom {
 
   async fetch(request: Request): Promise<Response> {
     const { pathname } = new URL(request.url);
-    if (pathname === '/mcp') return hasToken(request, this.env) ? handleMcp(request, tools, this.store()) : unauthorized();
-    if (pathname.startsWith('/runner/')) return runnerApi(request, this.env, this.store(), pathname);
+    const linked = connections(this.ctx.storage, this.env), connection = connectionsPath.exec(pathname)?.[1];
+    if (pathname === '/mcp') return hasToken(request, this.env) ? handleMcp(request, tools, this.store(), linked.note) : unauthorized();
+    if (pathname.startsWith('/runner/')) return runnerApi(request, this.env, this.store(), pathname, linked.runnerVoice);
+    if (connection) return linked.handle(request, connection);
     if (pathname === '/api/promo') return promoApi(request, this.env, this.store());
     if (pathname.startsWith('/s/')) return this.shared(request, pathname);
     if (pathname === '/api/share') return this.share(request);

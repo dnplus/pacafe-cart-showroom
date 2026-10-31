@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { McpCall } from '../shared/muse';
 import { ToolError, type Store, type Tool } from './tools';
 
 const SUPPORTED_VERSIONS = ['2025-11-25', '2025-06-18'];
@@ -43,8 +44,8 @@ const listed = (tool: Tool) => {
   return { name: tool.name, title: tool.title, description: tool.description, inputSchema, annotations: tool.annotations };
 };
 
-/** Stateless JSON-RPC over streamable HTTP: answers every POST with one JSON body and keeps no session. */
-export async function handleMcp(request: Request, tools: readonly Tool[], store: Store): Promise<Response> {
+/** Stateless JSON-RPC over streamable HTTP: answers every POST with one JSON body and keeps no session. `onCall` hears each valid call. */
+export async function handleMcp(request: Request, tools: readonly Tool[], store: Store, onCall: (call: McpCall) => Promise<void> = async () => {}): Promise<Response> {
   if (request.method !== 'POST') return Response.json({ error: 'method_not_allowed' }, { status: 405, headers: { allow: 'POST', 'cache-control': 'no-store' } });
   const version = request.headers.get('mcp-protocol-version');
   if (version && !SUPPORTED_VERSIONS.includes(version)) return rpcError(null, -32600, `不支援的 MCP-Protocol-Version：${version}`, 400);
@@ -58,6 +59,12 @@ export async function handleMcp(request: Request, tools: readonly Tool[], store:
   if (body.params !== undefined && !isRecord(body.params)) return rpcError(id, -32602, 'params 必須是物件。');
   const params = body.params ?? {};
   const ok = (result: unknown) => reply({ jsonrpc: '2.0', id, result });
+  const info = isRecord(params.clientInfo) ? params.clientInfo : null;
+  await onCall({
+    method,
+    client: method === 'initialize' && info && typeof info.name === 'string' ? { name: info.name, version: typeof info.version === 'string' ? info.version : '' } : undefined,
+    tool: method === 'tools/call' && typeof params.name === 'string' ? params.name : undefined,
+  }).catch(error => console.error('mcp: could not note the call', error));
   try {
     switch (method) {
       case 'initialize': return ok({

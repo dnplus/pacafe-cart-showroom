@@ -6,7 +6,8 @@ import { applyFixes, fitVoice, keyframes, type Issue, type QaReport, type QaRoun
 import type { Renderer } from './render.ts';
 import { fallbackStoryboarder, mockReviewer, sparkOrMockReviewer, sparkReviewer, sparkStoryboarder, type Reviewer, type Storyboarder } from './spark.ts';
 import type { Storyboard } from './storyboard.ts';
-import { selectTts, type Tts } from './tts.ts';
+import type { VoiceConfig } from '../shared/voice.ts';
+import { selectTts, ttsFor, type Tts } from './tts.ts';
 import type { RunnerWorker } from './worker-client.ts';
 
 export const MAX_QA_ROUNDS = 3;
@@ -15,7 +16,10 @@ type Env = Readonly<Record<string, string | undefined>>;
 export interface RunnerDeps {
   worker: RunnerWorker;
   storyboarder: Storyboarder;
+  /** The voice from the runner's own environment, for a claim that carries none. */
   tts: Tts;
+  /** The voice for a claim that carries the owner's room settings; defaults to speaking over fetch. */
+  voiceFor?: (config: VoiceConfig) => Tts;
   reviewer: Reviewer;
   renderer: Renderer;
   /** Each job works in `<workDir>/<jobId>`, emptied when the job starts so a re-claimed job starts clean. */
@@ -85,6 +89,9 @@ const sha256 = (file: string) => createHash('sha256').update(fs.readFileSync(fil
  */
 export async function runJob(claim: RunnerClaim, deps: RunnerDeps): Promise<'done' | 'failed'> {
   const { job } = claim, dir = path.join(deps.workDir, job.id);
+  // The room's voice key arrives with the claim, so it is taken out of every message as the environment's keys are.
+  const redact = claim.voice ? (text: string) => deps.redact(text).replaceAll(claim.voice!.apiKey, '[REDACTED]') : deps.redact;
+  const tts = claim.voice ? (deps.voiceFor ?? (config => ttsFor(config, fetch)))(claim.voice) : deps.tts;
   let costUsd = 0;
   const report = (update: Exclude<RunnerUpdate, { status: 'done' | 'failed' }>['status'], progress: number) => deps.worker.update(job.id, { status: update, progress, costUsd });
   try {
@@ -96,7 +103,8 @@ export async function runJob(claim: RunnerClaim, deps: RunnerDeps): Promise<'don
     await report('storyboard', 1);
 
     await report('voice', 0);
-    await deps.tts.voice(drafted.storyboard);
+    if (claim.voice) deps.log(`${job.id}：配音用房間設定的 ${tts.name}`);
+    await tts.voice(drafted.storyboard);
     await report('voice', 1);
 
     await report('rendering', 0);
@@ -110,7 +118,7 @@ export async function runJob(claim: RunnerClaim, deps: RunnerDeps): Promise<'don
     if (errors.length) throw new Error(`QA ${qa.rounds.length} 輪後仍有 ${errors.length} 個 error：${describe(errors)}`);
 
     // A wording fix changes what is said, so the final storyboard is voiced again; unchanged scenes come from the cache.
-    const voice = await deps.tts.voice(qa.storyboard);
+    const voice = await tts.voice(qa.storyboard);
     const input = { storyboard: fitVoice(qa.storyboard, voice), voice };
     const cut = voice.filter(clip => { const scene = input.storyboard.scenes.find(s => s.id === clip.sceneId)!; return clip.durationSec > scene.endSec - scene.startSec; });
     if (cut.length) deps.log(`${job.id}：配音比片長多，${cut.map(clip => clip.sceneId).join('、')} 的尾巴會被切掉`);
@@ -132,10 +140,10 @@ export async function runJob(claim: RunnerClaim, deps: RunnerDeps): Promise<'don
     deps.log(`${job.id}：done，${durationSec} 秒，估計花費 $${costUsd.toFixed(4)}`);
     return 'done';
   } catch (error) {
-    const message = deps.redact(error instanceof Error ? error.message : String(error)).trim().slice(0, 500) || 'runner failed';
+    const message = redact(error instanceof Error ? error.message : String(error)).trim().slice(0, 500) || 'runner failed';
     deps.log(`${job.id}：failed：${message}`);
     try { await deps.worker.update(job.id, { status: 'failed', costUsd, error: message }); } catch (reportError) {
-      deps.log(`${job.id}：回報 failed 也失敗：${deps.redact(reportError instanceof Error ? reportError.message : String(reportError))}`);
+      deps.log(`${job.id}：回報 failed 也失敗：${redact(reportError instanceof Error ? reportError.message : String(reportError))}`);
     }
     return 'failed';
   }

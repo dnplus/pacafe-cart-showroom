@@ -1,8 +1,10 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { Cue } from './room/castMotion';
 import { DEFAULT_CHARACTER } from '../shared/cast';
 import { DEFAULT_NICKNAME } from '../shared/share';
 import { sharePath, shareView, type ShareSettings } from '../shared/share';
 import { CastPanel } from './cast/CastPanel';
+import { ConnectionsPanel } from './connect/ConnectionsPanel';
 import { useCast } from './cast/useCast';
 import { useCue } from './cast/useCue';
 import { CartHud } from './cart/CartHud';
@@ -31,9 +33,9 @@ export default function App() {
 function Showroom() {
   const { state, retry } = useCart();
   const [listOpen, setListOpen] = useState(false);
-  const [sharing, setSharing] = useState(false);
-  const [casting, setCasting] = useState(false);
-  const [habiting, setHabiting] = useState(false);
+  const [panel, setPanel] = useState<'share' | 'cast' | 'habits' | 'connect' | 'promo' | null>(null);
+  const toggle = (name: NonNullable<typeof panel>) => () => setPanel(open => open === name ? null : name);
+  const sharing = panel === 'share', casting = panel === 'cast', habiting = panel === 'habits';
   const [preview, setPreview] = useState<ShareSettings | null>(null);
   const controls = useRef<RoomControls>(null);
   const cart = state.status === 'ready' || state.status === 'offline' ? state.cart : null;
@@ -41,20 +43,25 @@ function Showroom() {
   const unbox = useUnbox(cart);
   const cue = useCue(cart, unbox.shelved.size, unbox.ready && cart?.items.length === unbox.boxes.length);
   const poked = useProductPoke();
+  // The room reacts to the latest of the cart's news and Muse calling in; each gets a fresh id so it plays once.
+  const [roomCue, setRoomCue] = useState<{ id: number; kind: Cue } | null>(null);
+  const react = (kind: Cue) => setRoomCue(previous => ({ id: (previous?.id ?? 0) + 1, kind }));
+  useEffect(() => { if (cue) react(cue.kind); }, [cue]);
   // While the share panel is open the room draws what a visitor would see, so the card it captures shows no more than that.
   const shelf = useMemo(() => !cart ? null : preview ? sharedShelf(shareView(cart, preview), ownerImageLoader) : ownerShelf(cart, unbox.shelved, unbox.landed), [cart, preview, unbox.shelved, unbox.landed]);
   return <main className="agent-house-app showroom">
-    <CartHud state={state} open={listOpen} onToggle={() => setListOpen(open => !open)} unlock={key => { saveOwnerKey(key); retry(); }} focus={poked} sharing={sharing} onShare={() => { setSharing(open => !open); setCasting(false); setHabiting(false); }} casting={casting} onCast={() => { setCasting(open => !open); setSharing(false); setHabiting(false); }} habits={habiting} onHabits={() => { setHabiting(open => !open); setSharing(false); setCasting(false); }}>
-      {habiting && <HabitsPanel cart={cart} close={() => setHabiting(false)} />}
-      {casting && <CastPanel cast={cast} close={() => setCasting(false)} />}
-      {sharing && <SharingSettings cart={cart} controls={controls} onPreview={setPreview} close={() => setSharing(false)} />}
-      <PromoPanel count={cart?.items.length ?? 0} />
+    <CartHud state={state} open={listOpen} onToggle={() => setListOpen(open => !open)} unlock={key => { saveOwnerKey(key); retry(); }} focus={poked} sharing={sharing} onShare={toggle('share')} casting={casting} onCast={toggle('cast')} habits={habiting} onHabits={toggle('habits')} connecting={panel === 'connect'} onConnect={toggle('connect')} filming={panel === 'promo'} onFilm={toggle('promo')}>
+      {habiting && <HabitsPanel cart={cart} close={() => setPanel(null)} />}
+      {casting && <CastPanel cast={cast} close={() => setPanel(null)} />}
+      {sharing && <SharingSettings cart={cart} controls={controls} onPreview={setPreview} close={() => setPanel(null)} />}
+      {panel === 'connect' && <ConnectionsPanel close={() => setPanel(null)} onMuseSeen={() => react('poke')} />}
+      {panel === 'promo' && <PromoPanel count={cart?.items.length ?? 0} close={() => setPanel(null)} />}
     </CartHud>
     <section className="world-stage game-stage" aria-label={t('Cart showroom')}>
       <RoomZones>
-        <RoomScene scenery="peach" cue={preview ? null : cue} shelf={shelf} controls={controls} counter={() => setListOpen(true)} baristaName={t('Clerk')} barista={preview ? DEFAULT_CHARACTER : cast.view?.character} owner={{ name: preview?.nickname ?? cast.view?.nickname ?? DEFAULT_NICKNAME, sprite: preview ? null : cast.spriteUrl, open: () => { setCasting(true); setSharing(false); } }} studioSet={showroomStudioSet} hour={14} />
+        <RoomScene scenery="peach" cue={preview ? null : roomCue} shelf={shelf} controls={controls} counter={() => setListOpen(true)} baristaName={t('Clerk')} barista={preview ? DEFAULT_CHARACTER : cast.view?.character} owner={{ name: preview?.nickname ?? cast.view?.nickname ?? DEFAULT_NICKNAME, sprite: preview ? null : cast.spriteUrl, open: () => setPanel('cast') }} studioSet={showroomStudioSet} hour={14} />
       </RoomZones>
     </section>
-    {!sharing && !casting && !habiting && <UnboxTray {...unbox} items={cart?.items ?? []} />}
+    {!panel && <UnboxTray {...unbox} items={cart?.items ?? []} />}
   </main>;
 }

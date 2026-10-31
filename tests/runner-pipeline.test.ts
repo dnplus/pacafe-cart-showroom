@@ -9,7 +9,7 @@ import { MAX_QA_ROUNDS, modelsFromEnv, redactor, runJob, type RunnerDeps } from 
 import type { Renderer } from '../runner/render';
 import type { Reviewer } from '../runner/spark';
 import { PRICE_PATTERN, SUBTITLE, textWidthEm, type PromoInput } from '../runner/storyboard';
-import { selectTts } from '../runner/tts';
+import { selectTts, ttsFor } from '../runner/tts';
 import { workerClient } from '../runner/worker-client';
 import { claimFor, fakeRunnerWorker } from './fake-runner-worker';
 
@@ -92,6 +92,23 @@ describe('runner, mock models', () => {
     expect(calls.every(call => call.url.includes('/v1/text-to-speech/voice-1') && call.headers.get('xi-api-key') === 'el-test-key')).toBe(true);
     expect(videos[0].voice.map(clip => clip.sceneId)).toEqual(videos[0].storyboard.scenes.map(scene => scene.id));
     expect(videos[0].voice.every(clip => clip.src.startsWith('data:audio/mpeg;base64,') && Math.abs(clip.durationSec - 1) < 0.1)).toBe(true);
+  });
+
+  it('speaks with the voice the claim carries over its own environment, and keeps that key out of a failure', async () => {
+    const ROOM_KEY = 'room-minimax-key-LEAKCHECK-7777', seen: string[] = [];
+    const http = (async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).startsWith('https://api.minimaxi.com/')) { seen.push(new Headers(init?.headers).get('authorization')!); return Response.json({ data: null, base_resp: { status_code: 1004, status_msg: `bad key ${ROOM_KEY}` } }); }
+      return fetch(url, init);
+    }) as typeof fetch;
+    const claim = { ...claimFor(fixtureCartItems.slice(0, 2), 'range'), voice: { provider: 'minimax' as const, apiKey: ROOM_KEY, voiceId: '', region: 'mainland' as const } };
+    const { deps, run, failure, lines } = await setup(claim, { env: { TTS_PROVIDER: 'elevenlabs', ELEVENLABS_API_KEY: 'el-test-key', ELEVENLABS_VOICE_ID: 'voice-1' }, http });
+    deps.voiceFor = config => ttsFor(config, http);
+    expect(await run()).toBe('failed');
+    expect(seen[0]).toBe(`Bearer ${ROOM_KEY}`);
+    const sent = failure()!;
+    expect(sent.status === 'failed' && sent.error).toContain('MiniMax status 1004');
+    expect(JSON.stringify(sent)).not.toContain(ROOM_KEY);
+    expect(lines.join('\n')).not.toContain(ROOM_KEY);
   });
 
   it('wraps an overflowing subtitle in round one and passes in round two', async () => {

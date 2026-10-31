@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react';
-import { ChartNoAxesColumn, ChevronDown, ChevronUp, ExternalLink, KeyRound, Share2, ShoppingBasket, UsersRound } from 'lucide-react';
+import { Cable, ChartNoAxesColumn, ChevronDown, ChevronUp, Clapperboard, ExternalLink, KeyRound, Share2, ShoppingBasket, UsersRound } from 'lucide-react';
 import { cartView, formatTwd } from '../../shared/cart';
 import { t } from '../i18n';
 import { hasOwnerKey } from '../owner';
@@ -23,7 +23,7 @@ function OwnerKeyForm({ unlock }: { unlock: (key: string) => void }) {
   </form>;
 }
 
-export function CartHud({ state, open, onToggle, unlock, sharing, onShare, casting = false, onCast, habits = false, onHabits, focus = null, children }: { state: CartState; open: boolean; onToggle: () => void; unlock: (key: string) => void; sharing: boolean; onShare: () => void; casting?: boolean; onCast?: () => void; habits?: boolean; onHabits?: () => void; /** The shelf product last clicked in the room; its line is scrolled into view and flagged. */ focus?: ProductFocus | null; children?: ReactNode }) {
+export function CartHud({ state, open, onToggle, unlock, sharing, onShare, casting = false, onCast, habits = false, onHabits, connecting = false, onConnect, filming = false, onFilm, focus = null, children }: { state: CartState; open: boolean; onToggle: () => void; unlock: (key: string) => void; sharing: boolean; onShare: () => void; casting?: boolean; onCast?: () => void; habits?: boolean; onHabits?: () => void; connecting?: boolean; onConnect?: () => void; filming?: boolean; onFilm?: () => void; /** The shelf product last clicked in the room; its line is scrolled into view and flagged. */ focus?: ProductFocus | null; children?: ReactNode }) {
   const list = useRef<HTMLOListElement>(null);
   const flashed = useFlashedLine(focus, open, () => list.current);
   if (state.status === 'locked') return <aside className="cart-hud" aria-label={t('Cart showroom')} data-testid="cart-hud">
@@ -42,6 +42,8 @@ export function CartHud({ state, open, onToggle, unlock, sharing, onShare, casti
       {state.status !== 'loading' && <button type="button" className="cart-share" aria-expanded={sharing} aria-controls="share-panel" onClick={onShare} data-testid="share-button"><Share2 size={15} aria-hidden="true" />{t('Share')}</button>}
       {state.status !== 'loading' && onCast && <button type="button" className="cart-share" aria-expanded={casting} aria-controls="cast-panel" onClick={onCast} data-testid="cast-button"><UsersRound size={15} aria-hidden="true" />{t('Cast')}</button>}
       {state.status !== 'loading' && onHabits && <button type="button" className="cart-share" aria-expanded={habits} aria-controls="habits-panel" onClick={onHabits} data-testid="habits-button"><ChartNoAxesColumn size={15} aria-hidden="true" />{t('Habits')}</button>}
+      {state.status !== 'loading' && onFilm && <button type="button" className="cart-share" aria-expanded={filming} aria-controls="promo-panel" onClick={onFilm} data-testid="promo-button"><Clapperboard size={15} aria-hidden="true" />{t('Promo')}</button>}
+      {state.status !== 'loading' && onConnect && <button type="button" className="cart-share" aria-expanded={connecting} aria-controls="connect-panel" onClick={onConnect} data-testid="connect-button"><Cable size={15} aria-hidden="true" />{t('Connections')}</button>}
     </header>
     <dl className="cart-stats">
       <div><dt>{t('Items')}</dt><dd data-testid="hud-count">{view.count}</dd></div>

@@ -11,6 +11,7 @@ export function claimFor(items: readonly CartItemInput[], prices: PriceMode, dur
     job: queuedPromoJob(`promo-${crypto.randomUUID()}`, cart, { durationSec }, now),
     view: shareView(cart, { slug: 'a'.repeat(22), enabled: false, prices, nickname: '小島' }),
     leaseUntil: new Date(Date.now() + RUNNER_LEASE_MS).toISOString(),
+    voice: null,
   };
 }
 
