@@ -7,7 +7,8 @@ import { visitorImageLoader } from '../cart/productImage';
 import { formatRange, sharedShelf } from '../cart/shelf';
 import { useFlashedLine, useProductPoke, type ProductFocus } from '../cart/useProductPoke';
 import { RoomZones } from '../components/RoomZones';
-import { t } from '../i18n';
+import { shownNickname, t } from '../i18n';
+import { LanguageSwitch } from '../i18n/LanguageSwitch';
 import { RoomScene } from '../room/RoomScene';
 import { showroomStudioSet } from '../room/studioSet';
 import '../cart/cart.css';
@@ -21,10 +22,11 @@ const totalOf = (view: ShareView) => view.mode === 'range' ? view.totalRange ? f
 
 function SharePanel({ view, open, onToggle, focus }: { view: ShareView; open: boolean; onToggle: () => void; focus: ProductFocus | null }) {
   const total = totalOf(view), list = useRef<HTMLOListElement>(null), flashed = useFlashedLine(focus, open, () => list.current);
-  return <aside className="cart-hud share-hud" aria-label={t("{nickname}'s cart showroom", { nickname: view.nickname })} data-testid="share-hud" data-mode={view.mode}>
+  return <aside className="cart-hud share-hud" aria-label={t("{nickname}'s cart showroom", { nickname: shownNickname(view.nickname) })} data-testid="share-hud" data-mode={view.mode}>
     <header className="cart-hud-head">
       <span className="cart-hud-mark" aria-hidden="true"><ShoppingBasket size={18} /></span>
-      <span><h1>{t("{nickname}'s cart showroom", { nickname: view.nickname })}</h1><small>{t('Things their Muse noted while shopping')}</small></span>
+      <span><h1>{t("{nickname}'s cart showroom", { nickname: shownNickname(view.nickname) })}</h1><small>{t('Things their Muse noted while shopping')}</small></span>
+      <LanguageSwitch />
     </header>
     <dl className={`cart-stats ${total === null ? 'share-stats-count' : 'share-stats'}`}>
       <div><dt>{t('Items')}</dt><dd data-testid="share-count">{view.items.length}</dd></div>
@@ -59,7 +61,7 @@ export function Showcase({ slug }: { slug: string }) {
   }, [slug]);
   const shelf = useMemo(() => load.status === 'ready' ? sharedShelf(load.view, visitorImageLoader(slug)) : null, [load, slug]);
   const poked = useProductPoke();
-  useEffect(() => { if (load.status === 'ready') document.title = t("{nickname}'s cart showroom", { nickname: load.view.nickname }); }, [load]);
+  useEffect(() => { if (load.status === 'ready') document.title = t("{nickname}'s cart showroom", { nickname: shownNickname(load.view.nickname) }); }, [load]);
 
   if (load.status === 'missing' || load.status === 'failed') return <main className="agent-house-app share-missing-page">
     <section className="share-missing" role="alert">

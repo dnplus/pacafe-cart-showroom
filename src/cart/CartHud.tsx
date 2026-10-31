@@ -2,6 +2,7 @@ import { useRef, useState, type ReactNode } from 'react';
 import { Cable, ChartNoAxesColumn, ChevronDown, ChevronUp, Clapperboard, ExternalLink, KeyRound, Share2, ShoppingBasket, UsersRound } from 'lucide-react';
 import { cartView, formatTwd } from '../../shared/cart';
 import { t } from '../i18n';
+import { LanguageSwitch } from '../i18n/LanguageSwitch';
 import { hasOwnerKey } from '../owner';
 import { categoryLabel } from './category';
 import { ProductThumb } from './ProductThumb';
@@ -30,6 +31,7 @@ export function CartHud({ state, open, onToggle, unlock, sharing, onShare, casti
     <header className="cart-hud-head">
       <span className="cart-hud-mark" aria-hidden="true"><ShoppingBasket size={18} /></span>
       <span><strong>{t('Cart showroom')}</strong><small>{t('Things your Muse noted while shopping')}</small></span>
+      <LanguageSwitch />
     </header>
     <OwnerKeyForm unlock={unlock} />
   </aside>;
@@ -44,6 +46,7 @@ export function CartHud({ state, open, onToggle, unlock, sharing, onShare, casti
       {state.status !== 'loading' && onHabits && <button type="button" className="cart-share" aria-expanded={habits} aria-controls="habits-panel" onClick={onHabits} data-testid="habits-button"><ChartNoAxesColumn size={15} aria-hidden="true" />{t('Habits')}</button>}
       {state.status !== 'loading' && onFilm && <button type="button" className="cart-share" aria-expanded={filming} aria-controls="promo-panel" onClick={onFilm} data-testid="promo-button"><Clapperboard size={15} aria-hidden="true" />{t('Promo')}</button>}
       {state.status !== 'loading' && onConnect && <button type="button" className="cart-share" aria-expanded={connecting} aria-controls="connect-panel" onClick={onConnect} data-testid="connect-button"><Cable size={15} aria-hidden="true" />{t('Connections')}</button>}
+      <LanguageSwitch />
     </header>
     <dl className="cart-stats">
       <div><dt>{t('Items')}</dt><dd data-testid="hud-count">{view.count}</dd></div>

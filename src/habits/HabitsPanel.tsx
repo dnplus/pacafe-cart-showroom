@@ -4,7 +4,7 @@ import type { Cart } from '../../shared/cart';
 import { formatTwd } from '../../shared/cart';
 import { habitsReport } from '../../shared/habits';
 import { emptyUnbox, unboxStateSchema, type UnboxState } from '../../shared/unbox';
-import { t } from '../i18n';
+import { getLocale, t } from '../i18n';
 import { ownerFetch } from '../owner';
 import '../share/share.css';
 import './habits.css';
@@ -48,7 +48,7 @@ const COLUMN_W = 300, COLUMN_H = 96, COLUMN_TOP = 16, COLUMN_BASE = COLUMN_H - 2
 /** Vertical columns in a fixed 300-wide box, one per label, with the count above each and the label under it. */
 function Columns({ rows, name }: { rows: { label: string; value: number }[]; name: string }) {
   const max = Math.max(1, ...rows.map(row => row.value)), slot = COLUMN_W / rows.length, width = Math.min(26, slot - 10);
-  return <svg className="habits-columns" viewBox={`0 0 ${COLUMN_W} ${COLUMN_H}`} role="img" aria-label={`${name}：${rows.map(row => `${row.label} ${row.value}`).join('，')}`}>
+  return <svg className="habits-columns" viewBox={`0 0 ${COLUMN_W} ${COLUMN_H}`} role="img" aria-label={`${name}: ${rows.map(row => `${row.label} ${row.value}`).join(', ')}`}>
     <line x1="0" x2={COLUMN_W} y1={COLUMN_BASE} y2={COLUMN_BASE} className="habits-axis" />
     {rows.map((row, index) => {
       const height = row.value ? Math.max(3, (row.value / max) * (COLUMN_BASE - COLUMN_TOP)) : 0, x = slot * index + slot / 2;
@@ -64,7 +64,7 @@ function Columns({ rows, name }: { rows: { label: string; value: number }[]; nam
 /** The owner's shopping habits, drawn from the items in the cart right now (the same report the habits_report MCP tool returns). */
 export function HabitsPanel({ cart, close }: { cart: Cart | null; close: () => void }) {
   const opened = useOpened(cart?.revision);
-  const report = useMemo(() => habitsReport(cart?.items ?? [], opened ?? emptyUnbox(), new Date().toISOString()), [cart, opened]);
+  const report = useMemo(() => habitsReport(cart?.items ?? [], opened ?? emptyUnbox(), new Date().toISOString(), getLocale()), [cart, opened]);
   const { totals, parcels } = report, empty = totals.lines === 0;
   const parcelTotal = Math.max(1, totals.lines);
   return <section className="share-panel habits-panel" id="habits-panel" aria-labelledby="habits-title" data-testid="habits-panel">

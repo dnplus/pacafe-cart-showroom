@@ -11,7 +11,6 @@ import './connect.css';
 const POLL_MS = 3000;
 /** A call within this long reads as "connected now"; older ones say when Muse was last here. */
 const LIVE_MS = 10 * 60 * 1000;
-const TRY_PROMPT = '請用 showroom-cart 的 cart_list 看看我的小屋購物車，回報有幾件、總額多少。';
 
 function ago(at: string, now: number) {
   const seconds = Math.max(0, Math.round((now - Date.parse(at)) / 1000));
@@ -86,7 +85,7 @@ function MuseSection({ onSeen }: { onSeen: () => void }) {
       </li>
       <li><p className="connect-step-text">{t('3. Give Muse the showroom-cart and showroom-promo skills from .agents/skills/ in this project.')}</p></li>
       <li>
-        <CopyRow id="connect-try" label="4. Say this to Muse to try it" value={TRY_PROMPT} />
+        <CopyRow id="connect-try" label="4. Say this to Muse to try it" value={t('Use cart_list from the showroom-cart skill to look at my cart showroom, and tell me how many items there are and the total.')} />
         <small className="share-hint">{t('When Muse calls, the light above turns green and the clerk waves.')}</small>
       </li>
     </ol>

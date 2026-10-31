@@ -15,7 +15,7 @@ import { useCart } from './cart/useCart';
 import { useProductPoke } from './cart/useProductPoke';
 import { useUnbox } from './cart/useUnbox';
 import { RoomZones } from './components/RoomZones';
-import { t } from './i18n';
+import { shownNickname, t } from './i18n';
 import { saveOwnerKey } from './owner';
 import { HabitsPanel } from './habits/HabitsPanel';
 import { PromoPanel } from './promo/PromoPanel';
@@ -59,7 +59,7 @@ function Showroom() {
     </CartHud>
     <section className="world-stage game-stage" aria-label={t('Cart showroom')}>
       <RoomZones>
-        <RoomScene scenery="peach" cue={preview ? null : roomCue} shelf={shelf} controls={controls} counter={() => setListOpen(true)} baristaName={t('Clerk')} barista={preview ? DEFAULT_CHARACTER : cast.view?.character} owner={{ name: preview?.nickname ?? cast.view?.nickname ?? DEFAULT_NICKNAME, sprite: preview ? null : cast.spriteUrl, open: () => setPanel('cast') }} studioSet={showroomStudioSet} hour={14} />
+        <RoomScene scenery="peach" cue={preview ? null : roomCue} shelf={shelf} controls={controls} counter={() => setListOpen(true)} baristaName={t('Clerk')} barista={preview ? DEFAULT_CHARACTER : cast.view?.character} owner={{ name: shownNickname(preview?.nickname ?? cast.view?.nickname ?? DEFAULT_NICKNAME), sprite: preview ? null : cast.spriteUrl, open: () => setPanel('cast') }} studioSet={showroomStudioSet} hour={14} />
       </RoomZones>
     </section>
     {!panel && <UnboxTray {...unbox} items={cart?.items ?? []} />}

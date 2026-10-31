@@ -198,5 +198,7 @@ export const messages = [
   ['Last test failed: {message}', '上次試聽失敗：{message}'],
   ['The key is kept with this showroom and only handed to your runner; this page shows its last four characters.', '金鑰存在這個小屋，只交給你的 runner；這頁只顯示最後四碼。'],
   ['Promo', '影片'],
+  ['Switch language', '切換語言'],
+  ['Use cart_list from the showroom-cart skill to look at my cart showroom, and tell me how many items there are and the total.', '請用 showroom-cart 的 cart_list 看看我的小屋購物車，回報有幾件、總額多少。'],
 ] as const;
 export type TextKey = typeof messages[number][0];
