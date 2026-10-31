@@ -34,7 +34,7 @@ npm run verify:promo-lease
 
 ## 覆蓋紀錄
 
-最後確認模型與程式碼一致的 commit：`SYNC`。
+最後確認模型與程式碼一致的 commit：`809481c`。
 
 | 程式碼 | 模型 |
 | --- | --- |
@@ -50,7 +50,7 @@ npm run verify:promo-lease
 | `runner/pipeline.ts` `runJob`：回報順序、上傳後才 done、任何拒絕後回報 failed | `After`、`Answer`、`plan` |
 | `runner/worker-client.ts`：每個請求帶 `claim.claimId`，非 2xx 就丟錯 | `mine`、`Answer(r, FALSE)` → `"fail"` |
 
-改動前先 `git diff SYNC -- worker/runner.ts shared/runner.ts shared/promo.ts worker/showroom.ts runner/pipeline.ts runner/worker-client.ts`。只有在逐項確認模型仍描述新程式碼之後，才把上面的 commit 往前移。
+改動前先 `git diff 809481c -- worker/runner.ts shared/runner.ts shared/promo.ts worker/showroom.ts runner/pipeline.ts runner/worker-client.ts`。只有在逐項確認模型仍描述新程式碼之後，才把上面的 commit 往前移。
 
 ## 模型的假設
 
