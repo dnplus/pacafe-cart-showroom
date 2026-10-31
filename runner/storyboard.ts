@@ -62,7 +62,7 @@ export const PROMO_WORDS = {
     ending: (more: number) => [`今天就介紹到這裡${more ? `，另外 ${more} 件在小屋等你` : ''}。`, '想看全部，就來小屋的貨架逛逛吧！'],
   },
   en: {
-    brand: 'Cart Showroom', title: (name: string) => `${name}'s Cart Showroom`, shelf: (count: number) => `${count} ${count === 1 ? 'thing' : 'things'} Muse noted while shopping`,
+    brand: 'Cart Showroom', title: (name: string) => name === 'Owner' ? 'My Cart Showroom' : `${name}'s Cart Showroom`, shelf: (count: number) => `${count} ${count === 1 ? 'thing' : 'things'} Muse noted while shopping`,
     total: (total: string) => `Total ${total}`, nth: (n: number) => `No. ${n}`, orMore: (price: string) => `${price}+`,
     opening: (name: string, count: number) => [`Welcome to ${name === 'Owner' ? 'my' : `${name}'s`} Cart Showroom!`, `${count} ${count === 1 ? 'thing' : 'things'} on the shelf, all noted by Muse.`],
     item: (title: string, qty: number, price: string | null, about: boolean) => [`${title}${qty > 1 ? ` ×${qty}` : ''}${price ? `, ${about ? 'about ' : ''}${price}` : ''}.`],
