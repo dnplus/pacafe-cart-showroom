@@ -1,13 +1,32 @@
 import { useRef, useState, type ReactNode } from 'react';
-import { Cable, ChartNoAxesColumn, ChevronDown, ChevronUp, Clapperboard, ExternalLink, KeyRound, Share2, ShoppingBasket, UsersRound } from 'lucide-react';
+import { Cable, ChartNoAxesColumn, ChevronDown, ChevronUp, Clapperboard, ExternalLink, KeyRound, Share2, ShoppingBasket, Trash2, Undo2, UsersRound } from 'lucide-react';
 import { cartView, formatTwd } from '../../shared/cart';
+import { REMOVAL_REASONS, type RemovalReason } from '../../shared/removals';
+import type { TextKey } from '../i18n/messages';
 import { t } from '../i18n';
 import { hasOwnerKey } from '../owner';
 import { categoryLabel } from './category';
 import { ProductThumb } from './ProductThumb';
 import type { CartState } from './useCart';
+import type { RemovalController } from './useRemoval';
 import { useFlashedLine, type ProductFocus } from './useProductPoke';
 import './cart.css';
+
+const reasonLabels: Record<RemovalReason, TextKey> = { not_my_taste: 'Not my taste', too_expensive: 'Too expensive', already_have: 'Already have it', changed_mind: 'Changed my mind' };
+
+/** The chips under a line the owner is taking out: a reason is optional, and Muse is told it. */
+function ReasonPicker({ title, pick, cancel }: { title: string; pick: (reason: RemovalReason | null) => void; cancel: () => void }) {
+  return <div className="cart-reasons" role="group" aria-label={t('Why take {title} out?', { title })} data-testid="remove-reasons">
+    <p>{t('Why take it out? Muse will see your answer. (optional)')}</p>
+    <div className="cart-reason-chips">
+      {REMOVAL_REASONS.map(reason => <button type="button" key={reason} onClick={() => pick(reason)} data-testid={`remove-reason-${reason}`}>{t(reasonLabels[reason])}</button>)}
+    </div>
+    <div className="cart-reason-actions">
+      <button type="button" className="cart-reason-plain" onClick={() => pick(null)} data-testid="remove-no-reason">{t('Just remove it')}</button>
+      <button type="button" className="cart-reason-plain" onClick={cancel} data-testid="remove-cancel">{t('Cancel')}</button>
+    </div>
+  </div>;
+}
 
 /** Asked for when the worker wants the owner key; the key stays in this browser's localStorage. */
 function OwnerKeyForm({ unlock }: { unlock: (key: string) => void }) {
@@ -23,7 +42,7 @@ function OwnerKeyForm({ unlock }: { unlock: (key: string) => void }) {
   </form>;
 }
 
-export function CartHud({ state, open, onToggle, unlock, sharing, onShare, casting = false, onCast, habits = false, onHabits, connecting = false, onConnect, filming = false, onFilm, focus = null, children }: { state: CartState; open: boolean; onToggle: () => void; unlock: (key: string) => void; sharing: boolean; onShare: () => void; casting?: boolean; onCast?: () => void; habits?: boolean; onHabits?: () => void; connecting?: boolean; onConnect?: () => void; filming?: boolean; onFilm?: () => void; /** The shelf product last clicked in the room; its line is scrolled into view and flagged. */ focus?: ProductFocus | null; children?: ReactNode }) {
+export function CartHud({ state, open, onToggle, unlock, sharing, onShare, casting = false, onCast, habits = false, onHabits, connecting = false, onConnect, filming = false, onFilm, focus = null, removal, children }: { state: CartState; open: boolean; onToggle: () => void; unlock: (key: string) => void; sharing: boolean; onShare: () => void; casting?: boolean; onCast?: () => void; habits?: boolean; onHabits?: () => void; connecting?: boolean; onConnect?: () => void; filming?: boolean; onFilm?: () => void; /** The shelf product last clicked in the room; its line is scrolled into view and flagged. */ focus?: ProductFocus | null; /** Taking lines out of the list; without it the list has no remove controls. */ removal?: RemovalController; children?: ReactNode }) {
   const list = useRef<HTMLOListElement>(null);
   const flashed = useFlashedLine(focus, open, () => list.current);
   if (state.status === 'locked') return <aside className="cart-hud" aria-label={t('Cart showroom')} data-testid="cart-hud">
@@ -33,7 +52,7 @@ export function CartHud({ state, open, onToggle, unlock, sharing, onShare, casti
     </header>
     <OwnerKeyForm unlock={unlock} />
   </aside>;
-  const items = state.status === 'loading' ? [] : state.cart?.items ?? [];
+  const all = state.status === 'loading' ? [] : state.cart?.items ?? [], items = removal ? removal.visible(all) : all;
   const view = cartView(items), percent = Math.round(view.fill * 100);
   return <aside className="cart-hud" aria-label={t('Cart showroom')} data-testid="cart-hud" data-count={view.count} data-total={view.totalTwd} data-fill={view.fill}>
     <header className="cart-hud-head">
@@ -55,6 +74,13 @@ export function CartHud({ state, open, onToggle, unlock, sharing, onShare, casti
     {state.status === 'loading' && <p className="cart-note" role="status">{t('Loading the cart…')}</p>}
     {state.status === 'offline' && <p className="cart-note cart-offline" role="status">{t('Cannot reach the cart right now. Trying again.')}</p>}
     {state.status !== 'loading' && !view.count && <p className="cart-note">{t('The shelf is empty. What your Muse notes while shopping shows up here.')}</p>}
+    {removal && (removal.pending.length > 0 || removal.failed) && <ul className="cart-undo" role="status" aria-live="polite" data-testid="remove-undo">
+      {removal.pending.map(({ item }) => <li key={item.id}>
+        <span>{t('Removed {title}', { title: item.title })}</span>
+        <button type="button" onClick={() => removal.undo(item.id)} data-testid="remove-undo-button"><Undo2 size={14} aria-hidden="true" />{t('Undo')}</button>
+      </li>)}
+      {removal.failed && <li className="is-failed"><span>{t('Could not remove {title}. It is back on the list.', { title: removal.failed.title })}</span><button type="button" onClick={removal.dismissFailure}>{t('Dismiss')}</button></li>}
+    </ul>}
     {view.count > 0 && <button type="button" className="cart-toggle" aria-expanded={open} aria-controls="cart-list" onClick={onToggle}>{open ? t('Hide the list') : t('Show the list')}{open ? <ChevronUp size={16} aria-hidden="true" /> : <ChevronDown size={16} aria-hidden="true" />}</button>}
     {open && view.count > 0 && <ol className="cart-list" id="cart-list" ref={list} aria-label={t('On the shelf')}>
       {items.map(item => <li key={item.id} data-key={item.id} data-testid="cart-row" className={flashed === item.id ? 'is-flashed' : undefined}>
@@ -69,6 +95,8 @@ export function CartHud({ state, open, onToggle, unlock, sharing, onShare, casti
           </span>
         </span>
         <span className="cart-line-price">{item.priceTwd === null ? t('No price') : formatTwd(item.priceTwd)}{item.qty > 1 && <small>×{item.qty}</small>}</span>
+        {removal && <button type="button" className="cart-remove" aria-label={t('Remove {title}', { title: item.title })} aria-expanded={removal.asking === item.id} onClick={() => removal.ask(removal.asking === item.id ? null : item.id)} data-testid="cart-remove"><Trash2 size={15} aria-hidden="true" /></button>}
+        {removal?.asking === item.id && <ReasonPicker title={item.title} pick={reason => removal.confirm(item, reason)} cancel={() => removal.ask(null)} />}
       </li>)}
     </ol>}
     {children}

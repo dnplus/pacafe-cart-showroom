@@ -46,7 +46,8 @@ describe('/mcp', () => {
     expect(JSON.parse(added.content[0].text)).toEqual(added.structuredContent);
 
     const listing = (await call('cart_list')).structuredContent;
-    const { share, ...cart } = listing;
+    const { share, removals, ...cart } = listing;
+    expect(removals).toEqual([]);
     expect(cartSchema.parse(cart)).toMatchObject({ totalTwd: 420 * 2 + 290 });
     expect(listing.items.map((item: { title: string }) => item.title)).toEqual(['陶瓷馬克杯', '亞麻餐墊']);
     expect(share.url).toMatch(/^https:\/\/showroom\.test\/s\/[A-Za-z0-9_-]{22}$/);

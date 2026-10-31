@@ -7,6 +7,7 @@ import { CastPanel } from './cast/CastPanel';
 import { ConnectionsPanel } from './connect/ConnectionsPanel';
 import { useCast } from './cast/useCast';
 import { useCue } from './cast/useCue';
+import { useRemoval } from './cart/useRemoval';
 import { CartHud } from './cart/CartHud';
 import { UnboxTray } from './cart/UnboxTray';
 import { ownerImageLoader } from './cart/productImage';
@@ -40,6 +41,7 @@ function Showroom() {
   const controls = useRef<RoomControls>(null);
   const cart = state.status === 'ready' || state.status === 'offline' ? state.cart : null;
   const cast = useCast(state.status === 'ready' || state.status === 'offline', sharing);
+  const removal = useRemoval(cart);
   const unbox = useUnbox(cart);
   const cue = useCue(cart, unbox.shelved.size, unbox.ready && cart?.items.length === unbox.boxes.length);
   const poked = useProductPoke();
@@ -50,7 +52,7 @@ function Showroom() {
   // While the share panel is open the room draws what a visitor would see, so the card it captures shows no more than that.
   const shelf = useMemo(() => !cart ? null : preview ? sharedShelf(shareView(cart, preview), ownerImageLoader) : ownerShelf(cart, unbox.shelved, unbox.landed), [cart, preview, unbox.shelved, unbox.landed]);
   return <main className="agent-house-app showroom">
-    <CartHud state={state} open={listOpen} onToggle={() => setListOpen(open => !open)} unlock={key => { saveOwnerKey(key); retry(); }} focus={poked} sharing={sharing} onShare={toggle('share')} casting={casting} onCast={toggle('cast')} habits={habiting} onHabits={toggle('habits')} connecting={panel === 'connect'} onConnect={toggle('connect')} filming={panel === 'promo'} onFilm={toggle('promo')}>
+    <CartHud state={state} open={listOpen} onToggle={() => setListOpen(open => !open)} unlock={key => { saveOwnerKey(key); retry(); }} focus={poked} removal={removal} sharing={sharing} onShare={toggle('share')} casting={casting} onCast={toggle('cast')} habits={habiting} onHabits={toggle('habits')} connecting={panel === 'connect'} onConnect={toggle('connect')} filming={panel === 'promo'} onFilm={toggle('promo')}>
       {habiting && <HabitsPanel cart={cart} close={() => setPanel(null)} />}
       {casting && <CastPanel cast={cast} close={() => setPanel(null)} />}
       {sharing && <SharingSettings cart={cart} controls={controls} onPreview={setPreview} close={() => setPanel(null)} />}

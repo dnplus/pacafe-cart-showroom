@@ -198,5 +198,18 @@ export const messages = [
   ['Last test failed: {message}', '上次試聽失敗：{message}'],
   ['The key is kept with this showroom and only handed to your runner; this page shows its last four characters.', '金鑰存在這個小屋，只交給你的 runner；這頁只顯示最後四碼。'],
   ['Promo', '影片'],
+  ['Remove {title}', '移除 {title}'],
+  ['Why take {title} out?', '為什麼要拿掉 {title}？'],
+  ['Why take it out? Muse will see your answer. (optional)', '為什麼拿掉？Muse 會看到你的回答。（可不填）'],
+  ['Not my taste', '不合我的口味'],
+  ['Too expensive', '太貴'],
+  ['Already have it', '我已經有了'],
+  ['Changed my mind', '我改變主意了'],
+  ['Just remove it', '直接移除'],
+  ['Cancel', '取消'],
+  ['Removed {title}', '已移除 {title}'],
+  ['Undo', '復原'],
+  ['Could not remove {title}. It is back on the list.', '沒能移除 {title}，它還在清單裡。'],
+  ['Dismiss', '知道了'],
 ] as const;
 export type TextKey = typeof messages[number][0];
