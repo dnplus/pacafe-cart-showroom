@@ -147,12 +147,16 @@ export function registerModel() {
   display.position.set(0, .2, .26); display.scale.set(.3, .075, 1); node.add(display);
   const loaded = model(node, files.register, drop, original => {
     const clone = original.clone(true), screens: THREE.Mesh[] = [];
-    clone.scale.setScalar(registerScale);
+    // The model's keys and drawer face +z; turned round they face the clerk, and the total goes on the back of the screen for the customer.
+    clone.scale.setScalar(registerScale); clone.rotation.y = Math.PI;
     clone.traverse(part => { if (part instanceof THREE.Mesh && part.material.name === 'screen') screens.push(part); });
     if (!screens.length) throw new Error('The register model has no screen.');
     clone.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(screens[0]), size = box.getSize(new THREE.Vector3()), centre = box.getCenter(new THREE.Vector3()), width = Math.min(size.x, size.y * 4);
-    display.position.set(centre.x, centre.y, box.max.z + .004); display.scale.set(width, width / 4, 1);
+    // The screen's housing covers its back, so the total sits on the outermost part behind the screen's centre.
+    let back = box.max.z; const part = new THREE.Box3();
+    clone.traverse(mesh => { if (mesh instanceof THREE.Mesh && part.setFromObject(mesh) && part.min.x <= centre.x && part.max.x >= centre.x && part.min.y <= centre.y && part.max.y >= centre.y) back = Math.max(back, part.max.z); });
+    display.position.set(centre.x, centre.y, back + .004); display.scale.set(width, width / 4, 1);
     const built = new THREE.Group(); built.add(clone, display); return built;
   });
   return { ...loaded, display };
