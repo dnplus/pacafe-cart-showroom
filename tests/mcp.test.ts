@@ -34,8 +34,8 @@ describe('/mcp', () => {
     expect(init.response.headers.get('mcp-session-id')).toBeNull();
 
     const listed = (await rpc('tools/list')).body.result.tools as { name: string; annotations: { readOnlyHint: boolean }; inputSchema: Record<string, unknown> }[];
-    expect(listed.map(tool => tool.name).sort()).toEqual(['cart_add', 'cart_list', 'cart_remove', 'promo_generate', 'promo_status']);
-    expect(listed.filter(tool => tool.annotations.readOnlyHint).map(tool => tool.name).sort()).toEqual(['cart_list', 'promo_status']);
+    expect(listed.map(tool => tool.name).sort()).toEqual(['cart_add', 'cart_list', 'cart_remove', 'habits_report', 'promo_generate', 'promo_status']);
+    expect(listed.filter(tool => tool.annotations.readOnlyHint).map(tool => tool.name).sort()).toEqual(['cart_list', 'habits_report', 'promo_status']);
     expect(listed.find(tool => tool.name === 'cart_add')!.inputSchema).toMatchObject({ type: 'object', required: ['title'] });
     expect(listed.every(tool => !('$schema' in tool.inputSchema))).toBe(true);
 
@@ -62,6 +62,29 @@ describe('/mcp', () => {
 
     const api = cartSchema.parse(await (await send('/api/cart', { headers: { authorization: `Bearer ${token}` } })).json());
     expect(api).toEqual(removed.structuredContent);
+  });
+
+  it('habits_report reads the cart and the unbox records without changing either', async () => {
+    const { call, send } = world();
+    const empty = await call('habits_report');
+    expect(empty.isError).toBe(false);
+    expect(empty.structuredContent).toMatchObject({ scope: 'cart_now', totals: { lines: 0, averageTwd: null }, categories: [], observations: [] });
+
+    await call('cart_add', { title: '無線降噪耳機', store: '青田電器行', priceTwd: 3990, category: 'electronics' });
+    await call('cart_add', { title: '陶瓷馬克杯', store: '小島陶房', priceTwd: 420, qty: 2, category: 'kitchen' });
+    await call('cart_add', { title: '亞麻餐墊' });
+    const cart = (await call('cart_list')).structuredContent;
+    const auth = { authorization: `Bearer ${token}` };
+    await send('/api/unbox', { method: 'POST', headers: { ...auth, 'content-type': 'application/json' }, body: JSON.stringify({ itemIds: [cart.items[0].id] }) });
+
+    const report = (await call('habits_report')).structuredContent;
+    expect(JSON.parse((await call('habits_report')).content[0].text)).toEqual(report);
+    expect(report.totals).toEqual({ lines: 3, units: 4, spendTwd: 3990 + 840, pricedLines: 2, unpricedLines: 1, averageTwd: 2415 });
+    expect(report.categories.map((row: { key: string }) => row.key)).toEqual(['electronics', 'kitchen', 'uncategorized']);
+    expect(report.biggest).toMatchObject({ title: '無線降噪耳機', amountTwd: 3990 });
+    expect(report.parcels).toMatchObject({ opened: 1, unopened: 2, unopenedSpendTwd: 840 });
+    expect(report.observations[0]).toContain('3C 家電花得最多');
+    expect((await call('cart_list')).structuredContent.revision).toBe(cart.revision);
   });
 
   it('lists the same tools, schemas and annotations an agent was told about before the room could queue a video', async () => {

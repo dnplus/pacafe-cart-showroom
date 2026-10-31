@@ -47,6 +47,7 @@ export class Showroom {
     return {
       cart: () => this.read(),
       saveCart: cart => storage.put(CART_KEY, cart),
+      unbox: async () => { const stored = await storage.get(UNBOX_KEY); return stored === undefined ? emptyUnbox() : unboxStateSchema.parse(stored); },
       share: async () => {
         const stored = await this.storedShare();
         if (stored) return stored;

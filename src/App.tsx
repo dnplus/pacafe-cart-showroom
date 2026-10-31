@@ -12,6 +12,7 @@ import { useUnbox } from './cart/useUnbox';
 import { RoomZones } from './components/RoomZones';
 import { t } from './i18n';
 import { saveOwnerKey } from './owner';
+import { HabitsPanel } from './habits/HabitsPanel';
 import { PromoPanel } from './promo/PromoPanel';
 import { RoomScene, type RoomControls } from './room/RoomScene';
 import { showroomStudioSet } from './room/studioSet';
@@ -29,6 +30,7 @@ function Showroom() {
   const [listOpen, setListOpen] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [casting, setCasting] = useState(false);
+  const [habiting, setHabiting] = useState(false);
   const [preview, setPreview] = useState<ShareSettings | null>(null);
   const controls = useRef<RoomControls>(null);
   const cart = state.status === 'ready' || state.status === 'offline' ? state.cart : null;
@@ -37,7 +39,8 @@ function Showroom() {
   // While the share panel is open the room draws what a visitor would see, so the card it captures shows no more than that.
   const shelf = useMemo(() => !cart ? null : preview ? sharedShelf(shareView(cart, preview)) : ownerShelf(cart, unbox.shelved), [cart, preview, unbox.shelved]);
   return <main className="agent-house-app showroom">
-    <CartHud state={state} open={listOpen} onToggle={() => setListOpen(open => !open)} unlock={key => { saveOwnerKey(key); retry(); }} sharing={sharing} onShare={() => { setSharing(open => !open); setCasting(false); }} casting={casting} onCast={() => { setCasting(open => !open); setSharing(false); }}>
+    <CartHud state={state} open={listOpen} onToggle={() => setListOpen(open => !open)} unlock={key => { saveOwnerKey(key); retry(); }} sharing={sharing} onShare={() => { setSharing(open => !open); setCasting(false); setHabiting(false); }} casting={casting} onCast={() => { setCasting(open => !open); setSharing(false); setHabiting(false); }} habits={habiting} onHabits={() => { setHabiting(open => !open); setSharing(false); setCasting(false); }}>
+      {habiting && <HabitsPanel cart={cart} close={() => setHabiting(false)} />}
       {casting && <CastPanel cast={cast} close={() => setCasting(false)} />}
       {sharing && <SharingSettings cart={cart} controls={controls} onPreview={setPreview} close={() => setSharing(false)} />}
       <PromoPanel count={cart?.items.length ?? 0} />

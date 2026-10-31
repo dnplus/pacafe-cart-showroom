@@ -1,6 +1,6 @@
 ---
 name: showroom-cart
-description: 把你替屋主採買或看中的東西記進小屋購物車，或查看、移除購物車裡的東西。用 showroom MCP 的 cart_add、cart_list、cart_remove。屋主說「記進小屋」「放進購物車」「小屋裡有什麼」「拿掉那件」時使用。
+description: 把你替屋主採買或看中的東西記進小屋購物車，或查看、移除購物車裡的東西，也能讀購物習慣報表。用 showroom MCP 的 cart_add、cart_list、cart_remove、habits_report。屋主說「記進小屋」「放進購物車」「小屋裡有什麼」「拿掉那件」「我的購物習慣」「我都買什麼」時使用。
 ---
 
 # 小屋購物車
@@ -11,12 +11,13 @@ description: 把你替屋主採買或看中的東西記進小屋購物車，或�
 
 ## 工具
 
-這三支工具都在 `showroom` MCP server 上。
+這幾支工具都在 `showroom` MCP server 上。
 
 | 工具 | 什麼時候用 | 輸入 | 回傳 |
 |---|---|---|---|
 | `cart_add` | 每記下一件東西就呼叫一次 | `title`（必填）、`url`（商品頁連結）、`store`、`priceTwd`、`imageUrl`、`category`、`qty`（預設 1） | 整個購物車 `Cart` |
 | `cart_list` | 想知道小屋裡現在有什麼、總額多少、分享連結是什麼 | `{}` | `Cart`，另加 `share: { url, enabled, prices }` |
+| `habits_report` | 屋主問購物習慣、花在哪、什麼時候買、有沒有東西還沒拆 | `{}` | `HabitsReport`（唯讀） |
 | `cart_remove` | 屋主說不要了，或你記錯了 | `itemId`（從 `cart_list` 拿）、`qty`（不填就整件拿掉） | 整個購物車 `Cart` |
 
 `Cart` 的欄位是 `revision`、`items`、`totalTwd`、`fill`、`updatedAt`。`fill` 是貨架填滿度，0 到 1，貨架有 12 格。
@@ -58,6 +59,16 @@ description: 把你替屋主採買或看中的東西記進小屋購物車，或�
 
 - `enabled` 是 `false`：照實說連結還沒公開，要屋主在房間按「分享」打開。不要說連結已經可以分享，也不要把連結當成可以轉給別人的東西。
 - `enabled` 是 `true`：可以把 `share.url` 給屋主，並說清楚訪客看到的是哪一種價格。屋主想換價格顯示或關掉分享，請屋主到房間的分享面板改。
+
+## 購物習慣
+
+`habits_report` 只讀，不會改購物車。屋主在房間按「習慣」看到的是同一份數字。回報時：
+
+1. 照 `observations` 和數字說，不要自己加推論。沒有 `observations` 就說現在還看不出明顯的習慣。
+2. 先講 `note`：只算目前購物車裡的東西，移除過的不在內；時間是東西第一次被記進小屋的時間（台灣時間），不是下單時間。
+3. `totals.unpricedLines` 大於 0 時說明有幾筆沒標價，沒算進總額和平均。`categories` 裡的「未分類」是沒填 `category` 的東西，常常是記的時候漏填，不是真的雜項。
+4. 一次記進很多件的話，它們的時間會一樣，星期和時段的分布就沒有意義，不要拿來說屋主「習慣在某天買」。
+5. 金額寫成 `NT$ 1,234`。
 
 ## 出錯時
 
