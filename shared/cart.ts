@@ -31,7 +31,8 @@ export const cartItemSchema = z.strictObject({
   imageUrl: webUrl.nullable(),
   /** The item's image with its background removed (SAM), once that job has run. */
   cutoutUrl: webUrl.nullable(),
-  category: cartCategory.nullable(),
+  /** Carts stored before categories existed have no such key; they read as uncategorised. */
+  category: cartCategory.nullable().default(null),
   qty: cartQty,
   addedAt: timestamp,
   shelfSlot: z.number().int().nonnegative(),

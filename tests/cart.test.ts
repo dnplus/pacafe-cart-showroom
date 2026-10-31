@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addCartItem, cartView, cartWriteSchema, emptyCart, formatTwd, removeCartItem, replaceCart, SHELF_SLOTS, type CartItemInput } from '../shared/cart';
+import { addCartItem, cartSchema, cartView, cartWriteSchema, emptyCart, formatTwd, removeCartItem, replaceCart, SHELF_SLOTS, type CartItemInput } from '../shared/cart';
 import { fixtureCartItems } from '../shared/fixtures/cart';
 
 const at = '2026-10-30T03:00:00.000Z', later = '2026-10-30T04:00:00.000Z';
@@ -100,5 +100,13 @@ describe('formatTwd', () => {
     expect(formatTwd(7460)).toBe('NT$ 7,460');
     expect(formatTwd(1234567)).toBe('NT$ 1,234,567');
     expect(formatTwd(0)).toBe('NT$ 0');
+  });
+});
+
+describe('stored carts from before categories', () => {
+  it('still parse, with every item uncategorised', () => {
+    const { category: _, ...old } = replaceCart(emptyCart(), [{ title: '馬克杯', qty: 1 }], '2026-10-30T00:00:00.000Z').items[0];
+    const cart = cartSchema.parse({ revision: 1, items: [old], totalTwd: 0, fill: 1 / 12, updatedAt: '2026-10-30T00:00:00.000Z' });
+    expect(cart.items[0].category).toBeNull();
   });
 });
