@@ -46,7 +46,7 @@ const saved = async (store: Store, before: Cart, after: Cart) => { if (after !==
 
 export const tools: readonly Tool[] = [
   tool({
-    name: 'cart_add', title: '加入購物車', description: '把買到或看上的東西記進小屋購物車。url 請填商品頁的原始連結，小屋會在房間附上連結；沒給 imageUrl 時，小屋會從商品頁抓圖。category 是商品分類，給購物習慣報表用。同名、同店、同連結的東西會合併數量。如果屋主之前從房間移除過同連結或同名的東西，回傳會多一個 note 說明，請先問屋主再決定留不留。只做記錄，不會下單。',
+    name: 'cart_add', title: '加入購物車', description: '把買到或看上的東西記進小屋購物車。url 請填商品頁的原始連結，小屋會在房間附上連結；沒給 imageUrl 時，小屋會從商品頁抓圖。category 是商品分類，給購物習慣報表用。note 是你替屋主挑這件東西的一句話（最多 80 字，口氣像手寫小卡，不要寫價格），屋主拆快遞時小卡會跟商品一起飄出來；每件都請寫。同名、同店、同連結的東西會合併數量。如果屋主之前從房間移除過同連結或同名的東西，回傳最上層會多一個 note 欄位說明，請先問屋主再決定留不留。只做記錄，不會下單。',
     input: cartItemInputSchema, annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     async run(store, args) {
       const cart = await store.cart(), [input] = await withProductImages([args], cart), next = addCartItem(cart, input, now());

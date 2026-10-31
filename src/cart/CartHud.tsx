@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react';
-import { Cable, ChartNoAxesColumn, ChevronDown, ChevronUp, Clapperboard, ExternalLink, KeyRound, Share2, ShoppingBasket, Trash2, Undo2, UsersRound } from 'lucide-react';
+import { Cable, ChartNoAxesColumn, ChevronDown, ChevronUp, Clapperboard, ExternalLink, KeyRound, RotateCcw, Share2, ShoppingBasket, Sticker, Trash2, Undo2, UsersRound } from 'lucide-react';
 import { cartView, formatTwd } from '../../shared/cart';
 import { REMOVAL_REASONS, type RemovalReason } from '../../shared/removals';
 import type { TextKey } from '../i18n/messages';
@@ -12,6 +12,7 @@ import type { CartState } from './useCart';
 import type { RemovalController } from './useRemoval';
 import { useFlashedLine, type ProductFocus } from './useProductPoke';
 import './cart.css';
+import './stickers.css';
 
 const reasonLabels: Record<RemovalReason, TextKey> = { not_my_taste: 'Not my taste', too_expensive: 'Too expensive', already_have: 'Already have it', changed_mind: 'Changed my mind' };
 
@@ -43,7 +44,7 @@ function OwnerKeyForm({ unlock }: { unlock: (key: string) => void }) {
   </form>;
 }
 
-export function CartHud({ state, open, onToggle, unlock, sharing, onShare, casting = false, onCast, habits = false, onHabits, connecting = false, onConnect, filming = false, onFilm, focus = null, removal, children }: { state: CartState; open: boolean; onToggle: () => void; unlock: (key: string) => void; sharing: boolean; onShare: () => void; casting?: boolean; onCast?: () => void; habits?: boolean; onHabits?: () => void; connecting?: boolean; onConnect?: () => void; filming?: boolean; onFilm?: () => void; /** The shelf product last clicked in the room; its line is scrolled into view and flagged. */ focus?: ProductFocus | null; /** Taking lines out of the list; without it the list has no remove controls. */ removal?: RemovalController; children?: ReactNode }) {
+export function CartHud({ state, open, onToggle, unlock, sharing, onShare, casting = false, onCast, habits = false, onHabits, connecting = false, onConnect, filming = false, onFilm, focus = null, removal, replay, album, children }: { state: CartState; open: boolean; onToggle: () => void; unlock: (key: string) => void; sharing: boolean; onShare: () => void; casting?: boolean; onCast?: () => void; habits?: boolean; onHabits?: () => void; connecting?: boolean; onConnect?: () => void; filming?: boolean; onFilm?: () => void; /** The shelf product last clicked in the room; its line is scrolled into view and flagged. */ focus?: ProductFocus | null; /** Taking lines out of the list; without it the list has no remove controls. */ removal?: RemovalController; /** Parcels already on the shelf can be unboxed again from their line. */ replay?: { shelved: ReadonlySet<string>; start: (id: string) => void }; /** The sticker album button: how many kinds are found, and whether its panel is open. */ album?: { found: number; open: boolean; toggle: () => void }; children?: ReactNode }) {
   const list = useRef<HTMLOListElement>(null);
   const flashed = useFlashedLine(focus, open, () => list.current);
   if (state.status === 'locked') return <aside className="cart-hud" aria-label={t('Cart showroom')} data-testid="cart-hud">
@@ -63,6 +64,7 @@ export function CartHud({ state, open, onToggle, unlock, sharing, onShare, casti
       {state.status !== 'loading' && <button type="button" className="cart-share" aria-expanded={sharing} aria-controls="share-panel" onClick={onShare} data-testid="share-button"><Share2 size={15} aria-hidden="true" />{t('Share')}</button>}
       {state.status !== 'loading' && onCast && <button type="button" className="cart-share" aria-expanded={casting} aria-controls="cast-panel" onClick={onCast} data-testid="cast-button"><UsersRound size={15} aria-hidden="true" />{t('Cast')}</button>}
       {state.status !== 'loading' && onHabits && <button type="button" className="cart-share" aria-expanded={habits} aria-controls="habits-panel" onClick={onHabits} data-testid="habits-button"><ChartNoAxesColumn size={15} aria-hidden="true" />{t('Habits')}</button>}
+      {state.status !== 'loading' && album && <button type="button" className="cart-share album-target" aria-expanded={album.open} aria-controls="album-panel" onClick={album.toggle} data-testid="album-button"><Sticker size={15} aria-hidden="true" />{t('Stickers')}{album.found > 0 && <b className="album-badge">{album.found}</b>}</button>}
       {state.status !== 'loading' && onFilm && <button type="button" className="cart-share" aria-expanded={filming} aria-controls="promo-panel" onClick={onFilm} data-testid="promo-button"><Clapperboard size={15} aria-hidden="true" />{t('Promo')}</button>}
       {state.status !== 'loading' && onConnect && <button type="button" className="cart-share" aria-expanded={connecting} aria-controls="connect-panel" onClick={onConnect} data-testid="connect-button"><Cable size={15} aria-hidden="true" />{t('Connections')}</button>}
       <LanguageSwitch />
@@ -98,6 +100,7 @@ export function CartHud({ state, open, onToggle, unlock, sharing, onShare, casti
           </span>
         </span>
         <span className="cart-line-price">{item.priceTwd === null ? t('No price') : formatTwd(item.priceTwd)}{item.qty > 1 && <small>×{item.qty}</small>}</span>
+        {replay?.shelved.has(item.id) && <button type="button" className="cart-replay" aria-label={t('Unbox {title} again', { title: item.title })} title={t('Unbox again')} onClick={() => replay.start(item.id)} data-testid="cart-replay"><RotateCcw size={15} aria-hidden="true" /></button>}
         {removal && <button type="button" className="cart-remove" aria-label={t('Remove {title}', { title: item.title })} aria-expanded={removal.asking === item.id} onClick={() => removal.ask(removal.asking === item.id ? null : item.id)} data-testid="cart-remove"><Trash2 size={15} aria-hidden="true" /></button>}
         {removal?.asking === item.id && <ReasonPicker title={item.title} pick={reason => removal.confirm(item, reason)} cancel={() => removal.ask(null)} />}
       </li>)}

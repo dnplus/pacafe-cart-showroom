@@ -58,7 +58,7 @@ CI（`.github/workflows/ci.yml`）在每次 push 和 pull request 跑這三項�
 | `npm run verify:share` | 用真的 `wrangler dev`（有 token、`OPEN_OWNER_ACCESS=false`，跟正式環境一樣）走分享流程：`/api/cart` 沒 token 回 401；開分享後依序切 hidden、range、exact 檢查 `/s/<slug>` 的 JSON；關分享後回 404。 |
 | `node scripts/screenshots.mjs` | 建置、啟動 `wrangler dev --env local`，先把 5 個快遞箱都記成拆過，等貨架擺上 5 件商品後存 `docs/screenshots/desktop.png` 和 `mobile-390.png`。 |
 | `npm run screenshots:share` | 存房間分享面板和訪客分享頁的截圖（1440 和 390 寬，range 模式）到 `docs/screenshots/`。設了 `SHARE_SCREENSHOTS_COPY_TO` 會另外複製一份到那個目錄。 |
-| `node scripts/screenshots-unbox.mjs` | 用真的 `wrangler dev` 跑一遍拆快遞：桌機用滑鼠、390 寬用真的觸控事件（CDP）劃開一件、沒劃完就放手、劃開（檢查升起的商品卡有品名和商品連結）上架、再一鍵秒開，每一步存一張圖到 `UNBOX_SCREENSHOTS_DIR`（預設 `.local/screenshots-unbox`）。設 `UNBOX_REDUCED_MOTION=1` 會開「減少動態」再跑一次。 |
+| `node scripts/screenshots-unbox-play.mjs` | 用真的 `wrangler dev` 跑一遍拆快遞，1440 和 390 寬各存一組圖到 `PLAY_SCREENSHOTS_DIR`（預設 `.local/screenshots-unbox-play`）：櫃台的箱子、單個拆開（3D 舞台、手寫小卡）、一鍵秒開的連抽（開到一半、結果列、放大一張卡）、貼紙本、從貨架或清單再拆一次、訪客分享頁自己拆（並檢查沒有呼叫屋主的 `/api/unbox`）。設 `PLAY_REDUCED_MOTION=1` 用「減少動態」再跑一次；設 `PLAY_ORIGIN` 可指定已在跑的 worker。 |
 | `node scripts/screenshots-cast.mjs` | 存角色面板和房間（Muse 和店主、換店員前後、沒金鑰的說明、用假 Meta API 生成的角色、訪客頁，以及走路、拆快遞後的歡呼和店員去貨架、新東西進來的反應）的截圖到 `$CAST_SCREENSHOTS_DIR`，1440 和 390 寬各一套。 |
 | `node scripts/promo-plates.mjs` | 在 Vite 開發伺服器開 `plates.html`，從房間的直播棚拍介紹片的背景板（遠景、近景各一張去掉角色的房間、一張只有桌子），連同屋主站的位置寫到 `runner/composition/plates/`。房間或棚景改了以後要重拍。 |
 | `node tools/meta-hackathon/probe/run-all.ts --dry-run` | 不呼叫 API，印出 Meta Model API 探針的請求和費用估算。見 [探針說明](tools/meta-hackathon/probe/README.md)。 |
@@ -117,13 +117,22 @@ echo "CART_MCP_TOKEN=$(openssl rand -base64 24)" > .dev.vars
 
 - 沒有紀錄的東西就是箱子。第一次載入時 fixture 的 5 件全是箱子。紀錄存在 Durable Object 的 `unbox` key，形狀在 `shared/unbox.ts`。
 - `POST` 可以重送：已經拆過的保留原本的時間，不在購物車裡的 id 直接略過，同時刪掉已經不在購物車的紀錄。
-- 屋主的貨架只畫拆過的商品；收銀機的總額照舊算整個購物車。訪客的分享頁和 `/s/<slug>` 不變，看得到整個購物車。
+- 屋主的貨架只畫拆過的商品；收銀機的總額照舊算整個購物車。訪客的分享頁也有自己的快遞箱，見下面的「訪客自己拆」。
 - 每個箱子走 `arriving`、`atCounter`、`slicing`、`opened`、`shelved` 五個階段（`src/cart/unbox.ts` 的 reducer）。膠帶劃過 85% 就打開；沒劃完就放手，箱子回到 `atCounter`，劃痕歸零，下一次重劃。商品跳出來的動畫放完、`POST` 成功之後才變 `shelved` 並出現在貨架上；寫入失敗會每 2 秒重試，箱子留在畫面上。
 - 介面疊在 `main` 底下、房間外面，所以一指劃動不會被房間的雙指相機手勢吃掉。箱子可以用鍵盤的 Enter 或空白鍵打開。
-- 打開的那一刻：蓋子向後翻、膠帶掉落、箱口迸出幾粒火花，商品卡（商品圖或類別方塊、品名、店名、價格，和「看商品」連結）從箱口升起、停在半空讓人讀約 1 秒，再縮小飛向貨架，貨架上的盒子「咚」一聲落在格子裡（`src/cart/UnboxTray.tsx`、`unbox-tray.css`、`cartScene.ts`）。商品卡在箱子淡出後獨自停著，下一個箱子等它升起後才滑進來。整段約 2.4 秒，寫入 `/api/unbox` 等它放完。
-- 一鍵秒開（兩個以上一起開）用精簡版：卡片只有圖和品名，約 0.7 秒就飛走，一個接一個錯開 90 毫秒。接下來的 3 個箱子的圖會先下載，卡片升起時已經在了。
-- 系統開了「減少動態」：蓋子直接是翻開的，商品卡原地淡入、停 1.1 秒、淡出，不升也不飛；一鍵秒開不等。貨架上的盒子不做落下動畫。
-- 測試用的掛鉤：`data-testid="unbox"`（介面）、`unbox-box`（每個箱子，帶 `data-item-id`、`data-phase`）、`unbox-tape`（膠帶）、`unbox-all`（秒開鈕）、`unbox-reveal`（升起的商品卡）、`unbox-reveal-link`（卡上的連結）；清單是 `cart-row`、`cart-row-link`，訪客頁是 `share-row`、`share-row-link`。
+- **3D 舞台。** 在櫃台的小介面劃開膠帶（或按 Enter）之後，開箱在畫面中央放大成一個舞台：背景的房間變暗，中間是獨立的 three.js 畫布（`src/cart/parcelStage.ts`，有自己的柔光燈、接觸陰影和一個圓形轉台，不動房間的 renderer，關掉時釋放自己的 GPU 資源）。紙箱是圓角、軟倒角的厚紙箱，顏色和膠帶依店家，貼一張出貨單；膠帶向兩邊剝開、四片箱蓋帶彈性地翻開，箱子被擠一下，填充物（紙屑、氣泡、保麗龍粒、薄紙、彩紙）用 instanced 粒子噴出來；商品盒慢慢轉著升起，帶一圈光暈、光芒和火花，最後飛向貨架。商品盒就是貨架上那個：`cartScene.ts` 的 `productBox` 是貨架和舞台共用的同一份程式（幾何、顏色、商品圖貼圖和標籤卡，舞台只把標籤畫細一倍），圖一樣走同源的 `/api/image`。品名、價格和連結、Muse 的手寫小卡和貼紙是疊在畫布上的 HTML，文字保持清晰。像素比最多 2（沒有 GPU 的軟體繪圖降到 0.5），沒有後製特效；沒有 WebGL 時畫布是空的，卡片照樣出現。
+- **連抽。** 「一鍵秒開（N 件）」把 N 個箱子在 3D 舞台上排成一排（多了排兩排），依序搖晃、彈開；有貼紙的是稀有：箱子先金光閃動，開的時候金色閃光、更大的光芒和更久的停頓，畫面跳出「幸運抽中！」。放完後是結果列：每件一張商品卡（有小卡的卡片角落有便條記號，有貼紙的帶金框），點一張就放大，看商品和 Muse 的小卡；按「全部上架」所有卡片一起飛向貨架，這時才寫入 `/api/unbox`。「跳過」直接到結果列。連抽的箱子在按下「全部上架」之前都還沒有紀錄。
+- 「減少動態」：畫面配置不變，不動鏡頭、不旋轉、沒有粒子和光芒，箱蓋直接翻開，商品盒淡入，卡片淡入淡出，連抽的搖晃改成逐個淡入。
+- 再拆一次和訪客自己拆用的是同一個舞台。
+- 測試用的掛鉤：`data-testid="unbox"`（介面）、`unbox-box`（每個箱子，帶 `data-item-id`、`data-phase`）、`unbox-tape`（膠帶）、`unbox-all`（秒開鈕）、`unbox-stage`（舞台，`data-kind` 是 `single` 或 `pull`）、`stage-3d`（畫布）、`unbox-reveal`（品名價格牌）、`unbox-note`（小卡）、`unbox-sticker`、`pull-cascade`、`pull-results`、`pull-card`、`pull-zoom`、`pull-done`、`pull-skip`、`unbox-reveal-link`（連結）；清單是 `cart-row`、`cart-row-link`，訪客頁是 `share-row`、`share-row-link`。
+
+### 手寫小卡、包裝、貼紙和再拆一次
+
+- **小卡。** `cart_add` 多一個選填的 `note`（最多 80 字，Muse 對屋主說的一句話：為什麼挑這件）。拆開時，一張黃色手寫風小卡從商品卡後面滑出來，貼在卡上方。舊的、沒有 `note` 的購物車照樣能讀（欄位預設 `null`），不用小卡。一鍵秒開的精簡版不顯示小卡。
+- **包裝依店家和類別不同。** `shared/packaging.ts` 的 `packagingOf` 用店名（沒有店名就用類別）決定箱子顏色和膠帶（六色箱子、五種膠帶，包括紅條、藍條和和紙膠帶），用類別決定填充物（氣泡紙、保麗龍粒、薄紙、紙屑、彩色碎紙），都是確定性的：同一家店永遠是同一個箱子。每個商品的 id 另外決定有沒有貼紙，大約四分之一的包裹裡有一張，八款之一。蓋子打開時，填充物露出來，火花也是填充物的顏色。
+- **貼紙本。** 有貼紙的包裹打開時，貼紙彈在商品卡旁邊，再飛向 HUD 的「貼紙」鈕。點開鈕就是貼紙本：八個格子，找到的上色並標示重複的張數，沒找到的是虛線問號。收集紀錄存在這個瀏覽器的 localStorage（`showroom.stickers`），東西離開購物車後貼紙還在；貼紙是哪一張，永遠由商品 id 決定。
+- **再拆一次。** 點貨架上已經拆過的商品，頂端出現「再拆一次」；清單裡拆過的那行也有一顆重播鈕。按下去，櫃台出現一個新箱子，劃開膠帶重播一遍開箱動畫，放完自己收起來。只有動畫：沒有任何請求、不改 `unbox` 紀錄、不改貨架。
+- **訪客自己拆。** `/s/<slug>` 的訪客頁也是一堆快遞箱，每位訪客自己拆；拆過哪些只存在他自己的瀏覽器（`showroom.visitor-unbox.<slug>`，localStorage 不能用就只在這次造訪有效），不呼叫屋主的 `/api/unbox`，也不影響屋主那邊的拆封狀態。訪客的貨架和屋主一樣只畫拆過的，拆過的也能再拆一次。`ShareView` 的每個品項多兩個欄位：`packaging`（箱子、膠帶、填充物、貼紙，由店名和 id 算好的選項名稱，沒有店名或 id）和 `note`。價格隱藏或只給區間時，含數字或貨幣字樣的 `note` 不會出現在訪客的回應裡（`visitorNote`），免得小卡把價格說出去。
 
 ## 分享：`/api/share` 和 `/s/<slug>`
 
@@ -210,7 +219,7 @@ Muse 從兩個地方知道：`cart_list` 的 `removals` 列最近 20 筆（新�
 
 | 工具 | 輸入 | 回傳 | 唯讀 |
 |---|---|---|---|
-| `cart_add` | `{ title, store?, url?, priceTwd?, imageUrl?, category?, qty? }`，`qty` 預設 1 | `Cart`；屋主移除過同連結或同名的東西時多一個 `note` | 否 |
+| `cart_add` | `{ title, store?, url?, priceTwd?, imageUrl?, category?, note?, qty? }`，`qty` 預設 1；`note` 是 Muse 挑這件的一句話（最多 80 字） | `Cart`；屋主移除過同連結或同名的東西時多一個 `note` | 否 |
 | `cart_list` | `{}` | `Cart`，加上 `share: { url, enabled, prices }` 和 `removals`（屋主最近移除的東西，見下面） | 是 |
 | `cart_remove` | `{ itemId, qty? }`，不給 `qty` 就整件移除 | `Cart` | 否 |
 | `habits_report` | `{}` | `HabitsReport`，見下面「購物習慣」 | 是 |

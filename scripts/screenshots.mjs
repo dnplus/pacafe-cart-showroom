@@ -17,7 +17,7 @@ fs.mkdirSync(path.join(root, '.local'), { recursive: true });
 const persistTo = fs.mkdtempSync(path.join(root, '.local', 'screenshots-'));
 build();
 const worker = await startWorker(persistTo);
-// The owner's shelf only draws unboxed items, so open the fixture's parcels first; scripts/screenshots-unbox.mjs shows the parcels themselves.
+// The owner's shelf only draws unboxed items, so open the fixture's parcels first; scripts/screenshots-unbox-play.mjs shows the parcels themselves.
 const { items } = await (await fetch(`${worker.origin}/api/cart`)).json();
 await fetch(`${worker.origin}/api/unbox`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ itemIds: items.map(item => item.id) }) });
 const browser = await launchBrowser();
