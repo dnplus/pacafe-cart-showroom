@@ -50,6 +50,6 @@ function Showroom() {
         <RoomScene scenery="peach" shelf={shelf} controls={controls} counter={() => setListOpen(true)} baristaName={t('Clerk')} barista={preview ? DEFAULT_CHARACTER : cast.view?.character} owner={{ name: preview?.nickname ?? cast.view?.nickname ?? DEFAULT_NICKNAME, sprite: preview ? null : cast.spriteUrl, open: () => { setCasting(true); setSharing(false); } }} studioSet={showroomStudioSet} hour={14} />
       </RoomZones>
     </section>
-    {!sharing && !casting && <UnboxTray {...unbox} items={cart?.items ?? []} />}
+    {!sharing && !casting && !habiting && <UnboxTray {...unbox} items={cart?.items ?? []} />}
   </main>;
 }

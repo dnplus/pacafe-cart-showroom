@@ -133,7 +133,7 @@ export const messages = [
   ['Stores', '各家店'],
   ['{count} lines', '{count} 筆'],
   ['{count} lines have no store.', '另有 {count} 筆沒填店名。'],
-  ['Price per line', '每筆的價位'],
+  ['Price per line', '每筆的價位（NT$）'],
   ['When things were noted', '什麼時候記下的'],
   ['Noted by weekday', '依星期'],
   ['Noted by time of day', '依時段'],

@@ -25,10 +25,10 @@ export const TIME_OF_DAY = [
   { id: 'evening', label: '晚上', hours: '18–23 時', from: 18 },
 ] as const;
 export const PRICE_BANDS = [
-  { id: 'under300', label: 'NT$ 300 以下', max: 300 },
-  { id: 'to1000', label: 'NT$ 300–999', max: 1000 },
-  { id: 'to3000', label: 'NT$ 1,000–2,999', max: 3000 },
-  { id: 'over3000', label: 'NT$ 3,000 以上', max: Infinity },
+  { id: 'under300', label: '300 以下', max: 300 },
+  { id: 'to1000', label: '300–999', max: 1000 },
+  { id: 'to3000', label: '1,000–2,999', max: 3000 },
+  { id: 'over3000', label: '3,000 以上', max: Infinity },
 ] as const;
 const TOP_STORES = 5;
 /** Below this many cart lines the report still shows its numbers but draws no conclusion about timing. */
