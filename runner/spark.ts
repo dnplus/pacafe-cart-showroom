@@ -30,8 +30,8 @@ async function chat(config: MetaConfig, messages: unknown[], estimate: { inputTo
 const STORYBOARD_RULES = [
   '你是小屋購物車的短片字幕編劇。小屋把屋主的 Muse 採買時記下的東西擺上貨架；它沒有結帳，也不是購物網站。',
   '影片由屋主本人坐在小屋的直播棚主持，字幕就是屋主的口白：用第一人稱（我、我的小屋），Muse 是幫屋主採買的店員。',
-  '依輸入的每個 scene 寫字幕，用台灣繁體中文，口吻溫暖、簡短。每句一行，每景 1 到 3 行。',
-  `每行不超過 ${SUBTITLE.maxWidthEm} 個全形字寬，每秒不超過 ${MAX_CPS} 個字。`,
+  '依輸入的每個 scene 寫字幕，用輸入的 language 寫：zh-TW 是台灣繁體中文，en 是自然的英文。口吻溫暖、簡短。每句一行，每景 1 到 3 行。',
+  `每行不超過 ${SUBTITLE.maxWidthEm} 個全形字寬（英文約 ${Math.floor(SUBTITLE.maxWidthEm / 0.6)} 個字母），每秒不超過 ${MAX_CPS} 個中文字（英文約 ${MAX_CPS * 2} 個字母）。`,
   '不得出現結帳、下單、購買、付款、立即購買這類字眼。只能用輸入裡的資訊；price 是 null 的地方不提價格，也不要猜。',
   '只回傳 JSON：{"scenes":[{"id":"<scene id>","subtitle":["..."]}]}，scene 的 id 和順序照輸入。',
 ].join('\n');
@@ -45,7 +45,7 @@ export const fallbackStoryboarder: Storyboarder = async ({ job, view }) => ({ st
 /** Spark writes the words; the screens, timing and prices come from the view, so Spark cannot show a price the owner hid. */
 export const sparkStoryboarder = (config: MetaConfig, log: (line: string) => void): Storyboarder => async claim => {
   const { job, view } = claim, frames = sceneFrames(view, job);
-  const input = { durationSec: job.durationSec, style: job.style, nickname: view.nickname, scenes: frames.map(({ subtitle: _, ...scene }) => scene) };
+  const input = { durationSec: job.durationSec, style: job.style, language: job.language, nickname: frames[0].kind === 'opening' ? frames[0].nickname : view.nickname, scenes: frames.map(({ subtitle: _, ...scene }) => scene) };
   const prompt = JSON.stringify(input);
   let costUsd = 0;
   try {
@@ -54,7 +54,7 @@ export const sparkStoryboarder = (config: MetaConfig, log: (line: string) => voi
     const written = new Map(sparkStoryboardSchema.parse(JSON.parse(reply.content)).scenes.map(scene => [scene.id, scene.subtitle]));
     const missing = frames.filter(scene => !written.has(scene.id));
     if (missing.length) throw new Error(`Spark left out ${missing.map(scene => scene.id).join(', ')}`);
-    const storyboard = withSubtitles(view, frames, scene => written.get(scene.id)!);
+    const storyboard = withSubtitles(view, frames, scene => written.get(scene.id)!, job.language);
     if (view.mode === 'hidden' && storyboard.scenes.some(scene => PRICE_PATTERN.test(scene.subtitle.join('')))) throw new Error('Spark wrote a price the owner hid');
     return { storyboard, source: 'spark', costUsd };
   } catch (error) {

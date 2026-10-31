@@ -4,11 +4,16 @@ import { webUrl, type Cart } from './cart.ts';
 export const PROMO_STATUSES = ['queued', 'storyboard', 'voice', 'rendering', 'done', 'failed'] as const;
 
 const timestamp = z.iso.datetime();
+/** The language the video speaks and shows; the room sends the one its interface is in. */
+export const PROMO_LANGUAGES = ['zh-TW', 'en'] as const;
+export type PromoLanguage = typeof PROMO_LANGUAGES[number];
+const language = z.enum(PROMO_LANGUAGES).default('zh-TW');
 
 /** What Muse asks for; the video itself is made by the S4 runner. */
 export const promoRequestSchema = z.strictObject({
   durationSec: z.number().int().min(15).max(45).default(30),
   style: z.string().trim().min(1).max(200).optional(),
+  language,
 });
 export type PromoRequest = z.output<typeof promoRequestSchema>;
 
@@ -21,6 +26,7 @@ export const promoJobSchema = z.strictObject({
   cartRevision: z.number().int().nonnegative(),
   durationSec: z.number().int().min(15).max(45),
   style: z.string().nullable(),
+  language,
   status: z.enum(PROMO_STATUSES),
   progress: z.number().min(0).max(1),
   output: z.strictObject({ videoUrl: webUrl, thumbnailUrl: webUrl, sha256: z.string().regex(/^[0-9a-f]{64}$/), durationSec: z.number().positive() }).nullable(),
@@ -41,5 +47,5 @@ export interface PromoRecord { job: PromoJob; cart: Cart; lease?: { claimedAt: s
 export const isFinished = (job: Pick<PromoJob, 'status'>) => job.status === 'done' || job.status === 'failed';
 
 export const queuedPromoJob = (id: string, cart: Cart, request: PromoRequest, now: string): PromoJob => ({
-  id, cartRevision: cart.revision, durationSec: request.durationSec, style: request.style ?? null, status: 'queued', progress: 0, output: null, error: null, costUsd: 0, createdAt: now, updatedAt: now,
+  id, cartRevision: cart.revision, durationSec: request.durationSec, style: request.style ?? null, language: request.language, status: 'queued', progress: 0, output: null, error: null, costUsd: 0, createdAt: now, updatedAt: now,
 });

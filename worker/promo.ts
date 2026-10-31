@@ -12,7 +12,7 @@ export async function queuePromo(store: Store, request: PromoRequest, now = new 
   const cart = await store.cart();
   if (cart.items.length === 0) return null;
   const latest = (await store.latestPromo())?.job;
-  if (latest?.status === 'queued' && latest.cartRevision === cart.revision && latest.durationSec === request.durationSec && latest.style === (request.style ?? null)) return latest;
+  if (latest?.status === 'queued' && latest.cartRevision === cart.revision && latest.durationSec === request.durationSec && latest.style === (request.style ?? null) && latest.language === request.language) return latest;
   const job = queuedPromoJob(`promo-${crypto.randomUUID()}`, cart, request, now);
   await store.queuePromo({ job, cart });
   return job;

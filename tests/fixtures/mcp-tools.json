@@ -141,6 +141,14 @@
             "minimum": 15,
             "maximum": 45
           },
+          "language": {
+            "default": "zh-TW",
+            "enum": [
+              "zh-TW",
+              "en"
+            ],
+            "type": "string"
+          },
           "style": {
             "type": "string",
             "minLength": 1,

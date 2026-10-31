@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { promoJobSchema, type PromoJob } from '../../shared/promo';
 import { ownerFetch } from '../owner';
+import { getLocale } from '../i18n';
 
 export const PROMO_POLL_MS = 3000;
 
@@ -42,7 +43,7 @@ export function usePromo(intervalMs = PROMO_POLL_MS): PromoState & { queue: () =
   const queue = useCallback(async () => {
     setState(previous => ({ ...previous, queueing: true, queueFailed: false }));
     try {
-      const response = await ownerFetch('/api/promo', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+      const response = await ownerFetch('/api/promo', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ language: getLocale() }) });
       if (!response.ok) throw new Error(`POST /api/promo answered ${response.status}`);
       setRound(count => count + 1);
       setState(previous => ({ ...previous, queueing: false }));

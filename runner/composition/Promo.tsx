@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, type ComponentProps, type CSSProperties } from 'react';
 import { AbsoluteFill, Audio, Img, interpolate, Sequence, useCurrentFrame } from 'remotion';
-import { charCount, DISCLAIMER, PROMO_FORMAT, SUBTITLE, type PromoInput, type Scene, type Storyboard } from '../storyboard.ts';
+import { charCount, DISCLAIMER, PROMO_FORMAT, PROMO_WORDS, SUBTITLE, type PromoInput, type Scene, type Storyboard } from '../storyboard.ts';
 import museArt from '../../public/art/characters/muse-fullbody.png';
 import ownerArt from '../../public/art/characters/owner-fullbody.png';
 import ownerSheet from '../../public/art/characters/owner-spritesheet.png';
@@ -27,6 +27,7 @@ const pill: CSSProperties = { display: 'inline-block', padding: '8px 22px', bord
  */
 const PLATES = { wide: { back: wideBack, front: wideFront, ...plateLayout.wide }, close: { back: closeBack, front: closeFront, ...plateLayout.close } };
 type Shot = keyof typeof PLATES;
+type Words = typeof PROMO_WORDS[keyof typeof PROMO_WORDS];
 const FIGURE_METRES = 2.1;
 /** The drawn body inside each picture, from its alpha: [top, bottom] of 1024 for the full-body art, of a 256 cell for the sheet. */
 const ART = { owner: { src: ownerArt, width: 512, height: 1024, body: [55, 972] }, muse: { src: museArt, width: 512, height: 1024, body: [160, 864] } } as const;
@@ -90,12 +91,12 @@ function ProductPicture({ scene, n }: { scene: Extract<Scene, { kind: 'item' }>;
   );
 }
 
-function ItemCard({ scene, n, sec }: { scene: Extract<Scene, { kind: 'item' }>; n: number; sec: number }) {
+function ItemCard({ scene, n, sec, words }: { scene: Extract<Scene, { kind: 'item' }>; n: number; sec: number; words: Words }) {
   const slide = interpolate(sec, [0.15, 0.6], [80, 0], clamp), shown = interpolate(sec, [0.15, 0.5], [0, 1], clamp);
   return (
     <div style={{ position: 'absolute', right: 56, top: 64, width: 420, padding: 20, borderRadius: 28, background: CREAM, boxShadow: '0 18px 40px rgba(74, 52, 36, 0.3)', opacity: shown, transform: `translateX(${slide}px) rotate(${interpolate(sec, [0.15, 0.6], [4, 1.2], clamp)}deg)` }}>
       <ProductPicture scene={scene} n={n} />
-      <div style={{ fontSize: 20, opacity: 0.7, marginTop: 14 }}>第 {n} 件</div>
+      <div style={{ fontSize: 20, opacity: 0.7, marginTop: 14 }}>{words.nth(n)}</div>
       <div style={{ fontSize: 32, fontWeight: 800, lineHeight: 1.25, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{scene.title}</div>
       <div style={{ display: 'flex', gap: 12, marginTop: 12, fontSize: 26 }}>
         <span style={{ ...pill, background: '#a3b18a' }}>× {scene.qty}</span>
@@ -105,7 +106,7 @@ function ItemCard({ scene, n, sec }: { scene: Extract<Scene, { kind: 'item' }>; 
   );
 }
 
-function SceneView({ scene, sec, n }: { scene: Scene; sec: number; n: number }) {
+function SceneView({ scene, sec, n, words }: { scene: Scene; sec: number; n: number; words: Words }) {
   const length = scene.endSec - scene.startSec;
   switch (scene.kind) {
     case 'opening': {
@@ -118,9 +119,9 @@ function SceneView({ scene, sec, n }: { scene: Scene; sec: number; n: number }) 
             <Mark shot="wide" text="♪" sec={sec} at={walk + 0.1} />
           </Stage>
           <div style={{ position: 'absolute', left: 56, top: 96, padding: '24px 32px', borderRadius: 24, background: 'rgba(251, 244, 232, 0.94)', boxShadow: '0 14px 30px rgba(74, 52, 36, 0.22)', ...fadeIn(sec, 0.3) }}>
-            <div style={{ fontSize: 46, fontWeight: 800 }}>{scene.nickname}的小屋購物車</div>
-            <div style={{ fontSize: 24, marginTop: 10 }}>架上 {scene.count} 件，Muse 採買時記下的東西</div>
-            {scene.total && <div style={{ ...pill, fontSize: 24, marginTop: 16 }}>總額 {scene.total}</div>}
+            <div style={{ fontSize: 46, fontWeight: 800 }}>{words.title(scene.nickname)}</div>
+            <div style={{ fontSize: 24, marginTop: 10 }}>{words.shelf(scene.count)}</div>
+            {scene.total && <div style={{ ...pill, fontSize: 24, marginTop: 16 }}>{words.total(scene.total)}</div>}
           </div>
         </>
       );
@@ -133,7 +134,7 @@ function SceneView({ scene, sec, n }: { scene: Scene; sec: number; n: number }) 
             <Figure shot="close" who="owner" lift={hop(sec, 0.3) + talk(sec)} lean={interpolate(sec, [0.3, 0.7], [0, 4], clamp)} />
             <Mark shot="close" text={n % 2 ? '!' : '♪'} sec={sec} at={0.3} />
           </Stage>
-          <ItemCard scene={scene} n={n} sec={sec} />
+          <ItemCard scene={scene} n={n} sec={sec} words={words} />
         </>
       );
     }
@@ -150,7 +151,7 @@ function SceneView({ scene, sec, n }: { scene: Scene; sec: number; n: number }) 
           </Stage>
           <div style={{ position: 'absolute', left: 0, right: 0, top: 22, textAlign: 'center', ...fadeIn(sec, 0.2) }}>
             <div style={{ display: 'inline-block', padding: '14px 34px', borderRadius: 22, background: 'rgba(251, 244, 232, 0.94)' }}>
-              <div style={{ fontSize: 40, fontWeight: 800 }}>小屋購物車</div>
+              <div style={{ fontSize: 40, fontWeight: 800 }}>{words.brand}</div>
               <div style={{ fontSize: 20, marginTop: 6, lineHeight: 1.5, color: '#5b4636' }}>
                 {DISCLAIMER.map(line => <div key={line}>{line}</div>)}
               </div>
@@ -184,11 +185,11 @@ function Subtitle({ lines }: { lines: readonly string[] }) {
 /** One frame of the video at `atSec`, without Remotion's timing context, so tests can draw it directly. */
 export function PromoFrame({ storyboard, atSec }: { storyboard: Storyboard; atSec: number }) {
   const found = storyboard.scenes.findIndex(s => atSec < s.endSec), index = found < 0 ? storyboard.scenes.length - 1 : found;
-  const scene = storyboard.scenes[index], sec = atSec - scene.startSec;
+  const scene = storyboard.scenes[index], sec = atSec - scene.startSec, words = PROMO_WORDS[storyboard.language];
   return (
     <AbsoluteFill style={{ fontFamily: FONT, color: INK, background: '#d8c3a8', overflow: 'hidden' }}>
-      <SceneView key={scene.id} scene={scene} sec={sec} n={index} />
-      {scene.kind !== 'ending' && <div style={{ position: 'absolute', left: 48, top: 30, ...pill, fontSize: 22, background: '#8a5a3b' }}>小屋購物車</div>}
+      <SceneView key={scene.id} scene={scene} sec={sec} n={index} words={words} />
+      {scene.kind !== 'ending' && <div style={{ position: 'absolute', left: 48, top: 30, ...pill, fontSize: 22, background: '#8a5a3b' }}>{words.brand}</div>}
       <Subtitle lines={subtitlePage(scene, sec)} />
     </AbsoluteFill>
   );

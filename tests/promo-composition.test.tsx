@@ -36,4 +36,15 @@ describe('promo composition', () => {
     expect(markupAt(pictured.scenes[1].startSec + 1)).toContain('https://img.example.com/dripper.jpg');
     expect(pictured.scenes[0].subtitle.join('')).toContain('歡迎來到');
   });
+
+  it('speaks and labels in English when the job asks for it, item titles left as the owner saved them', () => {
+    const english = fallbackStoryboard(claimFor(fixtureCartItems, 'range', 30, 'en').view, { durationSec: 30, language: 'en' });
+    const at = (i: number) => shownText(renderToStaticMarkup(<Picture value={({ src }) => <img src={src} />}><PromoFrame storyboard={english} atSec={english.scenes[i].startSec + 1} /></Picture>));
+    expect(english.language).toBe('en');
+    expect(at(0)).toContain("小島's Cart Showroom");
+    expect(english.scenes[0].subtitle[0]).toBe("Welcome to 小島's Cart Showroom!");
+    expect(at(1)).toContain('No. 1');
+    expect(english.scenes[1].subtitle[0]).toMatch(/^手沖咖啡濾杯 陶瓷 02, about NT\$ /);
+    expect(english.scenes.at(-1)!.subtitle).toEqual(["That's all for today.", 'Come browse the whole shelf!']);
+  });
 });

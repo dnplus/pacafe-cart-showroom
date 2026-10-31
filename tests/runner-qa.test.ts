@@ -56,7 +56,7 @@ describe('Fix registry', () => {
   });
 
   it('pacing_too_fast borrows time from scenes that read slower than the limit, and never makes them fail', () => {
-    const long = ['「【現貨】日本製琺瑯細口手沖壺 1.2L 附溫度計', '霧面白」，大約 NT$ 1,000–3,000。'];
+    const long = ['「【現貨】日本製琺瑯細口手沖壺一點二公升附溫度計', '霧面白」，大約 NT$ 1,000–3,000。'];
     const before = board([opening(4, ['這是小島的小屋購物車。', '架上 6 件，都是 Muse 採買時記下的東西。']), item(4, 7.5, ['「無線降噪耳機」，大約 NT$ 3,000–5,000。'], 'item-1'), item(7.5, 11, long, 'item-2'), item(11, 14.5, ['「帆布托特包 燕麥色」，大約 NT$ 500–1,000。'], 'item-3'), ending(14.5, 19.5)]);
     expect(mockReview(before).map(issue => `${issue.kind}@${issue.sceneId}`)).toEqual(['pacing_too_fast@item-2']);
     const after = FIXES.pacing_too_fast(before, mockReview(before));
