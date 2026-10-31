@@ -70,3 +70,17 @@ export function extendSlit(slit: Slit | null, point: TapePoint, reach: number): 
 
 /** How much of the tape is cut, 0 to 1. */
 export const sliceProgress = (slit: Slit | null) => slit ? slit.hi - slit.lo : 0;
+
+export const REVEAL_MS = 3400;
+/** Several parcels opened together fly out fast and compact, staggered by STAGGER_MS, so a burst reads as a burst. */
+export const QUICK_MS = 700;
+export const STAGGER_MS = 90;
+export const STAGGERED = 6;
+/** Under reduced motion the card does not travel: it fades in, stays long enough to read, and a burst does not wait at all. */
+export const REDUCED_REVEAL_MS = 1100;
+export const REDUCED_QUICK_MS = 120;
+
+export function popDuration(count: number, reduced: boolean) {
+  if (count <= 1) return reduced ? REDUCED_REVEAL_MS : REVEAL_MS;
+  return reduced ? REDUCED_QUICK_MS : QUICK_MS + Math.min(count - 1, STAGGERED) * STAGGER_MS;
+}

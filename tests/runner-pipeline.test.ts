@@ -9,9 +9,12 @@ import { MAX_QA_ROUNDS, modelsFromEnv, redactor, runJob, type RunnerDeps } from 
 import type { Renderer } from '../runner/render';
 import type { Reviewer } from '../runner/spark';
 import { PRICE_PATTERN, SUBTITLE, textWidthEm, type PromoInput } from '../runner/storyboard';
-import { selectTts } from '../runner/tts';
+import { selectTts, ttsFor } from '../runner/tts';
 import { workerClient } from '../runner/worker-client';
+import { promoScriptSchema } from '../shared/script';
 import { claimFor, fakeRunnerWorker } from './fake-runner-worker';
+
+const promoScript = (input: unknown) => promoScriptSchema.parse(input);
 
 const token = 'runner-test-token-0123456789';
 const LONG_TITLE = '【現貨】日本製琺瑯細口手沖壺 1.2L 附溫度計 霧面白';
@@ -83,7 +86,7 @@ describe('runner, mock models', () => {
   it('with a voice provider and its keys, speaks each scene and hands the clips to the render', async () => {
     const calls: { url: string; headers: Headers }[] = [];
     const http = (async (url: string | URL | Request, init?: RequestInit) => {
-      if (String(url).startsWith('https://api.elevenlabs.io/')) { calls.push({ url: String(url), headers: new Headers(init?.headers) }); return new Response(new Uint8Array([0xff, 0xf3, 1, 2])); }
+      if (String(url).startsWith('https://api.elevenlabs.io/')) { calls.push({ url: String(url), headers: new Headers(init?.headers) }); return new Response(fs.readFileSync(path.join(import.meta.dirname, 'fixtures/silence-1s.mp3'))); }
       return fetch(url, init);
     }) as typeof fetch;
     const { run, videos } = await setup(undefined, { env: { TTS_PROVIDER: 'elevenlabs', ELEVENLABS_API_KEY: 'el-test-key', ELEVENLABS_VOICE_ID: 'voice-1' }, http });
@@ -91,7 +94,24 @@ describe('runner, mock models', () => {
     expect(calls.length).toBeGreaterThan(0);
     expect(calls.every(call => call.url.includes('/v1/text-to-speech/voice-1') && call.headers.get('xi-api-key') === 'el-test-key')).toBe(true);
     expect(videos[0].voice.map(clip => clip.sceneId)).toEqual(videos[0].storyboard.scenes.map(scene => scene.id));
-    expect(videos[0].voice.every(clip => clip.src.startsWith('data:audio/mpeg;base64,'))).toBe(true);
+    expect(videos[0].voice.every(clip => clip.src.startsWith('data:audio/mpeg;base64,') && Math.abs(clip.durationSec - 1) < 0.1)).toBe(true);
+  });
+
+  it('speaks with the voice the claim carries over its own environment, and keeps that key out of a failure', async () => {
+    const ROOM_KEY = 'room-minimax-key-LEAKCHECK-7777', seen: string[] = [];
+    const http = (async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).startsWith('https://api.minimaxi.com/')) { seen.push(new Headers(init?.headers).get('authorization')!); return Response.json({ data: null, base_resp: { status_code: 1004, status_msg: `bad key ${ROOM_KEY}` } }); }
+      return fetch(url, init);
+    }) as typeof fetch;
+    const claim = { ...claimFor(fixtureCartItems.slice(0, 2), 'range'), voice: { provider: 'minimax' as const, apiKey: ROOM_KEY, voiceId: '', region: 'mainland' as const } };
+    const { deps, run, failure, lines } = await setup(claim, { env: { TTS_PROVIDER: 'elevenlabs', ELEVENLABS_API_KEY: 'el-test-key', ELEVENLABS_VOICE_ID: 'voice-1' }, http });
+    deps.voiceFor = config => ttsFor(config, http);
+    expect(await run()).toBe('failed');
+    expect(seen[0]).toBe(`Bearer ${ROOM_KEY}`);
+    const sent = failure()!;
+    expect(sent.status === 'failed' && sent.error).toContain('MiniMax status 1004');
+    expect(JSON.stringify(sent)).not.toContain(ROOM_KEY);
+    expect(lines.join('\n')).not.toContain(ROOM_KEY);
   });
 
   it('wraps an overflowing subtitle in round one and passes in round two', async () => {
@@ -137,6 +157,68 @@ describe('runner, mock models', () => {
       for (const amount of ['650', '3,990', '3990', '7,460', '7460']) expect(text).not.toContain(amount);
       expect(input.storyboard.scenes.flatMap(scene => scene.kind === 'item' ? [scene.price] : scene.kind === 'opening' ? [scene.total] : [])).toEqual([null, null, null, null, null, null]);
     }
+  });
+});
+
+describe('a script from Muse', () => {
+  const script = { opening: ['嗨，歡迎來到我的小屋。', '這些都是 Muse 幫我挑的。'], items: [{ position: 1, lines: ['週末的咖啡全靠它。'] }, { position: 2, lines: ['通勤戴著，世界就安靜了。'] }], ending: ['謝謝你來逛，下次見！'] };
+  const subtitles = (input: PromoInput) => Object.fromEntries(input.storyboard.scenes.map(scene => [scene.id, scene.subtitle]));
+
+  it('is the storyboard\'s lines, and qa.json says muse wrote them', async () => {
+    const { run, videos, qa } = await setup(claimFor(fixtureCartItems.slice(0, 2), 'range', 30, promoScript(script)));
+    expect(await run()).toBe('done');
+    expect(subtitles(videos[0])).toEqual({ opening: script.opening, 'item-1': script.items[0].lines, 'item-2': script.items[1].lines, ending: script.ending });
+    expect(qa()).toMatchObject({ storyboard: 'muse', passed: true });
+  });
+
+  it('asks Spark for nothing when it covers every scene, and for the missing scenes only when it does not', async () => {
+    const asked: string[] = [];
+    const http = (async (url: string | URL | Request, init?: RequestInit) => {
+      if (!String(url).startsWith('https://meta.test/')) return fetch(url, init);
+      const body = JSON.parse(String(init!.body));
+      asked.push(Array.isArray(body.messages[1].content) ? 'review' : 'storyboard');
+      return Response.json({ choices: [{ message: { content: JSON.stringify(Array.isArray(body.messages[1].content) ? { issues: [] } : { scenes: ['opening', 'item-1', 'item-2', 'ending'].map(id => ({ id, subtitle: [`${id} 由 Spark 寫。`] })) }) } }] });
+    }) as typeof fetch;
+    const env = { META_API_KEY: 'meta-key-0123', META_API_BASE_URL: 'https://meta.test/v1' };
+    const full = await setup(claimFor(fixtureCartItems.slice(0, 2), 'range', 30, promoScript(script)), { env, http });
+    expect(await full.run()).toBe('done');
+    expect(asked.filter(kind => kind === 'storyboard')).toEqual([]);
+    asked.length = 0;
+    const partial = await setup(claimFor(fixtureCartItems.slice(0, 2), 'range', 30, promoScript({ opening: script.opening, items: [script.items[1]] })), { env, http });
+    expect(await partial.run()).toBe('done');
+    expect(asked.filter(kind => kind === 'storyboard')).toHaveLength(1);
+    expect(subtitles(partial.videos[0])).toEqual({ opening: script.opening, 'item-1': ['item-1 由 Spark 寫。'], 'item-2': script.items[1].lines, ending: ['ending 由 Spark 寫。'] });
+    expect(partial.qa().storyboard).toBe('muse');
+  });
+
+  it('fills the scenes it leaves out with the usual lines when no model is set', async () => {
+    const { run, videos } = await setup(claimFor(fixtureCartItems.slice(0, 2), 'range', 30, promoScript({ items: [script.items[0]] })));
+    expect(await run()).toBe('done');
+    const lines = subtitles(videos[0]);
+    expect(lines['item-1']).toEqual(script.items[0].lines);
+    expect(lines.opening[0]).toMatch(/^歡迎來到小島的小屋購物車/);
+    expect(lines['item-2'][0]).toMatch(/^「無線降噪耳機」/);
+    expect(lines.ending[0]).toMatch(/^今天就介紹到這裡/);
+  });
+
+  it('is dropped whole, and logged, when the owner hid prices after the script was queued with one', async () => {
+    const { run, videos, qa, lines } = await setup(claimFor(fixtureCartItems.slice(0, 2), 'hidden', 30, promoScript({ ...script, opening: ['手沖濾杯只要 NT$650。'] })));
+    expect(await run()).toBe('done');
+    expect(qa().storyboard).toBe('fallback');
+    expect(JSON.stringify(videos[0])).not.toMatch(PRICE_PATTERN);
+    expect(lines.join('\n')).toMatch(/Muse 的腳本不能用.*opening 提到價錢/);
+  });
+
+  it('still goes through QA: a line wider than the screen is wrapped and the job passes', async () => {
+    const wide = ['好咖啡值得慢慢喝，'.repeat(3)];
+    expect([...wide[0]].length).toBeLessThanOrEqual(30);
+    const { run, videos, qa } = await setup(claimFor(fixtureCartItems.slice(0, 2), 'range', 30, promoScript({ ...script, items: [{ position: 1, lines: wide }] })));
+    expect(await run()).toBe('done');
+    expect(qa().rounds[0].issues.map(issue => `${issue.kind}@${issue.sceneId}`)).toContain('subtitle_overflow@item-1');
+    expect(qa()).toMatchObject({ storyboard: 'muse', passed: true });
+    expect(videos[0].storyboard.scenes[1].subtitle.length).toBeGreaterThan(1);
+    expect(videos[0].storyboard.scenes[1].subtitle.join('')).toBe(wide[0]);
+    for (const line of videos[0].storyboard.scenes[1].subtitle) expect(textWidthEm(line)).toBeLessThanOrEqual(SUBTITLE.maxWidthEm);
   });
 });
 

@@ -1,30 +1,22 @@
-import { useRef, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
-import { PackageOpen, Scissors } from 'lucide-react';
-import type { CartItem } from '../../shared/cart';
+import { useEffect, useReducer, useRef, type KeyboardEvent, type PointerEvent } from 'react';
+import { PackageOpen, X } from 'lucide-react';
 import { t } from '../i18n';
-import { extendSlit, sliceProgress, type Box, type Slit } from './unbox';
-import { STAGGERED, type UnboxController } from './useUnbox';
+import { Parcel } from './Parcel';
+import { PullStage, SingleStage } from './UnboxStage';
+import type { ImageLoader } from './productImage';
+import type { TrayItem } from './trayItem';
+import { extendSlit, popDuration, sliceProgress, unboxReducer, type Box, type Slit } from './unbox';
+import type { UnboxController } from './useUnbox';
 import './unbox-tray.css';
 
 const MINIS = 4;
+const PRELOAD = 3;
+const NONE: ReadonlySet<string> = new Set(), noop = () => {};
 /** px a finger may stray from the tape's edge and still be cutting it. */
 const REACH_PX = 40;
-const style = (vars: Record<string, string | number>) => vars as CSSProperties;
-
-/** A parcel drawn in CSS; the same art is the big one on the counter, a small one waiting in line, and the one popping open. */
-function Parcel({ box, item, index = 0, variant, children }: { box: Box; item: CartItem; index?: number; variant: 'front' | 'mini' | 'pop'; children?: ReactNode }) {
-  return <div className={`parcel parcel-${variant}`} data-testid="unbox-box" data-item-id={box.id} data-phase={box.phase} data-progress={box.phase === 'slicing' ? box.progress.toFixed(2) : undefined}
-    style={style({ '--p': box.phase === 'slicing' ? box.progress : 0, '--i': Math.min(index, STAGGERED) })} aria-label={variant === 'mini' ? t('Parcel waiting its turn') : undefined}>
-    <i className="parcel-inside" /><i className="flap flap-back" /><i className="flap flap-front" />
-    <div className="parcel-body">{item.store && <span className="parcel-label">{t('From {store}', { store: item.store })}</span>}</div>
-    <div className="parcel-tape" data-testid={variant === 'front' ? 'unbox-tape' : undefined}><i className="parcel-cut" /></div>
-    {variant === 'front' && <Scissors className="parcel-scissors" aria-hidden="true" />}
-    {children}
-  </div>;
-}
 
 /** The one parcel on the counter that a finger or mouse can cut open along its tape. */
-function FrontParcel({ box, item, index, slice, release }: { box: Box; item: CartItem; index: number } & Pick<UnboxController, 'slice' | 'release'>) {
+function FrontParcel({ box, item, index, slice, release }: { box: Box; item: TrayItem; index: number } & Pick<UnboxController, 'slice' | 'release'>) {
   const root = useRef<HTMLDivElement>(null);
   const stroke = useRef<{ pointer: number; slit: Slit | null } | null>(null);
   const live = box.phase === 'atCounter' || box.phase === 'slicing';
@@ -59,41 +51,48 @@ function FrontParcel({ box, item, index, slice, release }: { box: Box; item: Car
   </div>;
 }
 
-/** The product jumping out of its box and flying to where the shelf is in the room. */
-function flyToShelf(node: HTMLElement | null) {
-  const shelf = document.querySelector('.shelf-target')?.getBoundingClientRect(), from = node?.parentElement?.getBoundingClientRect();
-  if (!node || !shelf?.width || !from) return;
-  node.style.setProperty('--fx', `${shelf.left + shelf.width / 2 - (from.left + from.width / 2)}px`);
-  node.style.setProperty('--fy', `${shelf.top + shelf.height / 2 - (from.top + 24)}px`);
-}
-
 /**
  * Parcels delivered to the counter, shown over the room (not inside it, so a swipe is never taken for the two-finger camera).
  * It leaves once every parcel is shelved.
  */
-export function UnboxTray({ boxes, items, ready, saveFailed, slice, release, openAll }: Pick<UnboxController, 'boxes' | 'ready' | 'saveFailed' | 'slice' | 'release' | 'openAll'> & { items: readonly CartItem[] }) {
+export function UnboxTray({ boxes, items, ready, saveFailed, slice, release, openAll, replay, held = NONE, settle = noop, loadImage }: Pick<UnboxController, 'boxes' | 'ready' | 'saveFailed' | 'slice' | 'release' | 'openAll'> & Partial<Pick<UnboxController, 'held' | 'settle'>> & { items: readonly TrayItem[]; /** How the 3D stage fetches a product picture for its box; the same loader the room's shelf uses. */ loadImage?: ImageLoader; /** Unboxing something already on the shelf: no write happens, and this closes the tray. */ replay?: () => void }) {
   const byId = new Map(items.map(item => [item.id, item]));
   const pending = boxes.filter(box => box.phase !== 'shelved' && byId.has(box.id));
+  // The next few pictures are fetched while their parcels are still shut, so the one that comes out is already there.
+  const upcoming = pending.slice(0, PRELOAD).map(box => byId.get(box.id)?.picture).filter(Boolean).join('\n');
+  useEffect(() => { for (const src of upcoming ? upcoming.split('\n') : []) { const image = new Image(); image.referrerPolicy = 'no-referrer'; image.src = src; } }, [upcoming]);
   if (!ready || !pending.length) return null;
-  const popping = pending.filter(box => box.phase === 'opened'), queue = pending.filter(box => box.phase !== 'opened');
+  const popping = pending.filter(box => box.phase === 'opened'), pulled = popping.filter(box => held.has(box.id)), single = popping.filter(box => !held.has(box.id));
+  const queue = pending.filter(box => box.phase !== 'opened');
   const [front, ...rest] = queue, minis = rest.slice(0, MINIS), more = rest.length - minis.length;
-  return <section className="unbox" data-testid="unbox" data-phase={front?.phase ?? 'opened'} data-pending={queue.length} aria-label={t('Parcels at the counter')}>
-    <header className="unbox-head"><strong>{t('Parcels at the counter')}</strong>{front && <small>{t('Swipe along the tape to cut it open')}</small>}</header>
-    <div className="unbox-stage">
-      {front && <FrontParcel key={front.id} box={front} item={byId.get(front.id)!} index={0} slice={slice} release={release} />}
-      <div className="unbox-pop">
-        {popping.map((box, i) => <Parcel key={box.id} box={box} item={byId.get(box.id)!} index={i} variant="pop">
-          <span className="parcel-item" ref={flyToShelf}><b>{byId.get(box.id)!.title}</b>{byId.get(box.id)!.qty > 1 && <small>×{byId.get(box.id)!.qty}</small>}</span>
-        </Parcel>)}
+  return <>
+    <section className="unbox" data-testid="unbox" data-phase={front?.phase ?? 'opened'} data-replay={replay ? '' : undefined} data-staging={popping.length > 0 || undefined} data-pending={queue.length} aria-label={t('Parcels at the counter')}>
+      <header className="unbox-head"><strong>{replay ? t('Unbox again') : t('Parcels at the counter')}</strong>{front && <small>{t('Swipe along the tape to cut it open')}</small>}{replay && <button type="button" className="unbox-close" onClick={replay} aria-label={t('Close')} data-testid="unbox-replay-close"><X size={16} aria-hidden="true" /></button>}</header>
+      <div className="unbox-stage">
+        {front && <FrontParcel key={front.id} box={front} item={byId.get(front.id)!} index={0} slice={slice} release={release} />}
       </div>
-    </div>
-    {pending.length > 1 && <footer className="unbox-bar">
-      <div className="unbox-queue">
-        {minis.map((box, i) => <Parcel key={box.id} box={box} item={byId.get(box.id)!} index={i + 1} variant="mini" />)}
-        {more > 0 && <span className="unbox-more">+{more}</span>}
-      </div>
-      {queue.length > 1 && <button type="button" className="unbox-all" onClick={openAll} data-testid="unbox-all"><PackageOpen size={18} aria-hidden="true" />{t('Open all at once ({count})', { count: queue.length })}</button>}
-    </footer>}
-    {saveFailed && <p className="cart-note cart-offline" role="status">{t('Could not save what you opened. Trying again.')}</p>}
-  </section>;
+      {pending.length > 1 && <footer className="unbox-bar">
+        <div className="unbox-queue">
+          {minis.map((box, i) => <Parcel key={box.id} box={box} item={byId.get(box.id)!} index={i + 1} variant="mini" />)}
+          {more > 0 && <span className="unbox-more">+{more}</span>}
+        </div>
+        {queue.length > 1 && <button type="button" className="unbox-all" onClick={openAll} data-testid="unbox-all"><PackageOpen size={18} aria-hidden="true" />{t('Open all at once ({count})', { count: queue.length })}</button>}
+      </footer>}
+      {saveFailed && <p className="cart-note cart-offline" role="status">{t('Could not save what you opened. Trying again.')}</p>}
+    </section>
+    {single.length > 0 && <SingleStage boxes={single} byId={byId} loadImage={loadImage} />}
+    {pulled.length > 0 && <PullStage boxes={pulled} byId={byId} settle={settle} loadImage={loadImage} />}
+  </>;
+}
+
+export function ReplayTray({ item, done, loadImage }: { item: TrayItem; done: () => void; loadImage?: ImageLoader }) {
+  const [boxes, dispatch] = useReducer(unboxReducer, [{ id: item.id, phase: 'atCounter' }] as readonly Box[]);
+  const opened = boxes[0]?.phase === 'opened';
+  useEffect(() => {
+    if (!opened) return;
+    const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches, timer = setTimeout(done, popDuration(1, reduced));
+    return () => clearTimeout(timer);
+  }, [opened, done]);
+  return <UnboxTray boxes={boxes} items={[item]} ready saveFailed={false} replay={done} loadImage={loadImage}
+    slice={(id, progress) => dispatch({ type: 'slice', id, progress })} release={id => dispatch({ type: 'release', id })} openAll={() => dispatch({ type: 'openAll' })} />;
 }

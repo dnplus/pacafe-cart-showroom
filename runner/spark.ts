@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { RunnerClaim } from '../shared/runner.ts';
 import { PRICING } from '../tools/meta-hackathon/probe/common.ts';
 import { issueSchema, ISSUE_KINDS, MAX_CPS, mockReview, sceneAt, type Issue } from './qa.ts';
+import { scriptProblems, scriptScenes } from '../shared/script.ts';
 import { fallbackStoryboard, PRICE_PATTERN, sceneFrames, SUBTITLE, withSubtitles, type Storyboard } from './storyboard.ts';
 
 export const SPARK_MODEL = 'muse-spark-1.3';
@@ -29,14 +30,15 @@ async function chat(config: MetaConfig, messages: unknown[], estimate: { inputTo
 
 const STORYBOARD_RULES = [
   '你是小屋購物車的短片字幕編劇。小屋把屋主的 Muse 採買時記下的東西擺上貨架；它沒有結帳，也不是購物網站。',
-  '依輸入的每個 scene 寫字幕，用台灣繁體中文，口吻溫暖、簡短。每句一行，每景 1 到 3 行。',
-  `每行不超過 ${SUBTITLE.maxWidthEm} 個全形字寬，每秒不超過 ${MAX_CPS} 個字。`,
+  '影片由屋主本人坐在小屋的直播棚主持，字幕就是屋主的口白：用第一人稱（我、我的小屋），Muse 是幫屋主採買的店員。',
+  '依輸入的每個 scene 寫字幕，用輸入的 language 寫：zh-TW 是台灣繁體中文，en 是自然的英文。口吻溫暖、簡短。每句一行，每景 1 到 3 行。',
+  `每行不超過 ${SUBTITLE.maxWidthEm} 個全形字寬（英文約 ${Math.floor(SUBTITLE.maxWidthEm / 0.6)} 個字母），每秒不超過 ${MAX_CPS} 個中文字（英文約 ${MAX_CPS * 2} 個字母）。`,
   '不得出現結帳、下單、購買、付款、立即購買這類字眼。只能用輸入裡的資訊；price 是 null 的地方不提價格，也不要猜。',
   '只回傳 JSON：{"scenes":[{"id":"<scene id>","subtitle":["..."]}]}，scene 的 id 和順序照輸入。',
 ].join('\n');
 const sparkStoryboardSchema = z.object({ scenes: z.array(z.object({ id: z.string(), subtitle: z.array(z.string().trim().min(1).max(120)).min(1).max(3) })) });
 
-export interface Storyboarded { storyboard: Storyboard; source: 'spark' | 'fallback'; costUsd: number }
+export interface Storyboarded { storyboard: Storyboard; source: 'spark' | 'fallback' | 'muse'; costUsd: number }
 export type Storyboarder = (claim: RunnerClaim) => Promise<Storyboarded>;
 
 export const fallbackStoryboarder: Storyboarder = async ({ job, view }) => ({ storyboard: fallbackStoryboard(view, job), source: 'fallback', costUsd: 0 });
@@ -44,7 +46,7 @@ export const fallbackStoryboarder: Storyboarder = async ({ job, view }) => ({ st
 /** Spark writes the words; the screens, timing and prices come from the view, so Spark cannot show a price the owner hid. */
 export const sparkStoryboarder = (config: MetaConfig, log: (line: string) => void): Storyboarder => async claim => {
   const { job, view } = claim, frames = sceneFrames(view, job);
-  const input = { durationSec: job.durationSec, style: job.style, nickname: view.nickname, scenes: frames.map(({ subtitle: _, ...scene }) => scene) };
+  const input = { durationSec: job.durationSec, style: job.style, language: job.language, nickname: frames[0].kind === 'opening' ? frames[0].nickname : view.nickname, scenes: frames.map(({ subtitle: _, ...scene }) => scene) };
   const prompt = JSON.stringify(input);
   let costUsd = 0;
   try {
@@ -53,13 +55,28 @@ export const sparkStoryboarder = (config: MetaConfig, log: (line: string) => voi
     const written = new Map(sparkStoryboardSchema.parse(JSON.parse(reply.content)).scenes.map(scene => [scene.id, scene.subtitle]));
     const missing = frames.filter(scene => !written.has(scene.id));
     if (missing.length) throw new Error(`Spark left out ${missing.map(scene => scene.id).join(', ')}`);
-    const storyboard = withSubtitles(view, frames, scene => written.get(scene.id)!);
+    const storyboard = withSubtitles(view, frames, scene => written.get(scene.id)!, job.language);
     if (view.mode === 'hidden' && storyboard.scenes.some(scene => PRICE_PATTERN.test(scene.subtitle.join('')))) throw new Error('Spark wrote a price the owner hid');
     return { storyboard, source: 'spark', costUsd };
   } catch (error) {
     log(`Spark 分鏡失敗，改用本地分鏡：${error instanceof Error ? error.message : String(error)}`);
     return { storyboard: fallbackStoryboard(view, job), source: 'fallback', costUsd };
   }
+};
+
+/** `base` only runs (and only costs) when the script leaves a scene out; a script the view no longer allows, such as prices after the owner hid them, is dropped whole. */
+export const museStoryboarder = (base: Storyboarder, log: (line: string) => void): Storyboarder => async claim => {
+  const { job, view } = claim;
+  if (!job.script) return base(claim);
+  const problems = scriptProblems(job.script, view, job.durationSec);
+  if (problems.length) {
+    log(`Muse 的腳本不能用，改由 runner 寫口白：${problems.join('；')}`);
+    return base(claim);
+  }
+  const frames = sceneFrames(view, job), given = scriptScenes(job.script);
+  const rest = frames.every(scene => given.has(scene.id)) ? null : await base(claim);
+  const storyboard = withSubtitles(view, frames, scene => given.get(scene.id) ?? rest!.storyboard.scenes.find(other => other.id === scene.id)!.subtitle, job.language);
+  return { storyboard, source: 'muse', costUsd: rest?.costUsd ?? 0 };
 };
 
 export interface Frame { atSec: number; sceneId: string; file: string }

@@ -1,6 +1,6 @@
 ---
 name: showroom-cart
-description: 把你替屋主採買或看中的東西記進小屋購物車，或查看、移除購物車裡的東西。用 showroom MCP 的 cart_add、cart_list、cart_remove。屋主說「記進小屋」「放進購物車」「小屋裡有什麼」「拿掉那件」時使用。
+description: 把你替屋主採買或看中的東西記進小屋購物車，或查看、移除購物車裡的東西，也能讀購物習慣報表，並尊重屋主自己移除過的東西。用 showroom MCP 的 cart_add、cart_list、cart_remove、habits_report。屋主說「記進小屋」「放進購物車」「小屋裡有什麼」「拿掉那件」「我的購物習慣」「我都買什麼」時使用。
 ---
 
 # 小屋購物車
@@ -11,12 +11,13 @@ description: 把你替屋主採買或看中的東西記進小屋購物車，或�
 
 ## 工具
 
-這三支工具都在 `showroom` MCP server 上。
+這幾支工具都在 `showroom` MCP server 上。
 
 | 工具 | 什麼時候用 | 輸入 | 回傳 |
 |---|---|---|---|
-| `cart_add` | 每記下一件東西就呼叫一次 | `title`（必填）、`store`、`url`、`priceTwd`、`imageUrl`、`qty`（預設 1） | 整個購物車 `Cart` |
-| `cart_list` | 想知道小屋裡現在有什麼、總額多少、分享連結是什麼 | `{}` | `Cart`，另加 `share: { url, enabled, prices }` |
+| `cart_add` | 每記下一件東西就呼叫一次 | `title`（必填）、`url`（商品頁連結）、`store`、`priceTwd`、`imageUrl`、`category`、`note`、`qty`（預設 1） | 整個購物車 `Cart`；屋主移除過同連結或同名的東西時多一個 `note` |
+| `cart_list` | 想知道小屋裡現在有什麼、總額多少、分享連結是什麼 | `{}` | `Cart`，另加 `share: { url, enabled, prices }` 和 `removals`（屋主最近移除的東西） |
+| `habits_report` | 屋主問購物習慣、花在哪、什麼時候買、有沒有東西還沒拆 | `{}` | `HabitsReport`（唯讀） |
 | `cart_remove` | 屋主說不要了，或你記錯了 | `itemId`（從 `cart_list` 拿）、`qty`（不填就整件拿掉） | 整個購物車 `Cart` |
 
 `Cart` 的欄位是 `revision`、`items`、`totalTwd`、`fill`、`updatedAt`。`fill` 是貨架填滿度，0 到 1，貨架有 12 格。
@@ -26,9 +27,23 @@ description: 把你替屋主採買或看中的東西記進小屋購物車，或�
 1. 一件東西呼叫一次 `cart_add`。數量用 `qty`，不要重複呼叫。
 2. `title` 寫商品本身的名字，例如「鑄鐵平底鍋 24cm」。不要寫成一句話。
 3. `priceTwd` 是新台幣整數單價，不含小數。不知道價格就不要填，不要猜。
-4. `url` 和 `imageUrl` 只接受 http 或 https。不要放含有帳號、訂單編號或追蹤參數的網址；有疑慮就不要填。
-5. 同一件東西（標題、店名、連結都一樣）再記一次，小屋會把數量加上去，不會多一格。
-6. 要移除東西，先用 `cart_list` 找到那件的 `id`，再呼叫 `cart_remove`。
+4. `url` 一定要填：你看到這件東西的商品頁原始連結。屋主在房間裡點它就回到那一頁。只接受 http 或 https。不要放含有帳號、訂單編號或結帳流程的網址；`utm_`、`fbclid` 這類追蹤參數小屋會自己拿掉。
+5. 商品頁上看得到主圖時，把圖片網址填進 `imageUrl`。沒填時，小屋會自己讀商品頁的 Open Graph 圖或商品結構化資料來補圖，抓不到就只顯示品名。
+6. `category` 從下面挑一個，給購物習慣報表用：`fashion` 服飾配件、`beauty` 美妝保養、`electronics` 3C 家電、`home` 居家生活、`kitchen` 廚房餐具、`food` 食品飲料、`books` 書籍文具、`hobby` 玩具嗜好、`outdoor` 運動戶外、`other` 其他。
+7. 每件都寫一句 `note`（最多 80 字）：你為什麼替屋主挑這件。口氣像手寫小卡，對屋主說話，用屋主說過的事或口味當理由，例如「你說早上的咖啡太苦，這個濾杯出水慢，剛剛好」。屋主拆快遞時，小卡會跟商品一起飄出來；分享連結的訪客也會看到。所以不要在 `note` 寫價格、折扣或任何數字，屋主隱藏價格時，帶數字的 `note` 會被藏起來。
+8. 同一件東西（標題、店名、連結都一樣）再記一次，小屋會把數量加上去，不會多一格。
+9. 要移除東西，先用 `cart_list` 找到那件的 `id`，再呼叫 `cart_remove`。
+
+## 屋主移除的東西
+
+屋主可以在房間的購物車清單裡把不喜歡的東西拿掉，也可以選一個原因。這是屋主在告訴你他的口味，不是記錯。
+
+1. 每次開始記東西或整理購物車前，先呼叫 `cart_list`，讀 `removals`（新的在前，最多 20 筆）。每筆有 `item`（`title`、`url`、`store`、`category`、`priceTwd`）、`reason`、`removedAt`、`by`（固定是 `owner`）。
+2. `reason` 是 `not_my_taste` 不合口味、`too_expensive` 太貴、`already_have` 已經有了、`changed_mind` 改變主意，或 `null`（屋主沒說）。
+3. 不要把屋主移除過的東西再記回來。看到同一個商品、同一家店的同類東西，或同一個原因會擋掉的東西（例如 `too_expensive` 之後別再挑更貴的同類），先問屋主。
+4. 從 `removals` 學他的口味：`not_my_taste` 避開那個分類或風格，`too_expensive` 留意價位，`already_have` 別再買同類，`changed_mind` 不要推論成討厭。沒有 `reason` 就別猜。
+5. `cart_add` 的回傳多了 `note` 時，代表你剛記的東西，屋主以前移除過（同連結或同名）。東西已經進購物車了，但請停下來問屋主還要不要；不要就用 `cart_remove` 拿掉，並照 `note` 裡的原因回報，不要自己決定留下。
+6. `removals` 只留最近 50 筆，更早的記錄會消失，所以屋主說過的偏好要自己記住。
 
 ## 回報給屋主
 
@@ -56,6 +71,16 @@ description: 把你替屋主採買或看中的東西記進小屋購物車，或�
 
 - `enabled` 是 `false`：照實說連結還沒公開，要屋主在房間按「分享」打開。不要說連結已經可以分享，也不要把連結當成可以轉給別人的東西。
 - `enabled` 是 `true`：可以把 `share.url` 給屋主，並說清楚訪客看到的是哪一種價格。屋主想換價格顯示或關掉分享，請屋主到房間的分享面板改。
+
+## 購物習慣
+
+`habits_report` 只讀，不會改購物車。屋主在房間按「習慣」看到的是同一份數字。回報時：
+
+1. 照 `observations` 和數字說，不要自己加推論。沒有 `observations` 就說現在還看不出明顯的習慣。
+2. 先講 `note`：只算目前購物車裡的東西，移除過的不在內；時間是東西第一次被記進小屋的時間（台灣時間），不是下單時間。
+3. `totals.unpricedLines` 大於 0 時說明有幾筆沒標價，沒算進總額和平均。`categories` 裡的「未分類」是沒填 `category` 的東西，常常是記的時候漏填，不是真的雜項。
+4. 一次記進很多件的話，它們的時間會一樣，星期和時段的分布就沒有意義，不要拿來說屋主「習慣在某天買」。
+5. 金額寫成 `NT$ 1,234`。
 
 ## 出錯時
 

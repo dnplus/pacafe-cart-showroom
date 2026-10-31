@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { emptyCart, formatTwd, replaceCart } from '../shared/cart';
 import { fixtureCartItems } from '../shared/fixtures/cart';
 import { ownerShelf } from '../src/cart/shelf';
-import { extendSlit, SLICE_DONE, shelvedIds, sliceProgress, unboxReducer, type Box, type Slit, type TapePoint, type UnboxEvent } from '../src/cart/unbox';
+import { extendSlit, popDuration, QUICK_MS, REDUCED_QUICK_MS, REDUCED_REVEAL_MS, REVEAL_MS, SLICE_DONE, shelvedIds, sliceProgress, STAGGER_MS, STAGGERED, unboxReducer, type Box, type Slit, type TapePoint, type UnboxEvent } from '../src/cart/unbox';
 
 const run = (events: readonly UnboxEvent[], from: readonly Box[] = []) => events.reduce(unboxReducer, from);
 const phases = (boxes: readonly Box[]) => boxes.map(box => `${box.id}:${box.phase}`);
@@ -107,5 +107,18 @@ describe('cutting the tape', () => {
   });
   it('lets a finger drift a little off the centerline', () => {
     expect(sliceProgress(stroke([0, 100, 200], 30))).toBe(1);
+  });
+});
+
+describe('how long a reveal takes', () => {
+  it('gives one parcel the full reveal and a burst the short staggered one, capped at STAGGERED steps', () => {
+    expect(popDuration(1, false)).toBe(REVEAL_MS);
+    expect(popDuration(2, false)).toBe(QUICK_MS + STAGGER_MS);
+    expect(popDuration(50, false)).toBe(QUICK_MS + STAGGERED * STAGGER_MS);
+    expect(REVEAL_MS).toBeGreaterThan(QUICK_MS * 2);
+  });
+  it('keeps a lone parcel readable under reduced motion and does not make a burst wait', () => {
+    expect(popDuration(1, true)).toBe(REDUCED_REVEAL_MS);
+    expect(popDuration(5, true)).toBe(REDUCED_QUICK_MS);
   });
 });

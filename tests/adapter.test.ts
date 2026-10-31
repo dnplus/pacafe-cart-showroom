@@ -11,7 +11,7 @@ import { memoryState } from './memory-state';
 const token = 'test-token-0123456789';
 const apiKey = 'fake-model-key-0123456789';
 const origin = 'https://showroom.test';
-const toolNames = ['cart_add', 'cart_list', 'cart_remove', 'promo_generate', 'promo_status'];
+const toolNames = ['cart_add', 'cart_list', 'cart_remove', 'habits_report', 'promo_generate', 'promo_status'];
 
 /** The real worker over one real Showroom held in memory, reached through a fetch the MCP client can use. */
 function showroom() {
@@ -49,7 +49,7 @@ async function run(options: { model: ReturnType<typeof scriptedModel>; room?: Re
 }
 
 describe('adapter', () => {
-  it('drives the model through the five tools and into the cart behind the showroom', async () => {
+  it('drives the model through the six tools and into the cart behind the showroom', async () => {
     const room = showroom();
     const model = scriptedModel([
       reply('resp-1', functionCall('call-1', 'cart_add', { title: '陶瓷馬克杯', store: '小島陶房', priceTwd: 420, qty: 2 }), functionCall('call-2', 'cart_add', { title: '亞麻餐墊', priceTwd: 290 })),
@@ -76,7 +76,7 @@ describe('adapter', () => {
 
     expect(later.map(request => request.previous_response_id)).toEqual(['resp-1', 'resp-2', 'resp-3']);
     expect(later.map(request => request.input.map((item: { call_id: string }) => item.call_id))).toEqual([['call-1', 'call-2'], ['call-3'], ['call-4']]);
-    expect(later.every(request => request.tool_choice === 'auto' && request.tools.length === 5 && request.input.every((item: { type: string }) => item.type === 'function_call_output'))).toBe(true);
+    expect(later.every(request => request.tool_choice === 'auto' && request.tools.length === toolNames.length && request.input.every((item: { type: string }) => item.type === 'function_call_output'))).toBe(true);
     const listing = JSON.parse(later[1].input[0].output);
     expect(listing.items).toHaveLength(2);
     expect(listing.share.url).toMatch(/^https:\/\/showroom\.test\/s\//);

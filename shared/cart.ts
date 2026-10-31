@@ -15,7 +15,13 @@ export const webUrl = z.url({ protocol: /^https?$/ }).max(2000);
 const timestamp = z.iso.datetime();
 const priceTwd = z.number().int().nonnegative().max(100_000_000);
 const MAX_QTY = 999;
+export const NOTE_MAX = 80;
+export const noteText = z.string().trim().min(1).max(NOTE_MAX);
 export const cartQty = z.number().int().min(1).max(MAX_QTY);
+
+export const CART_CATEGORIES = ['fashion', 'beauty', 'electronics', 'home', 'kitchen', 'food', 'books', 'hobby', 'outdoor', 'other'] as const;
+export const cartCategory = z.enum(CART_CATEGORIES);
+export type CartCategory = z.infer<typeof cartCategory>;
 
 export const cartItemSchema = z.strictObject({
   id: z.string().min(1).max(80),
@@ -26,6 +32,10 @@ export const cartItemSchema = z.strictObject({
   imageUrl: webUrl.nullable(),
   /** The item's image with its background removed (SAM), once that job has run. */
   cutoutUrl: webUrl.nullable(),
+  /** Carts stored before categories existed have no such key; they read as uncategorised. */
+  category: cartCategory.nullable().default(null),
+  /** Muse's one sentence on why it picked this for the owner; carts stored before notes existed read as no note. */
+  note: noteText.nullable().default(null),
   qty: cartQty,
   addedAt: timestamp,
   shelfSlot: z.number().int().nonnegative(),
@@ -49,6 +59,8 @@ export const cartItemInputSchema = z.strictObject({
   url: webUrl.optional(),
   priceTwd: priceTwd.optional(),
   imageUrl: webUrl.optional(),
+  category: cartCategory.optional(),
+  note: noteText.optional(),
   qty: cartQty.default(1),
 });
 export type CartItemInput = z.output<typeof cartItemInputSchema>;
@@ -67,14 +79,14 @@ export const formatTwd = (amount: number) => `NT$ ${Math.round(amount).toLocaleS
 export const emptyCart = (): Cart => ({ revision: 0, items: [], totalTwd: 0, fill: 0, updatedAt: new Date(0).toISOString() });
 
 /** FNV-1a: a short, stable name for an item's identity, so the same thing keeps its id and first-seen time across writes. */
-function fingerprint(text: string) {
+export function fingerprint(text: string) {
   let hash = 0x811c9dc5;
   for (let i = 0; i < text.length; i++) { hash ^= text.charCodeAt(i); hash = Math.imul(hash, 0x01000193); }
   return (hash >>> 0).toString(36);
 }
 
 const identityOf = (entry: { title: string; store?: string | null; url?: string | null }) => fingerprint(JSON.stringify([entry.title, entry.store ?? null, entry.url ?? null]));
-const asInput = (item: CartItem): CartItemInput => ({ title: item.title, store: item.store ?? undefined, url: item.url ?? undefined, priceTwd: item.priceTwd ?? undefined, imageUrl: item.imageUrl ?? undefined, qty: item.qty });
+const asInput = (item: CartItem): CartItemInput => ({ title: item.title, store: item.store ?? undefined, url: item.url ?? undefined, priceTwd: item.priceTwd ?? undefined, imageUrl: item.imageUrl ?? undefined, category: item.category ?? undefined, note: item.note ?? undefined, qty: item.qty });
 
 /**
  * The cart after a write that replaces its items: the same write twice gives back the same cart, revision included.
@@ -87,7 +99,7 @@ export function replaceCart(previous: Cart, input: readonly CartItemInput[], now
     const nth = seen.get(identity) ?? 0; seen.set(identity, nth + 1);
     const id = `item-${identity}-${nth}`, before = previous.items.find(item => item.id === id);
     return { id, title: entry.title, store: entry.store ?? null, url: entry.url ?? null, priceTwd: entry.priceTwd ?? null, imageUrl: entry.imageUrl ?? null,
-      cutoutUrl: before && before.imageUrl === (entry.imageUrl ?? null) ? before.cutoutUrl : null, qty: entry.qty, addedAt: before?.addedAt ?? now, shelfSlot };
+      cutoutUrl: before && before.imageUrl === (entry.imageUrl ?? null) ? before.cutoutUrl : null, category: entry.category ?? null, note: entry.note ?? null, qty: entry.qty, addedAt: before?.addedAt ?? now, shelfSlot };
   });
   if (JSON.stringify(items) === JSON.stringify(previous.items)) return previous;
   const { totalTwd, fill } = cartView(items);
@@ -98,7 +110,7 @@ export function replaceCart(previous: Cart, input: readonly CartItemInput[], now
 export function addCartItem(cart: Cart, input: CartItemInput, now: string): Cart {
   const lines = cart.items.map(asInput), at = cart.items.findIndex(item => identityOf(item) === identityOf(input));
   if (at < 0) lines.push(input);
-  else lines[at] = { ...lines[at], qty: Math.min(MAX_QTY, lines[at].qty + input.qty), priceTwd: input.priceTwd ?? lines[at].priceTwd, imageUrl: input.imageUrl ?? lines[at].imageUrl };
+  else lines[at] = { ...lines[at], qty: Math.min(MAX_QTY, lines[at].qty + input.qty), priceTwd: input.priceTwd ?? lines[at].priceTwd, imageUrl: input.imageUrl ?? lines[at].imageUrl, category: input.category ?? lines[at].category, note: input.note ?? lines[at].note };
   return replaceCart(cart, lines, now);
 }
 

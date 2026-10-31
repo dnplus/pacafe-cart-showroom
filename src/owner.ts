@@ -2,6 +2,7 @@ import { readStored, writeStored } from './browserStorage';
 
 const OWNER_KEY = 'showroom.ownerKey';
 export const hasOwnerKey = () => readStored(OWNER_KEY) !== null;
+export const ownerKey = () => readStored(OWNER_KEY);
 export const saveOwnerKey = (key: string) => writeStored(OWNER_KEY, key.trim() || null);
 
 /** fetch for the owner's routes (/api/cart, /api/share): sends the saved key as a bearer token. env.local answers without one. */

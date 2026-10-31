@@ -2,11 +2,12 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { RunnerClaim, RunnerUpdate } from '../shared/runner.ts';
-import { applyFixes, keyframes, type Issue, type QaReport, type QaRound } from './qa.ts';
+import { applyFixes, fitVoice, keyframes, type Issue, type QaReport, type QaRound } from './qa.ts';
 import type { Renderer } from './render.ts';
-import { fallbackStoryboarder, mockReviewer, sparkOrMockReviewer, sparkReviewer, sparkStoryboarder, type Reviewer, type Storyboarder } from './spark.ts';
+import { fallbackStoryboarder, mockReviewer, museStoryboarder, sparkOrMockReviewer, sparkReviewer, sparkStoryboarder, type Reviewer, type Storyboarder } from './spark.ts';
 import type { Storyboard } from './storyboard.ts';
-import { selectTts, type Tts } from './tts.ts';
+import type { VoiceConfig } from '../shared/voice.ts';
+import { selectTts, ttsFor, type Tts } from './tts.ts';
 import type { RunnerWorker } from './worker-client.ts';
 
 export const MAX_QA_ROUNDS = 3;
@@ -16,6 +17,7 @@ export interface RunnerDeps {
   worker: RunnerWorker;
   storyboarder: Storyboarder;
   tts: Tts;
+  voiceFor?: (config: VoiceConfig) => Tts;
   reviewer: Reviewer;
   renderer: Renderer;
   /** Each job works in `<workDir>/<jobId>`, emptied when the job starts so a re-claimed job starts clean. */
@@ -26,13 +28,12 @@ export interface RunnerDeps {
   log: (line: string) => void;
 }
 
-/** Spark for the storyboard and the review when both Meta variables are set, the local fallback and mock rules otherwise. */
 export function modelsFromEnv(env: Env, http: typeof fetch, log: (line: string) => void): Pick<RunnerDeps, 'storyboarder' | 'reviewer' | 'tts'> {
   const missing = ['META_API_KEY', 'META_API_BASE_URL'].filter(name => !env[name]);
   const meta = missing.length ? null : { baseUrl: env.META_API_BASE_URL!.replace(/\/+$/, ''), apiKey: env.META_API_KEY!, fetch: http };
   log(meta ? `分鏡和看片用 Spark（${meta.baseUrl}）。` : `沒有設定 ${missing.join('、')}：分鏡用本地 fallback，看片用 mock 規則，不花錢。`);
   return {
-    storyboarder: meta ? sparkStoryboarder(meta, log) : fallbackStoryboarder,
+    storyboarder: museStoryboarder(meta ? sparkStoryboarder(meta, log) : fallbackStoryboarder, log),
     reviewer: meta ? sparkOrMockReviewer(sparkReviewer(meta), log) : mockReviewer,
     tts: selectTts(env, http, log),
   };
@@ -85,6 +86,9 @@ const sha256 = (file: string) => createHash('sha256').update(fs.readFileSync(fil
  */
 export async function runJob(claim: RunnerClaim, deps: RunnerDeps): Promise<'done' | 'failed'> {
   const { job } = claim, dir = path.join(deps.workDir, job.id);
+  // The room's voice key arrives with the claim, so it is taken out of every message as the environment's keys are.
+  const redact = claim.voice ? (text: string) => deps.redact(text).replaceAll(claim.voice!.apiKey, '[REDACTED]') : deps.redact;
+  const tts = claim.voice ? (deps.voiceFor ?? (config => ttsFor(config, fetch)))(claim.voice) : deps.tts;
   let costUsd = 0;
   const report = (update: Exclude<RunnerUpdate, { status: 'done' | 'failed' }>['status'], progress: number) => deps.worker.update(job.id, { status: update, progress, costUsd });
   try {
@@ -96,7 +100,8 @@ export async function runJob(claim: RunnerClaim, deps: RunnerDeps): Promise<'don
     await report('storyboard', 1);
 
     await report('voice', 0);
-    await deps.tts.voice(drafted.storyboard);
+    if (claim.voice) deps.log(`${job.id}：配音用房間設定的 ${tts.name}`);
+    await tts.voice(drafted.storyboard);
     await report('voice', 1);
 
     await report('rendering', 0);
@@ -110,7 +115,10 @@ export async function runJob(claim: RunnerClaim, deps: RunnerDeps): Promise<'don
     if (errors.length) throw new Error(`QA ${qa.rounds.length} 輪後仍有 ${errors.length} 個 error：${describe(errors)}`);
 
     // A wording fix changes what is said, so the final storyboard is voiced again; unchanged scenes come from the cache.
-    const input = { storyboard: qa.storyboard, voice: await deps.tts.voice(qa.storyboard) };
+    const voice = await tts.voice(qa.storyboard);
+    const input = { storyboard: fitVoice(qa.storyboard, voice), voice };
+    const cut = voice.filter(clip => { const scene = input.storyboard.scenes.find(s => s.id === clip.sceneId)!; return clip.durationSec > scene.endSec - scene.startSec; });
+    if (cut.length) deps.log(`${job.id}：配音比片長多，${cut.map(clip => clip.sceneId).join('、')} 的尾巴會被切掉`);
     const videoFile = path.join(dir, 'video.mp4'), thumbnailFile = path.join(dir, 'thumbnail.jpg');
     // Progress reports go out one at a time and in order; the first one the worker refuses fails the job after the render.
     let reported = 0, reports = Promise.resolve(), refused: unknown;
@@ -121,7 +129,7 @@ export async function runJob(claim: RunnerClaim, deps: RunnerDeps): Promise<'don
     });
     await reports;
     if (refused) throw refused;
-    const opening = qa.storyboard.scenes[0];
+    const opening = input.storyboard.scenes[0];
     await deps.renderer.still(input, (opening.startSec + opening.endSec) / 2, thumbnailFile);
     await deps.worker.upload(job.id, 'video.mp4', fs.readFileSync(videoFile));
     await deps.worker.upload(job.id, 'thumbnail.jpg', fs.readFileSync(thumbnailFile));
@@ -129,10 +137,10 @@ export async function runJob(claim: RunnerClaim, deps: RunnerDeps): Promise<'don
     deps.log(`${job.id}：done，${durationSec} 秒，估計花費 $${costUsd.toFixed(4)}`);
     return 'done';
   } catch (error) {
-    const message = deps.redact(error instanceof Error ? error.message : String(error)).trim().slice(0, 500) || 'runner failed';
+    const message = redact(error instanceof Error ? error.message : String(error)).trim().slice(0, 500) || 'runner failed';
     deps.log(`${job.id}：failed：${message}`);
     try { await deps.worker.update(job.id, { status: 'failed', costUsd, error: message }); } catch (reportError) {
-      deps.log(`${job.id}：回報 failed 也失敗：${deps.redact(reportError instanceof Error ? reportError.message : String(reportError))}`);
+      deps.log(`${job.id}：回報 failed 也失敗：${redact(reportError instanceof Error ? reportError.message : String(reportError))}`);
     }
     return 'failed';
   }

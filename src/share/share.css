@@ -32,12 +32,8 @@
 .share-hud .cart-hud-head small{display:block;font-size:12px;color:var(--muted);font-weight:750}
 .share-stats{grid-template-columns:auto 1fr}
 .share-stats-count{grid-template-columns:auto}
-.share-hud .cart-list{max-height:min(520px,58dvh)}
+.share-hud .cart-list{max-height:min(560px,62dvh)}
 .share-list li{align-items:center}
-.share-list .cart-line-title{flex:1}
-.share-list .cart-line-title a{display:flex;align-items:center;gap:3px;width:fit-content;margin-top:2px;font-size:12px;font-weight:800}
-.share-thumb{flex:none;width:44px;height:44px;border-radius:10px;background:#f5efe0;display:grid;place-items:center;color:#b49a76;overflow:hidden}
-.share-thumb img{width:100%;height:100%;object-fit:cover}
 .share-missing-page{align-items:center;justify-content:center;padding:24px}
 .share-missing{max-width:360px;background:var(--paper);border:1px solid #e6dcc5;border-radius:18px;box-shadow:0 10px 30px #3e45231f;padding:22px 24px;text-align:center;display:grid;justify-items:center;gap:12px}
 .share-missing p{margin:0;font-weight:800;line-height:1.5}

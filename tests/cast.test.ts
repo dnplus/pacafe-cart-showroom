@@ -23,7 +23,7 @@ function room(state = memoryState(), vars: Partial<Env> = {}) {
 describe('the clerk the owner picks', () => {
   it('starts as the default clerk with a placeholder in the owner spot', async () => {
     const first = await room().view();
-    expect(first).toMatchObject({ character: 'clerk', owner: { kind: 'placeholder' }, nickname: '屋主' });
+    expect(first).toMatchObject({ character: 'muse', owner: { kind: 'placeholder' }, nickname: '屋主' });
   });
 
   it('is still the pick when a new object reads the same storage', async () => {
@@ -32,6 +32,12 @@ describe('the clerk the owner picks', () => {
       expect((await room(state).choose({ character })).status).toBe(200);
       expect((await room(state).view()).character).toBe(character);
     }
+  });
+
+  it('keeps a stored pick of a retired clerk standing as Muse', async () => {
+    const state = memoryState();
+    await state.storage.put('cast', { character: 'clerk-mint', owner: { kind: 'placeholder' } });
+    expect((await room(state).view()).character).toBe('muse');
   });
 
   it('refuses a character that is not in the registry, and keeps the old pick', async () => {

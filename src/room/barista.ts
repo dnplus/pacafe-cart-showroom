@@ -1,17 +1,27 @@
 import type { BaristaAppearance, Character } from '../../shared/domain';
 import type { TextKey } from '../i18n/messages';
-import { residentArt } from './residentArt';
+import { ownerArt, residentArt } from './residentArt';
 import { ownerSilhouette, residentSilhouette } from './silhouette';
 
-interface BaristaArt { label: TextKey; portrait: string; standee: string; height?: number }
+interface BaristaArt { label: TextKey; portrait: string; standee: string; height?: number; sheet?: string }
 export const baristaArt: Readonly<Record<Character, BaristaArt>> = residentArt;
 
-/** The full-body images the barista can wear, best first; the plain silhouette stands in when none loads. */
-export function baristaBodies(character: Character, appearance?: BaristaAppearance): { src: string; height?: number }[] {
+export interface Body { src: string; height?: number; sheet?: boolean }
+
+export function baristaBodies(character: Character, appearance?: BaristaAppearance): Body[] {
   const art = baristaArt[character];
-  return [...(appearance?.standee ? [{ src: `/media/${appearance.standee.key}` }] : []), { src: art.standee, height: art.height }, { src: residentSilhouette }];
+  return [
+    ...(appearance?.standee ? [{ src: `/media/${appearance.standee.key}` }] : []),
+    ...(art.sheet ? [{ src: art.sheet, height: art.height, sheet: true }] : []),
+    { src: art.standee, height: art.height },
+    { src: residentSilhouette },
+  ];
 }
 
-const OWNER_HEIGHT = 1.7;
-/** The owner's standee: the sprite drawn from their photo when there is one, else the stand-in figure. */
-export const ownerBodies = (sprite: string | null) => [...(sprite ? [{ src: sprite, height: OWNER_HEIGHT }] : []), { src: ownerSilhouette, height: OWNER_HEIGHT }];
+const OWNER_HEIGHT = 2;
+export const ownerBodies = (sprite: string | null): Body[] => [
+  ...(sprite ? [{ src: sprite, height: OWNER_HEIGHT }] : []),
+  { src: ownerArt.sheet, height: ownerArt.height, sheet: true },
+  { src: ownerArt.standee, height: ownerArt.height },
+  { src: ownerSilhouette, height: OWNER_HEIGHT },
+];

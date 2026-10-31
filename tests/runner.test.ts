@@ -282,6 +282,60 @@ describe('/api/promo', () => {
     expect((await room('/api/promo').then(response => response.json()) as PromoJob).id).toBe(longer.jobId);
   });
 
+  describe('with a script from Muse', () => {
+    const script = { opening: ['嗨，歡迎來到我的小屋。'], items: [{ position: 2, title: '降噪耳機', lines: ['通勤全靠它。'] }], ending: ['謝謝你來逛。'] };
+    const stock = async (w: ReturnType<typeof world>) => { for (const item of [{ title: '手沖咖啡濾杯', priceTwd: 650 }, { title: '無線降噪耳機', priceTwd: 3990 }]) await w.cartAdd(item); };
+
+    it('stores the script on the job, hands it to the runner in the claim, and reports it in promo_status', async () => {
+      const w = world();
+      await stock(w);
+      const id = await w.queue({ script });
+      expect((await w.status(id)).script).toEqual(script);
+      const claimed = await w.claim();
+      expect(claimed.job).toMatchObject({ id, status: 'storyboard', script });
+      expect((await w.status(id)).script).toEqual(script);
+    });
+
+    it('gives a job without a script a null one, and tells scripts apart when deciding whether a queued job is the same', async () => {
+      const w = world();
+      await stock(w);
+      const plain = await w.queue();
+      expect((await w.status(plain)).script).toBeNull();
+      const scripted = await w.queue({ script });
+      expect(scripted).not.toBe(plain);
+      expect(await w.queue({ script })).toBe(scripted);
+      expect(await w.queue({ script: { ...script, ending: ['再見。'] } })).not.toBe(scripted);
+    });
+
+    it('refuses a script that does not fit the cart with messages Muse can act on, and queues nothing', async () => {
+      const w = world();
+      await stock(w);
+      const wrongTitle = await w.call('promo_generate', { script: { items: [{ position: 1, title: '耳機', lines: ['好'] }] } });
+      expect(wrongTitle.isError).toBe(true);
+      expect(wrongTitle.content[0].text).toMatch(/腳本沒有收下.*position 1 寫的 title「耳機」，但貨架第 1 件是「手沖咖啡濾杯」/);
+      const checkout = await w.call('promo_generate', { script: { ending: ['喜歡就立即購買'] } });
+      expect(checkout.content[0].text).toMatch(/參數不正確.*ending\.0 .*沒有結帳流程/);
+      const beyond = await w.call('promo_generate', { script: { items: [{ position: 3, lines: ['好'] }] } });
+      expect(beyond.content[0].text).toMatch(/position 3 沒有場景/);
+      expect((await w.next()).status).toBe(204);
+    });
+
+    it('refuses an amount when the owner hides prices, and allows it when they show them', async () => {
+      const w = world();
+      await stock(w);
+      expect((await w.room('/api/share', { method: 'PUT', ...w.json({ enabled: false, prices: 'hidden', nickname: '小島' }) })).status).toBe(200);
+      const priced = { opening: ['手沖濾杯只要 NT$650。'] };
+      const refused = await w.call('promo_generate', { script: priced });
+      expect(refused.isError).toBe(true);
+      expect(refused.content[0].text).toMatch(/opening 提到價錢，但屋主把價格設成隱藏/);
+      const viaRoom = await w.room('/api/promo', { method: 'POST', ...w.json({ script: priced }) });
+      expect(viaRoom.status).toBe(400);
+      expect(await viaRoom.json()).toMatchObject({ error: 'invalid_script', problems: [expect.stringContaining('opening 提到價錢')] });
+      expect((await w.room('/api/share', { method: 'PUT', ...w.json({ enabled: false, prices: 'exact', nickname: '小島' }) })).status).toBe(200);
+      expect((await w.call('promo_generate', { script: priced })).isError).toBe(false);
+    });
+  });
+
   it('refuses an empty cart and a body that is not a request', async () => {
     const { room, json } = world();
     const empty = await room('/api/promo', { method: 'POST', ...json({}) });

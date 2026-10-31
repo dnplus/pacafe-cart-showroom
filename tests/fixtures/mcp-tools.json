@@ -3,7 +3,7 @@
     {
       "name": "cart_add",
       "title": "加入購物車",
-      "description": "把買到或看上的東西記進小屋購物車。同名、同店、同連結的東西會合併數量。只做記錄，不會下單。",
+      "description": "把買到或看上的東西記進小屋購物車。url 請填商品頁的原始連結，小屋會在房間附上連結；沒給 imageUrl 時，小屋會從商品頁抓圖。category 是商品分類，給購物習慣報表用。note 是你替屋主挑這件東西的一句話（最多 80 字，口氣像手寫小卡，不要寫價格），屋主拆快遞時小卡會跟商品一起飄出來；每件都請寫。同名、同店、同連結的東西會合併數量。如果屋主之前從房間移除過同連結或同名的東西，回傳最上層會多一個 note 欄位說明，請先問屋主再決定留不留。只做記錄，不會下單。",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -32,6 +32,26 @@
             "maxLength": 2000,
             "format": "uri"
           },
+          "category": {
+            "type": "string",
+            "enum": [
+              "fashion",
+              "beauty",
+              "electronics",
+              "home",
+              "kitchen",
+              "food",
+              "books",
+              "hobby",
+              "outdoor",
+              "other"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
           "qty": {
             "default": 1,
             "type": "integer",
@@ -54,10 +74,35 @@
     {
       "name": "cart_list",
       "title": "查看購物車",
-      "description": "列出購物車內容、總額，以及分享連結、是否已開啟分享和訪客看到的價格（hidden 隱藏、range 區間、exact 精確）。",
+      "description": "列出購物車內容、總額，以及分享連結、是否已開啟分享和訪客看到的價格（hidden 隱藏、range 區間、exact 精確）。removals 是屋主最近從房間移除的東西（新的在前、最多 20 筆，含品名、連結、店、分類、價格、原因和時間）；原因是 not_my_taste 不合口味、too_expensive 太貴、already_have 已經有了、changed_mind 改變主意，或 null 沒說。這些是屋主的口味，別再記回來。",
       "inputSchema": {
         "type": "object",
         "properties": {},
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "habits_report",
+      "title": "購物習慣報表",
+      "description": "讀取購物習慣報表：各分類和各店的花費與件數、價位分布、記下東西的星期和時段（台灣時間）、平均與最貴的一筆、沒標價的件數、已拆和還沒拆的快遞，以及幾句從數字推出來的觀察。只算目前購物車裡的東西，已移除的不在內。language 決定分類名稱和觀察句的語言（預設 zh-TW）。唯讀。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "language": {
+            "default": "zh-TW",
+            "type": "string",
+            "enum": [
+              "zh-TW",
+              "en"
+            ]
+          }
+        },
         "additionalProperties": false
       },
       "annotations": {
@@ -100,7 +145,7 @@
     {
       "name": "promo_generate",
       "title": "排程介紹影片",
-      "description": "為目前的購物車排一支介紹影片，回傳 jobId，再用 promo_status 查進度。購物車沒變、參數相同時重複呼叫會回傳同一個 jobId。",
+      "description": "為目前的購物車排一支介紹影片，回傳 jobId，再用 promo_status 查進度。購物車沒變、參數相同時重複呼叫會回傳同一個 jobId。可以用 script 自己寫口白：影片由屋主本人主持，口白是屋主的第一人稱；opening 是開場，items 每項用 position（貨架順序，從 1 算起，和 cart_list 一樣）對應一件東西，ending 是結尾。每景 1 到 3 行、一行最多 30 字，不要出現結帳、下單、購買這類字眼，屋主隱藏價格時不要提金額。沒寫的景由 runner 補上預設口白。",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -114,6 +159,71 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 200
+          },
+          "language": {
+            "default": "zh-TW",
+            "type": "string",
+            "enum": [
+              "zh-TW",
+              "en"
+            ]
+          },
+          "script": {
+            "type": "object",
+            "properties": {
+              "opening": {
+                "minItems": 1,
+                "maxItems": 3,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "items": {
+                "maxItems": 8,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "position": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 8
+                    },
+                    "title": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "lines": {
+                      "minItems": 1,
+                      "maxItems": 2,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  },
+                  "required": [
+                    "position",
+                    "lines"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "ending": {
+                "minItems": 1,
+                "maxItems": 3,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "additionalProperties": false
           }
         },
         "additionalProperties": false

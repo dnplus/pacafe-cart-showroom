@@ -13,13 +13,16 @@ import { clampRoomAngle, clampRoomZoom, frameRoom, roomFov } from './roomCamera'
 import type { SceneryId } from '../../shared/scenery';
 import { barSpots, defaultFurniture, interactionsOf, pieces as catalog, type FurnitureItem, type FurnitureKind } from './furniture';
 import { furnitureModel, type FurnitureModel } from './furnitureModels';
-import { cartScene } from '../cart/cartScene';
+import { cartScene, PRODUCT_POKED } from '../cart/cartScene';
 import type { Shelf } from '../cart/shelf';
 import { hangOnWall } from './pieces';
-import { cameraView, Card, dress, frameOf, illustrationFrame, measureImage, orientCard, releaseCardPlane, singleLayout, standeeMaterial, type Layout, type StandeeUniforms } from './standee';
-import { baristaBodies, ownerBodies } from './barista';
+import { cameraView, Card, dress, frameOf, illustrationFrame, measureImage, orientCard, releaseCardPlane, sheetLayout, singleLayout, standeeMaterial, type Layout, type StandeeUniforms } from './standee';
+import { baristaBodies, ownerBodies, type Body } from './barista';
 import { residentSilhouette } from './silhouette';
-import type { Vec } from './behavior';
+import { standingCells } from './sprites';
+import { sheetFormats } from '../../shared/sprites';
+import { actorCell, beatPose, fetchesFromShelf, insideArea, newActor, sendTo, stepActor, type Actor, type Area, type Beat, type Cue } from './castMotion';
+import { facingOf, type Vec } from './behavior';
 import { buildLight, buildStage } from './light';
 import { floorTop, roomFloor, roomSize, roomWalls } from '../../shared/room-dimensions';
 import { daylight, type Daylight } from './daylight';
@@ -35,7 +38,7 @@ export type GlowTarget = 'counter' | 'shelf';
 export interface CameraView { angle: number; zoom: number; panX: number; panY: number }
 export interface RoomDebugApi { scene: THREE.Scene; camera: THREE.PerspectiveCamera; renderer: THREE.WebGLRenderer; render(): void; actor: THREE.Object3D }
 export type RoomDebugHook = (api: RoomDebugApi) => void;
-export interface RoomRenderer { brightness(value: number): void; finish?(choice: RoomFinishChoice): void; update(scenery: SceneryId): void; motion(paused: boolean): void; graphics?(profile: GraphicsProfile): void; sleep?(asleep: boolean): void; open(listener: (panel: 'counter') => void): void; barista(character: Character, appearance?: BaristaAppearance): void; /** The owner's standee at the room's centre: this image (an object URL or path), or the placeholder figure with null. */ owner?(sprite: string | null): void; view(angle: number): void; zoomAt(factor: number, clientX: number, clientY: number): void; zoomBy(factor: number): void; panBy(dx: number, dy: number): void; resetView(): void; cameraView?(): CameraView; restoreView?(view: CameraView): void; glowTarget(target: GlowTarget, reason: 'hover' | 'focus', on: boolean): void; present?(spot: string | null): void; shoot?(shot: PresenterShot | null): void; studioSet?(set: StudioSet | null): void; perform?(act: PerformanceAct, elapsed: number): void; furniture(items: FurnitureItem[]): void; /** Puts the products on the shelf and the register's text on its display. */ shelf(shelf: Shelf): void; capture?(width: number, height: number, background: string): HTMLCanvasElement | null; pokeAt(clientX: number, clientY: number): string | null; dispose(): void }
+export interface RoomRenderer { brightness(value: number): void; finish?(choice: RoomFinishChoice): void; update(scenery: SceneryId): void; motion(paused: boolean): void; graphics?(profile: GraphicsProfile): void; sleep?(asleep: boolean): void; open(listener: (panel: 'counter') => void): void; barista(character: Character, appearance?: BaristaAppearance): void; /** The owner's standee at the room's centre: this image (an object URL or path), or the placeholder figure with null. */ owner?(sprite: string | null): void; /** Something happened in the shop: the clerk and the owner react (hop, a mark above the head, the clerk fetching from the shelf). */ cue?(cue: Cue): void; view(angle: number): void; zoomAt(factor: number, clientX: number, clientY: number): void; zoomBy(factor: number): void; panBy(dx: number, dy: number): void; resetView(): void; cameraView?(): CameraView; restoreView?(view: CameraView): void; glowTarget(target: GlowTarget, reason: 'hover' | 'focus', on: boolean): void; present?(spot: string | null): void; shoot?(shot: PresenterShot | null): void; studioSet?(set: StudioSet | null): void; perform?(act: PerformanceAct, elapsed: number): void; furniture(items: FurnitureItem[]): void; /** Puts the products on the shelf and the register's text on its display. */ shelf(shelf: Shelf): void; capture?(width: number, height: number, background: string): HTMLCanvasElement | null; pokeAt(clientX: number, clientY: number): string | null; dispose(): void }
 
 
 /** A front camera on the presenter: the script's zoom 1–3, and how far it has turned from the host (0) to the spot's desk (1). */
@@ -105,6 +108,7 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
   let furniture: FurnitureItem[] = [...defaultFurniture];
   type LivePiece = { item: FurnitureItem; node: THREE.Group; model: FurnitureModel; key: string; poked: number };
   const live = new Map<string, LivePiece>();
+  const pending: Promise<unknown>[] = [];
   let lightingDirty = true;
   const glow = glowLayer(); let hovered: string | null = null;
   const targetLit: Record<GlowTarget, Set<'hover' | 'focus'>> = { counter: new Set(), shelf: new Set() };
@@ -127,12 +131,21 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
     const model = furnitureModel(item);
     model.node.traverse(part => { part.userData.pieceId = item.id; });
     furnitureRoot.add(model.node); placePiece(item, model.node);
-    return { item, node: model.node, model, key: pieceKey(item), poked: -Infinity };
+    const piece = { item, node: model.node, model, key: pieceKey(item), poked: -Infinity };
+    pending.push(model.ready.then(loaded => { if (loaded && live.get(item.id) === piece) modelArrived(piece); }));
+    return piece;
+  }
+  function modelArrived(piece: LivePiece) {
+    if (disposed) return;
+    piece.model.node.traverse(part => { part.userData.pieceId = piece.item.id; });
+    glow.invalidate(piece.node); lightingDirty = true; seatCart(); placeGlow();
+    renderer.shadowMap.needsUpdate = true; frameCamera(); anchors(); render();
   }
   function dropPiece(piece: LivePiece) { glow.invalidate(piece.node); piece.model.dispose(); live.delete(piece.item.id); }
   let bar = barSpots(furniture);
   let counter = { ...bar.counter };
   const cart = cartScene(); group.add(cart.register);
+  pending.push(cart.ready.then(() => { if (!disposed) { seatCart(); renderer.shadowMap.needsUpdate = true; anchors(); render(); } }));
   const shelfPiece = () => [...live.values()].find(piece => piece.item.kind === 'beanShelf');
   /** The products ride on the shelf and the register on the bar, so a tap on either counts as that piece. */
   function seatCart() {
@@ -201,21 +214,51 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
   function size(sprite: Card, width: number, height: number, top = height) { sprite.scale.set(width, height, 1); sprite.userData.base = { width, height, top }; }
   const baseSize = (sprite: Card): { width: number; height: number; top: number } => sprite.userData.base ?? { width: 2, height: 2, top: 2 };
   const layouts = new Map<string, Layout>();
-  function measured(path: string, image: HTMLImageElement, height?: number) {
+  const illustrationFrames = new Map<string, THREE.Texture>();
+  function measured(path: string, image: HTMLImageElement, body?: Body) {
     let layout = layouts.get(path);
-    if (!layout) { layout = singleLayout(measureImage(image, 1, 1, [[0, 0]]), image.width, image.height, height); layouts.set(path, layout); }
+    if (!layout) {
+      const full = { l: 0, t: 0, r: 1, b: 1 };
+      if (body?.sheet) {
+        const { rows, facings } = sheetFormats.four;
+        layout = sheetLayout(measureImage(image, 8, rows, standingCells('four'), facings.length) ?? { union: full, idle: full, pixel: false }, image.height, rows, body.height);
+      } else layout = singleLayout(measureImage(image, 1, 1, [[0, 0]]), image.width, image.height, body?.height);
+      layouts.set(path, layout);
+    }
     return layout;
   }
-  /** Illustrations need minification filtering, so the one image is drawn into its own frame texture with mipmaps. */
+  /** Illustrations need minification filtering, so each cell of the image is drawn into its own frame texture with mipmaps. */
+  function paintFrame(sprite: Card, col: number, row: number) {
+    const layout = sprite.userData.layout as Layout, source = sprite.userData.source as THREE.Texture;
+    if (!layout.pixel) {
+      const key = `${source.uuid}:${col}:${row}`; let isolated = illustrationFrames.get(key);
+      if (!isolated) {
+        const frame = illustrationFrame(source.image as HTMLImageElement, layout.cols, layout.rows, col, row);
+        if (frame) { frame.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy()); textures.add(frame); illustrationFrames.set(key, frame); isolated = frame; }
+      }
+      if (isolated) {
+        const previous = sprite.material.map;
+        if (previous && !previous.userData.isolatedFrame) { textures.delete(previous); previous.dispose(); }
+        sprite.material.map = isolated;
+        dress(isolated, sprite.userData.uniforms, { ...layout, cols: 1, rows: 1 }, 0, 0);
+        return;
+      }
+    }
+    dress(sprite.material.map!, sprite.userData.uniforms, layout, col, row);
+  }
   function wear(sprite: Card, source: THREE.Texture, layout: Layout) {
     const previous = sprite.material.map;
-    if (previous) { textures.delete(previous); previous.dispose(); }
-    const isolated = layout.pixel ? null : illustrationFrame(source.image as HTMLImageElement, 1, 1, 0, 0);
-    if (isolated) isolated.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
-    const map = isolated ?? source.clone(); map.needsUpdate = true; textures.add(map);
-    sprite.material.map = map; dress(map, sprite.userData.uniforms, layout, 0, 0);
+    if (previous && !previous.userData.isolatedFrame) { textures.delete(previous); previous.dispose(); }
+    const map = source.clone(); map.needsUpdate = true; textures.add(map);
+    sprite.material.map = map; sprite.userData.source = source; sprite.userData.layout = layout; sprite.userData.sheet = layout.cols > 1;
+    paintFrame(sprite, 0, 0);
     sprite.material.needsUpdate = true;
     const f = frameOf(layout); sprite.center.copy(f.center); size(sprite, f.width, f.height, f.top);
+  }
+  function forget(path: string) {
+    const source = maps.get(path); if (!source) return;
+    for (const [key, frame] of illustrationFrames) if (key.startsWith(`${source.uuid}:`)) { textures.delete(frame); frame.dispose(); illustrationFrames.delete(key); }
+    textures.delete(source); source.dispose(); maps.delete(path); layouts.delete(path); failed.delete(path);
   }
   function standCard(flip: number, at: Vec) {
     const { material: m, uniforms } = standeeMaterial(); materials.add(m);
@@ -226,6 +269,21 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
   const baristaStand = standCard(-1, bar.barista);
   /** The owner's standee stands on the floor's open middle, between the studio set and the counter, clear of the shelf. */
   const ownerStand = standCard(1, ownerSpot);
+  interface Figure { stand: Card; actor: Actor; beat?: Beat; mark: THREE.Sprite; flipTo: number; rest: number; phase: number; shown: string }
+  const markTextures = new Map<string, THREE.Texture>();
+  function markTexture(text: string) {
+    let texture = markTextures.get(text); if (texture) return texture;
+    const canvas = document.createElement('canvas'); canvas.width = canvas.height = 128; const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#fffaf0'; ctx.strokeStyle = '#a87451'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(64, 64, 52, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = text === '♥' ? '#e0607a' : text === '!' ? '#d9822b' : '#5f8f6e'; ctx.font = 'bold 72px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, 64, 70);
+    texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace; textures.add(texture); markTextures.set(text, texture); return texture;
+  }
+  function figure(stand: Card, at: Vec, phase: number): Figure {
+    const material = new THREE.SpriteMaterial({ transparent: true, depthTest: false, toneMapped: false }); materials.add(material);
+    const mark = new THREE.Sprite(material); mark.visible = false; mark.renderOrder = 20; group.add(mark);
+    return { stand, actor: newActor(at), mark, flipTo: stand.flip, rest: stand.flip, phase, shown: '' };
+  }
+  const baristaFig = figure(baristaStand, bar.barista, 0), ownerFig = figure(ownerStand, ownerSpot, 2.1);
   /** A performance in this room: where the barista hosts it and the act playing, counted from `since` on the room clock. */
   let presenting: { spot: string; act: PerformanceAct; since: number } | null = null;
   let presenterPlace: { key: string; place: ReturnType<typeof hostPlace> } | null = null;
@@ -240,13 +298,14 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
     const place = presenterPlaceNow();
     const at = place?.stand ?? bar.barista;
     baristaStand.position.set(at.x, .3, at.z);
-    baristaStand.flip = place ? 1 : -1;
+    baristaFig.actor = newActor(at); baristaFig.rest = baristaFig.flipTo = place ? 1 : -1;
+    baristaStand.flip = baristaFig.rest;
     if (presenting) host.dataset.presenter = JSON.stringify({ spot: presenting.spot, act: presenting.act, onStage: Boolean(place), seated: false, place });
     else delete host.dataset.presenter;
   }
-  let baristaLook: Character = 'clerk'; let baristaOwn: BaristaAppearance | undefined; let ownerSprite: string | null = null;
+  let baristaLook: Character = 'muse'; let baristaOwn: BaristaAppearance | undefined; let ownerSprite: string | null = null;
   /** Puts the first body that loads on `stand` and says which kind it is in `data-<source>`; `place` runs when the image changes. */
-  function dressStand(stand: Card, bodies: { src: string; height?: number }[], source: 'baristaSource' | 'ownerSource', place: () => void, kind: (path: string) => string) {
+  function dressStand(stand: Card, bodies: Body[], source: 'baristaSource' | 'ownerSource', place: () => void, kind: (body: Body) => string) {
     const body = bodies.find(entry => !failed.has(entry.src)), path = body?.src;
     if (!path || stand.userData.character !== path) {
       stand.visible = false; delete stand.userData.character;
@@ -256,15 +315,16 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
     const texture = avatarTexture(path); const image = texture.image as HTMLImageElement | undefined;
     if (!image) return;
     if (stand.userData.character !== path) {
-      wear(stand, texture, measured(path, image, body?.height));
+      if (body?.sheet && (image.width !== sheetFormats.four.width || image.height !== sheetFormats.four.height)) { failed.add(path); dressStand(stand, bodies, source, place, kind); return; }
+      wear(stand, texture, measured(path, image, body));
       (stand.userData.uniforms as StandeeUniforms).tint.value.set(light_.tint);
       stand.userData.character = path; place();
     }
-    host.dataset[source] = kind(path);
+    host.dataset[source] = kind(body!);
     stand.visible = true;
   }
-  const dressBarista = () => dressStand(baristaStand, baristaBodies(baristaLook, baristaOwn), 'baristaSource', placeBarista, path => path === residentSilhouette ? 'silhouette' : baristaOwn?.standee && path === `/media/${baristaOwn.standee.key}` ? 'custom-standee' : 'standee');
-  const dressOwner = () => dressStand(ownerStand, ownerBodies(ownerSprite), 'ownerSource', () => {}, path => path === ownerSprite ? 'generated' : 'placeholder');
+  const dressBarista = () => dressStand(baristaStand, baristaBodies(baristaLook, baristaOwn), 'baristaSource', placeBarista, body => body.src === residentSilhouette ? 'silhouette' : baristaOwn?.standee && body.src === `/media/${baristaOwn.standee.key}` ? 'custom-standee' : body.sheet ? 'sheet' : 'standee');
+  const dressOwner = () => dressStand(ownerStand, ownerBodies(ownerSprite), 'ownerSource', () => {}, body => body.src === ownerSprite ? 'generated' : body.sheet ? 'sheet' : body.src.startsWith('data:') ? 'placeholder' : 'standee');
   const dressStands = () => { dressBarista(); dressOwner(); };
   let currentScenery: SceneryId = 'sage';
   let onOpen: (panel: 'counter') => void = () => {};
@@ -355,7 +415,7 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
     const box = new THREE.Box3(), narrow = host.clientWidth < 700;
     for (const piece of live.values()) if (!narrow || piece.item.kind === 'bar' || piece.item.kind === 'beanShelf') box.expandByObject(piece.node);
     if (!narrow && setView) box.expandByObject(setView.root);
-    if (narrow) box.expandByObject(ownerStand);
+    if (narrow) for (const x of [ownerSpot.x - 1, ownerSpot.x + 1.8]) for (const [y, z] of [[.3, ownerSpot.z + 1], [2.2, ownerSpot.z - .6]]) box.expandByPoint(new THREE.Vector3(x, y, z));
     if (box.isEmpty()) return undefined;
     return [0, 1].flatMap(x => [0, 1].flatMap(y => [0, 1].map(z => new THREE.Vector3(x ? box.max.x : box.min.x, y ? box.max.y : box.min.y, z ? box.max.z : box.min.z))));
   }
@@ -428,6 +488,73 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
       renderer.shadowMap.needsUpdate = true;
     }
   }
+  /** Footprints grown by a figure's radius; rugs do not count. `except` leaves out one kind, so the clerk can stand inside the counter. */
+  let walkCache = { key: '', parts: [] as { kind: string; area: Area }[] };
+  function blocked(except?: FurnitureKind): Area[] {
+    const key = `${layoutKey}|${setGeneration}|${Boolean(setView)}`;
+    if (walkCache.key !== key) {
+      group.updateMatrixWorld(true);
+      const box = new THREE.Box3(), parts: { kind: string; area: Area }[] = [], radius = .2;
+      const roots: [string, THREE.Object3D][] = [...[...live.values()].filter(piece => piece.item.kind !== 'rug').map((piece): [string, THREE.Object3D] => [piece.item.kind, piece.node]), ...setView ? [['studioSet', setView.root] as [string, THREE.Object3D]] : []];
+      for (const [kind, root] of roots) root.traverse(part => {
+        if (!(part instanceof THREE.Mesh) || !part.visible) return;
+        box.setFromObject(part);
+        if (box.isEmpty() || box.max.y < .1 || box.min.y > 1.3) return;
+        parts.push({ kind, area: { minX: box.min.x - radius, maxX: box.max.x + radius, minZ: box.min.z - radius, maxZ: box.max.z + radius } });
+      });
+      walkCache = { key, parts };
+    }
+    return walkCache.parts.filter(part => part.kind !== except).map(part => part.area);
+  }
+  /** Where the clerk strolls: the strip right behind the countertop, clear of the return on the left and of the register (and its price tag) on the right; any deeper and the counter hides all but her head. */
+  const clerkArea = (): Area => ({ minX: bar.counter.x - 1.25, maxX: bar.counter.x + .6, minZ: bar.counter.z - bar.counter.halfZ - .45, maxZ: bar.counter.z - bar.counter.halfZ - .15 });
+  const ownerArea: Area = { minX: ownerSpot.x - .6, maxX: ownerSpot.x + 1.9, minZ: ownerSpot.z - .7, maxZ: ownerSpot.z + 1.2 };
+  function shelfStop(): Vec {
+    const node = shelfPiece()?.node; if (!node) return bar.barista;
+    group.updateMatrixWorld(true); const box = new THREE.Box3().setFromObject(node), centre = box.getCenter(new THREE.Vector3());
+    return insideArea({ minX: bar.counter.x - 1.25, maxX: bar.counter.x + 1.2, minZ: bar.counter.z - bar.counter.halfZ - .7, maxZ: bar.barista.z }, { x: centre.x, z: box.max.z + .45 });
+  }
+  function react(fig: Figure, cue: Cue) {
+    fig.beat = { cue, since: performance.now() }; host.dataset.cue = cue; render();
+    if (fig === baristaFig && fetchesFromShelf.has(cue) && !presenting && !(reduced.matches || paused)) fig.actor = sendTo(fig.actor, [{ ...shelfStop(), wait: 900 }, { ...fig.actor.at }]);
+  }
+  let lastAnchored = 0, lastTick = 0;
+  function moveFigure(fig: Figure, time: number, dt: number, view: Vec, pinned: boolean, area: Area, stroll: number, walls: Area[], step = 0) {
+    const { stand } = fig, calm = reduced.matches || paused, sheet = Boolean(stand.userData.sheet);
+    if (!pinned) fig.actor = stepActor(fig.actor, { now: time, dt, area, rand: Math.random, still: calm, stroll, blocked: walls });
+    const { actor } = fig, pose = beatPose(fig.beat, time, calm);
+    if (fig.beat && pose.over) fig.beat = undefined;
+    const gait = actor.moving && !sheet && !calm ? Math.abs(Math.sin(time / 120)) * .05 : 0;
+    const stretch = pose.stretch + (calm ? 0 : Math.sin(time / 700 + fig.phase) * .01);
+    const base = baseSize(stand);
+    if (!pinned) stand.position.set(actor.at.x, .3 + step + pose.hop + gait, actor.at.z); else stand.position.y = .3 + pose.hop;
+    stand.scale.set(base.width * (1 - stretch * .6), base.height * (1 + stretch), 1);
+    if (sheet) {
+      const cell = pinned ? { col: 0, row: 0 } : actorCell(actor, view, time);
+      paintFrame(stand, cell.col, cell.row); stand.flip = 1;
+      fig.shown = `${cell.col},${cell.row}`;
+    } else {
+      if (actor.moving && !pinned) fig.flipTo = /E/.test(facingOf(actor.heading.x, actor.heading.z, view)) ? 1 : /W/.test(facingOf(actor.heading.x, actor.heading.z, view)) ? -1 : fig.flipTo;
+      else if (!actor.moving) fig.flipTo = fig.rest;
+      stand.flip = calm ? fig.flipTo : stand.flip + Math.max(-dt * 16, Math.min(dt * 16, fig.flipTo - stand.flip));
+    }
+    const mark = fig.mark;
+    if (pose.mark && fig.beat) {
+      const age = Math.min(1, (time - fig.beat.since) / 140);
+      mark.material.map = markTexture(pose.mark); mark.material.needsUpdate = true;
+      const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0).multiplyScalar(.62);
+      mark.position.set(stand.position.x + right.x, stand.position.y + base.top * (1 + stretch) - .12, stand.position.z + right.z); mark.scale.setScalar(.42 * (calm ? 1 : .4 + .6 * age)); mark.visible = true;
+    } else mark.visible = false;
+  }
+  function moveFigures(time: number, view: Vec) {
+    const dt = Math.min(.1, Math.max(0, (time - lastTick) / 1000)); lastTick = time;
+    // Behind the counter the clerk stands on an unseen step, so more of her shows over a countertop half her height.
+    moveFigure(baristaFig, time, dt, view, Boolean(presenting), clerkArea(), 5200, blocked('bar'), .25);
+    moveFigure(ownerFig, time, dt, view, false, ownerArea, 4200, blocked());
+    const moved = baristaFig.actor.moving || ownerFig.actor.moving || baristaFig.beat || ownerFig.beat;
+    if (moved && time - lastAnchored > 90 || (!moved && lastAnchored)) { lastAnchored = moved ? time : 0; anchors(); }
+    host.dataset.castMotion = JSON.stringify({ clerk: { x: +baristaFig.actor.at.x.toFixed(2), z: +baristaFig.actor.at.z.toFixed(2), moving: baristaFig.actor.moving, cell: baristaFig.shown }, owner: { x: +ownerFig.actor.at.x.toFixed(2), z: +ownerFig.actor.at.z.toFixed(2), moving: ownerFig.actor.moving, cell: ownerFig.shown } });
+  }
   function animate(time: number) {
     frame = 0;
     if (disposed) return;
@@ -437,6 +564,7 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
     const admission = cadence.advance(time);
     if (admission === 'skip') { if (renderRequested) drawIfChanged(); return; }
     for (const stand of [baristaStand, ownerStand]) orientCard(stand, cameraView(camera), reduced.matches || paused ? 1 : .2);
+    moveFigures(time, cameraView(camera));
     if (Math.abs(hourNow() - lit) > 1 / 120) applyDaylight(hourNow());
     const calmRoom = reduced.matches || paused || graphics.calmDecor;
     for (const piece of live.values()) {
@@ -474,7 +602,7 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
   layFurniture(options.furniture ?? defaultFurniture);
   const observer = new ResizeObserver(() => resize()); observer.observe(host); resize();
   options.debug?.({ scene, camera, renderer, render, actor: baristaStand });
-  onReady();
+  void Promise.race([Promise.all(pending), new Promise(resolve => setTimeout(resolve, 4000))]).then(() => { if (!disposed) onReady(); });
   return {
     update(scenery) {
       currentScenery = scenery;
@@ -492,10 +620,10 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
     restoreView(view) { cameraAngle = clampRoomAngle(view.angle); cameraZoom = clampRoomZoom(view.zoom); cameraPanX = view.panX; cameraPanY = view.panY; frameCamera(); anchors(); render(); },
     open(listener) { onOpen = listener; },
     barista(character, appearance) { host.dataset.character = character; if (character === baristaLook && JSON.stringify(appearance ?? null) === JSON.stringify(baristaOwn ?? null)) return; baristaLook = character; baristaOwn = appearance; dressBarista(); anchors(); render(); },
+    cue(cue) { react(baristaFig, cue); react(ownerFig, cue); },
     owner(sprite) {
       if (sprite === ownerSprite) return;
-      const previous = ownerSprite && maps.get(ownerSprite);
-      if (previous) { textures.delete(previous); previous.dispose(); maps.delete(ownerSprite!); layouts.delete(ownerSprite!); failed.delete(ownerSprite!); }
+      if (ownerSprite) forget(ownerSprite);
       ownerSprite = sprite; dressOwner(); anchors(); render();
     },
     studioSet(value) { if (JSON.stringify(value) !== JSON.stringify(studioSet)) loadSet(value); },
@@ -550,11 +678,14 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
       const piece = touched && live.get(touched.object.userData.pieceId);
       if (touched && piece) hits.push({ kind: piece.item.kind, at: touched.distance + .05, act: () => {
         piece.poked = time;
+        if (touched.object.userData.cartKey !== undefined) host.dispatchEvent(new CustomEvent(PRODUCT_POKED, { bubbles: true, detail: { key: touched.object.userData.cartKey } }));
         for (const interaction of catalog[piece.item.kind].interactions(piece.item)) if (interaction.type === 'open' && interaction.panel === 'counter') onOpen('counter');
       } });
       // The barista stands behind the bar, so a click on their body counts as the counter. The card is a wide quad; only its middle strip is the body.
       const barista = baristaStand.visible ? raycaster.intersectObject(baristaStand, false).find(hit => hit.uv && Math.abs(hit.uv.x - .5) < .2 && hit.uv.y > .05 && hit.uv.y < .85) : undefined;
-      if (barista) hits.push({ kind: 'bar', at: barista.distance, act: () => onOpen('counter') });
+      if (barista) hits.push({ kind: 'bar', at: barista.distance, act: () => { react(baristaFig, 'poke'); onOpen('counter'); } });
+      const owner = ownerStand.visible ? raycaster.intersectObject(ownerStand, false).find(hit => hit.uv && Math.abs(hit.uv.x - .5) < .2 && hit.uv.y > .05 && hit.uv.y < .85) : undefined;
+      if (owner) hits.push({ kind: 'owner', at: owner.distance, act: () => react(ownerFig, 'poke') });
       const nearest = hits.sort((a, b) => a.at - b.at)[0]; if (!nearest) return null;
       nearest.act(); host.dataset.poked = nearest.kind; render(); return nearest.kind;
     },

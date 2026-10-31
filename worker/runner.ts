@@ -6,6 +6,7 @@ import type { Env } from './env';
 import { invalidBody, json, readJson } from './http';
 import { mediaUrl } from './media';
 import type { Store } from './tools';
+import type { VoiceConfig } from '../shared/voice';
 
 /** One uploaded file; a 45 s 1080p render with its voice is a few MB. */
 export const MAX_MEDIA_BYTES = 50 * 1024 * 1024;
@@ -20,14 +21,14 @@ const claimable = ({ job, lease }: PromoRecord, now: number) => job.status === '
  * price choice and nickname whether or not sharing is on. Files the earlier runner uploaded are dropped, so done can only see
  * this run's video.
  */
-export async function claimNext(store: Store, media: R2Bucket, now = Date.now()): Promise<RunnerClaim | null> {
+export async function claimNext(store: Store, media: R2Bucket, now = Date.now(), voice: VoiceConfig | null = null): Promise<RunnerClaim | null> {
   const record = (await store.promoQueue()).find(candidate => claimable(candidate, now));
   if (!record) return null;
   if (record.lease) await media.delete(Object.keys(RUNNER_MEDIA).map(name => promoMediaKey(record.job.id, name as RunnerMedia)));
   const at = new Date(now).toISOString(), until = leaseFrom(now);
   const claimed: PromoRecord = { ...record, job: { ...record.job, status: 'storyboard', progress: 0, output: null, error: null, updatedAt: at }, lease: { claimedAt: at, until } };
   await store.savePromo(claimed);
-  return { job: claimed.job, view: shareView(claimed.cart, await store.share()), leaseUntil: until };
+  return { job: claimed.job, view: shareView(claimed.cart, await store.share()), leaseUntil: until, voice };
 }
 
 type Outcome<T> = { ok: T } | { refused: { status: 400 | 409 | 413; body: object } };
@@ -93,12 +94,12 @@ const jobPath = /^\/runner\/jobs\/([^/]+)(?:\/media\/([^/]+))?$/;
 const wrongMethod = (allow: string) => json({ error: 'method_not_allowed' }, 405, { allow });
 
 /** `/runner/*`, the promo runner's side of shared/runner.ts. Every route needs the token, env.local included. */
-export async function runnerApi(request: Request, env: Env, store: Store, pathname: string) {
+export async function runnerApi(request: Request, env: Env, store: Store, pathname: string, voice: () => Promise<VoiceConfig | null> = async () => null) {
   if (!hasToken(request, env)) return unauthorized();
   const origin = new URL(request.url).origin;
   if (pathname === '/runner/next') {
     if (request.method !== 'POST') return wrongMethod('POST');
-    const claim = await claimNext(store, env.MEDIA);
+    const claim = await claimNext(store, env.MEDIA, Date.now(), await voice());
     return claim ? json(claim) : new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } });
   }
   const match = jobPath.exec(pathname);

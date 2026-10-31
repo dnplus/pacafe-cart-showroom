@@ -1,4 +1,5 @@
-import { cartWriteSchema, emptyCart, replaceCart, type Cart } from '../shared/cart';
+import { cartWriteSchema, emptyCart, removeCartItem, replaceCart, type Cart } from '../shared/cart';
+import { recordRemoval, removalLogSchema, removalOf, removeRequestSchema, type Removal } from '../shared/removals';
 import { fixtureCartItems } from '../shared/fixtures/cart';
 import { isFinished, type PromoRecord } from '../shared/promo';
 import { newShareSettings, sharePath, shareSettingsSchema, shareUpdateSchema, shareUrl, shareView, type ShareSettings } from '../shared/share';
@@ -10,11 +11,16 @@ import { handleMcp } from './mcp';
 import { promoApi } from './promo';
 import { runnerApi } from './runner';
 import { castPath, handleCast } from './cast';
+import { clerkDesk, clerkPath } from './clerk';
+import { connections, connectionsPath } from './connections';
 import { DEFAULT_NICKNAME } from '../shared/share';
+import { cartImageUrls, serveImage, shareImageUrls } from './imageProxy';
+import { withProductImages } from './productPage';
 import { tools, type Store } from './tools';
 
 const CART_KEY = 'cart';
 const SHARE_KEY = 'share';
+const REMOVALS_KEY = 'removals';
 const UNBOX_KEY = 'unbox';
 const LATEST_PROMO_KEY = 'promo:latest';
 /** Ids of the jobs not yet done or failed, oldest first: what /runner/next takes from. */
@@ -36,6 +42,11 @@ export class Showroom {
     return seeded;
   }
 
+  private async storedRemovals(): Promise<Removal[]> {
+    const stored = await this.ctx.storage.get(REMOVALS_KEY);
+    return stored === undefined ? [] : removalLogSchema.parse(stored);
+  }
+
   private async storedShare() {
     const stored = await this.ctx.storage.get(SHARE_KEY);
     return stored === undefined ? undefined : shareSettingsSchema.parse(stored);
@@ -46,6 +57,8 @@ export class Showroom {
     return {
       cart: () => this.read(),
       saveCart: cart => storage.put(CART_KEY, cart),
+      removals: () => this.storedRemovals(),
+      unbox: async () => { const stored = await storage.get(UNBOX_KEY); return stored === undefined ? emptyUnbox() : unboxStateSchema.parse(stored); },
       share: async () => {
         const stored = await this.storedShare();
         if (stored) return stored;
@@ -82,6 +95,18 @@ export class Showroom {
     return json(shareView(await this.read(), settings));
   }
 
+  private async image(request: Request) {
+    if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405, { allow: 'GET' });
+    const { searchParams } = new URL(request.url), slug = searchParams.get('s'), target = searchParams.get('u');
+    if (slug === null) {
+      if (!isOwner(request, this.env)) return unauthorized();
+      return serveImage(target, cartImageUrls(await this.read()));
+    }
+    const settings = await this.storedShare();
+    if (!settings?.enabled || !sameSecret(slug, settings.slug)) return json({ error: 'not_found' }, 404);
+    return serveImage(target, shareImageUrls(shareView(await this.read(), settings)));
+  }
+
   private async share(request: Request) {
     if (request.method !== 'GET' && request.method !== 'PUT') return json({ error: 'method_not_allowed' }, 405, { allow: 'GET, PUT' });
     if (!isOwner(request, this.env)) return unauthorized();
@@ -112,14 +137,41 @@ export class Showroom {
     return json(next);
   }
 
+  /** The cart and the removal log change together, so Muse never sees one without the other. */
+  private async removeItem(request: Request) {
+    if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405, { allow: 'POST' });
+    if (!isOwner(request, this.env)) return unauthorized();
+    const sent = await readJson(request);
+    if (!sent) return json({ error: 'invalid_json' }, 400);
+    const parsed = removeRequestSchema.safeParse(sent.body);
+    if (!parsed.success) return invalidBody(parsed.error);
+    const cart = await this.read(), item = cart.items.find(line => line.id === parsed.data.itemId);
+    if (!item) return json({ error: 'not_found' }, 404);
+    const now = new Date().toISOString(), next = removeCartItem(cart, item.id, undefined, now);
+    const log = recordRemoval(await this.storedRemovals(), removalOf(item, parsed.data.reason ?? null, now));
+    await this.ctx.storage.put({ [CART_KEY]: next, [REMOVALS_KEY]: log });
+    return json({ cart: next, removal: log[log.length - 1] });
+  }
+
+  private desk?: ReturnType<typeof clerkDesk>;
+  /** One desk per object, so its one-turn-at-a-time flag holds across requests. */
+  private clerk(linked: ReturnType<typeof connections>) {
+    return this.desk ??= clerkDesk(this.ctx.storage, this.env, { tools, store: () => this.store(), nickname: async () => (await this.storedShare())?.nickname ?? DEFAULT_NICKNAME, note: call => linked.note(call) });
+  }
+
   async fetch(request: Request): Promise<Response> {
-    const { pathname } = new URL(request.url);
-    if (pathname === '/mcp') return hasToken(request, this.env) ? handleMcp(request, tools, this.store()) : unauthorized();
-    if (pathname.startsWith('/runner/')) return runnerApi(request, this.env, this.store(), pathname);
+    const { pathname, origin } = new URL(request.url);
+    const linked = connections(this.ctx.storage, this.env), connection = connectionsPath.exec(pathname)?.[1], clerk = clerkPath.exec(pathname);
+    if (pathname === '/mcp') return hasToken(request, this.env) ? handleMcp(request, tools, this.store(), linked.note) : unauthorized();
+    if (pathname.startsWith('/runner/')) return runnerApi(request, this.env, this.store(), pathname, linked.runnerVoice);
+    if (connection) return linked.handle(request, connection);
+    if (clerk) return this.clerk(linked).handle(request, clerk[1], origin);
     if (pathname === '/api/promo') return promoApi(request, this.env, this.store());
     if (pathname.startsWith('/s/')) return this.shared(request, pathname);
     if (pathname === '/api/share') return this.share(request);
     if (pathname === '/api/unbox') return this.unbox(request);
+    if (pathname === '/api/cart/remove') return this.removeItem(request);
+    if (pathname === '/api/image') return this.image(request);
     if (castPath.test(pathname)) return handleCast(request, { storage: this.ctx.storage, env: this.env, nickname: async () => (await this.storedShare())?.nickname ?? DEFAULT_NICKNAME });
     if (pathname !== '/api/cart') return json({ error: 'not_found' }, 404);
     if (request.method !== 'GET' && request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405, { allow: 'GET, POST' });
@@ -129,8 +181,8 @@ export class Showroom {
     if (!sent) return json({ error: 'invalid_json' }, 400);
     const parsed = cartWriteSchema.safeParse(sent.body);
     if (!parsed.success) return invalidBody(parsed.error);
-    const stored = await this.stored();
-    const next = replaceCart(stored ?? emptyCart(), parsed.data.items, new Date().toISOString());
+    const stored = await this.stored(), previous = stored ?? emptyCart();
+    const next = replaceCart(previous, await withProductImages(parsed.data.items, previous), new Date().toISOString());
     // Unchanged items give back the stored cart itself; the first write is always kept, so the fixture never comes back.
     if (next !== stored) await this.ctx.storage.put(CART_KEY, next);
     return json(next);

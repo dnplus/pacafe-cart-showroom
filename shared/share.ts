@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { cartQty, webUrl, type Cart, type CartItem } from './cart.ts';
+import { cartQty, noteText, webUrl, type Cart, type CartItem } from './cart.ts';
+import { packagingOf, packagingSchema } from './packaging.ts';
 
 /** What a visitor learns about prices: nothing, a bucket per item and for the total, or the exact amounts. */
 export const priceModes = ['hidden', 'range', 'exact'] as const;
@@ -47,7 +48,7 @@ export function publicLink(url: string | null) {
   return link.toString();
 }
 
-const item = { title: z.string(), imageUrl: webUrl.nullable(), url: webUrl.nullable(), qty: cartQty };
+const item = { title: z.string(), imageUrl: webUrl.nullable(), url: webUrl.nullable(), qty: cartQty, note: noteText.nullable().default(null), packaging: packagingSchema };
 /**
  * What `/s/<slug>` answers. Each mode is its own strict shape, so a hidden view has no field that could hold a price and a
  * range view none that could hold an exact one. Items are in shelf order; ids, stores and revisions stay with the owner.
@@ -59,9 +60,15 @@ export const shareViewSchema = z.discriminatedUnion('mode', [
 ]);
 export type ShareView = z.infer<typeof shareViewSchema>;
 
+/**
+ * Muse's note as a visitor may read it. Where prices are hidden or banded, a note that carries a digit or a currency word could
+ * give an exact price away, so it stays with the owner.
+ */
+export const visitorNote = (note: string | null | undefined, mode: PriceMode) => note && (mode === 'exact' || !/[\d０-９$＄]|NT|元|塊|twd|usd|dollar/i.test(note)) ? note : null;
+
 /** The cart narrowed to what the owner chose to show. The worker answers visitors with it, and the room draws the card and preview from it. */
 export function shareView(cart: Cart, { prices: mode, nickname }: ShareSettings): ShareView {
-  const shown = (entry: CartItem) => ({ title: entry.title, imageUrl: entry.cutoutUrl ?? entry.imageUrl, url: publicLink(entry.url), qty: entry.qty });
+  const shown = (entry: CartItem) => ({ title: entry.title, imageUrl: entry.cutoutUrl ?? entry.imageUrl, url: publicLink(entry.url), qty: entry.qty, note: visitorNote(entry.note, mode), packaging: packagingOf(entry) });
   const priced = cart.items.filter(entry => entry.priceTwd !== null);
   const total = priced.length ? priced.reduce((sum, entry) => sum + entry.priceTwd! * entry.qty, 0) : null;
   switch (mode) {

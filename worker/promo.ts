@@ -1,8 +1,14 @@
+import { scriptProblems } from '../shared/script';
+import { shareView } from '../shared/share';
 import { promoRequestSchema, queuedPromoJob, type PromoJob, type PromoRequest } from '../shared/promo';
 import { isOwner, unauthorized } from './auth';
 import type { Env } from './env';
 import { invalidBody, json, readJson } from './http';
 import type { Store } from './tools';
+
+export class ScriptRefused extends Error {
+  constructor(readonly problems: string[]) { super(problems.join('；')); }
+}
 
 /**
  * Queues a video for the cart as it is now, or hands back the one already waiting for exactly this cart and request, so a
@@ -11,8 +17,12 @@ import type { Store } from './tools';
 export async function queuePromo(store: Store, request: PromoRequest, now = new Date().toISOString()): Promise<PromoJob | null> {
   const cart = await store.cart();
   if (cart.items.length === 0) return null;
+  if (request.script) {
+    const problems = scriptProblems(request.script, shareView(cart, await store.share()), request.durationSec);
+    if (problems.length) throw new ScriptRefused(problems);
+  }
   const latest = (await store.latestPromo())?.job;
-  if (latest?.status === 'queued' && latest.cartRevision === cart.revision && latest.durationSec === request.durationSec && latest.style === (request.style ?? null)) return latest;
+  if (latest?.status === 'queued' && latest.cartRevision === cart.revision && latest.durationSec === request.durationSec && latest.style === (request.style ?? null) && latest.language === request.language && JSON.stringify(latest.script) === JSON.stringify(request.script ?? null)) return latest;
   const job = queuedPromoJob(`promo-${crypto.randomUUID()}`, cart, request, now);
   await store.queuePromo({ job, cart });
   return job;
@@ -27,6 +37,10 @@ export async function promoApi(request: Request, env: Env, store: Store) {
   if (!sent) return json({ error: 'invalid_json' }, 400);
   const parsed = promoRequestSchema.safeParse(sent.body);
   if (!parsed.success) return invalidBody(parsed.error);
-  const job = await queuePromo(store, parsed.data);
+  let job: PromoJob | null;
+  try { job = await queuePromo(store, parsed.data); } catch (error) {
+    if (error instanceof ScriptRefused) return json({ error: 'invalid_script', problems: error.problems }, 400);
+    throw error;
+  }
   return job ? json({ jobId: job.id, status: job.status }) : json({ error: 'empty_cart' }, 409);
 }
