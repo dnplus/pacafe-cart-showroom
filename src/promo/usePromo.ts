@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { promoJobSchema, type PromoJob } from '../../shared/promo';
-import { ownerFetch } from '../owner';
+import { z } from 'zod';
+import { ownerJson } from '../owner';
 import { getLocale } from '../i18n';
 
 export const PROMO_POLL_MS = 3000;
@@ -22,9 +23,7 @@ export function usePromo(intervalMs = PROMO_POLL_MS): PromoState & { queue: () =
     const controller = new AbortController(); let timer: ReturnType<typeof setTimeout> | undefined;
     const poll = async () => {
       try {
-        const response = await ownerFetch('/api/promo', { signal: controller.signal });
-        if (!response.ok) throw new Error(`GET /api/promo answered ${response.status}`);
-        const job = promoJobSchema.nullable().parse(await response.json());
+        const job = await ownerJson('/api/promo', promoJobSchema.nullable(), { signal: controller.signal });
         setState(previous => ({ ...previous, job, offline: false }));
       } catch (error) {
         if (controller.signal.aborted) return;
@@ -40,8 +39,7 @@ export function usePromo(intervalMs = PROMO_POLL_MS): PromoState & { queue: () =
   const queue = useCallback(async () => {
     setState(previous => ({ ...previous, queueing: true, queueFailed: false }));
     try {
-      const response = await ownerFetch('/api/promo', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ language: getLocale() }) });
-      if (!response.ok) throw new Error(`POST /api/promo answered ${response.status}`);
+      await ownerJson('/api/promo', z.unknown(), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ language: getLocale() }) });
       setRound(count => count + 1);
       setState(previous => ({ ...previous, queueing: false }));
     } catch (error) {

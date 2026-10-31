@@ -1,11 +1,10 @@
 import { castSchema, castUpdateSchema, CAST_KEY, MAX_PHOTO_BYTES, sniffPhotoType, type Cast, type CastView } from '../shared/cast';
 import { isOwner, unauthorized } from './auth';
 import type { Env } from './env';
+import { json, notAllowed, parseBody, readOr } from './http';
 import { requestSprite, SpriteError, SPRITE_MODEL } from './ownerSprite';
 
-/** The owner's cast routes, which the entry worker forwards to the Showroom. */
 export const castPath = /^\/api\/cast(?:\/owner-sprite)?$/;
-const json = (body: unknown, status = 200, headers: Record<string, string> = {}) => Response.json(body, { status, headers: { 'cache-control': 'no-store', ...headers } });
 /** Room for the multipart framing and the consent field around a photo of MAX_PHOTO_BYTES. */
 const FORM_OVERHEAD = 16 * 1024;
 
@@ -16,9 +15,7 @@ export interface CastDeps {
   nickname(): Promise<string>;
 }
 
-export async function readCast({ storage }: CastDeps): Promise<Cast> {
-  return castSchema.parse(await storage.get(CAST_KEY) ?? {});
-}
+const readCast = ({ storage }: CastDeps): Promise<Cast> => readOr(storage, CAST_KEY, castSchema, castSchema.parse({}));
 
 const canGenerate = (env: Env): env is Env & { META_API_KEY: string; META_API_BASE_URL: string } => Boolean(env.META_API_KEY && env.META_API_BASE_URL);
 
@@ -66,14 +63,12 @@ export async function handleCast(request: Request, deps: CastDeps): Promise<Resp
   const { pathname } = new URL(request.url), sprite = pathname === '/api/cast/owner-sprite';
   if (!castPath.test(pathname)) return json({ error: 'not_found' }, 404);
   const allowed = sprite ? ['POST', 'DELETE'] : ['GET', 'PUT'];
-  if (!allowed.includes(request.method)) return json({ error: 'method_not_allowed' }, 405, { allow: allowed.join(', ') });
+  if (!allowed.includes(request.method)) return notAllowed(...allowed);
   if (!isOwner(request, deps.env)) return unauthorized();
   if (sprite) return request.method === 'POST' ? generate(request, deps) : revert(deps);
   if (request.method === 'GET') return json(await view(deps));
-  const sent = await request.json().then((body: unknown) => ({ body }), () => null);
-  if (!sent) return json({ error: 'invalid_json' }, 400);
-  const parsed = castUpdateSchema.safeParse(sent.body);
-  if (!parsed.success) return json({ error: 'invalid_body', issues: parsed.error.issues.map(issue => ({ path: issue.path.join('.'), message: issue.message })) }, 400);
-  await deps.storage.put(CAST_KEY, { ...await readCast(deps), ...parsed.data });
+  const body = await parseBody(request, castUpdateSchema);
+  if (body instanceof Response) return body;
+  await deps.storage.put(CAST_KEY, { ...await readCast(deps), ...body.data });
   return json(await view(deps));
 }

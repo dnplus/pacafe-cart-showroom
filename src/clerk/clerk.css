@@ -1,4 +1,3 @@
-.clerk-panel{gap:12px}
 .clerk-meter{position:relative;margin:0;padding:7px 12px;border-radius:999px;background:#f5efe0;font-size:12px;font-weight:850;color:#5b4a36;overflow:hidden;isolation:isolate}
 .clerk-meter span{position:absolute;inset:0 auto 0 0;width:var(--used);background:#e8d6b0;z-index:-1;transition:width .4s ease}
 .clerk-log{list-style:none;margin:0;padding:4px 2px;display:flex;flex-direction:column;gap:10px;max-height:340px;min-height:120px;overflow-y:auto;overscroll-behavior:contain}

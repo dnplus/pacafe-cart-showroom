@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { metaBase } from '../shared/meta';
 import type { Env } from './env';
 
 export const SPRITE_MODEL = 'muse-image-1.0';
@@ -8,7 +9,7 @@ export const SPRITE_MODEL = 'muse-image-1.0';
  */
 export const REFERENCE_IMAGE_FIELD = 'image';
 /** The fixed prompt. It names no product or brand, and the photo is the only thing the owner contributes. */
-export const SPRITE_PROMPT = 'A full-body chibi standee illustration of the person in the reference photo: a cute neutral cartoon figure with a big head and small body, standing straight and facing the camera with arms relaxed at the sides, the whole body visible from head to shoes. Simple clean shapes, soft flat colours, a thin outline. Plain transparent background, no text, no logo, no props, no ground shadow.';
+const SPRITE_PROMPT = 'A full-body chibi standee illustration of the person in the reference photo: a cute neutral cartoon figure with a big head and small body, standing straight and facing the camera with arms relaxed at the sides, the whole body visible from head to shoes. Simple clean shapes, soft flat colours, a thin outline. Plain transparent background, no text, no logo, no props, no ground shadow.';
 
 const MAX_SPRITE_BYTES = 8 * 1024 * 1024;
 const TIMEOUT_MS = 100_000;
@@ -22,7 +23,7 @@ export class SpriteError extends Error {}
  * The request body for one sprite. `enable_image_search: false` keeps the model from looking the person up on the web:
  * the photo is the owner's own and is the only reference it may use.
  */
-export const spriteRequest = (photo: { bytes: Uint8Array; type: string }) => ({
+const spriteRequest = (photo: { bytes: Uint8Array; type: string }) => ({
   model: SPRITE_MODEL,
   prompt: SPRITE_PROMPT,
   n: 1,
@@ -40,7 +41,7 @@ const isPng = (bytes: Uint8Array) => pngSignature.every((byte, i) => bytes[i] ==
 export async function requestSprite(env: Env & { META_API_KEY: string; META_API_BASE_URL: string }, photo: { bytes: Uint8Array; type: string }): Promise<Uint8Array> {
   let answer: Response;
   try {
-    answer = await fetch(`${env.META_API_BASE_URL.replace(/\/+$/, '')}/images/generations`, {
+    answer = await fetch(`${metaBase(env.META_API_BASE_URL)}/images/generations`, {
       method: 'POST', headers: { authorization: `Bearer ${env.META_API_KEY}`, 'content-type': 'application/json' },
       body: JSON.stringify(spriteRequest(photo)), signal: AbortSignal.timeout(TIMEOUT_MS),
     });

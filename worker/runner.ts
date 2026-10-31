@@ -3,7 +3,7 @@ import { PROMO_STEPS, promoMediaKey, RUNNER_LEASE_MS, RUNNER_MEDIA, runnerUpdate
 import { shareView } from '../shared/share';
 import { hasToken, unauthorized } from './auth';
 import type { Env } from './env';
-import { invalidBody, json, readJson } from './http';
+import { json, notAllowed, parseBody } from './http';
 import { mediaUrl } from './media';
 import type { Store } from './tools';
 import type { VoiceConfig } from '../shared/voice';
@@ -21,7 +21,7 @@ const claimable = ({ job, lease }: PromoRecord, now: number) => job.status === '
  * price choice and nickname whether or not sharing is on. Files the earlier runner uploaded are dropped, so done can only see
  * this run's video.
  */
-export async function claimNext(store: Store, media: R2Bucket, now = Date.now(), voice: VoiceConfig | null = null): Promise<RunnerClaim | null> {
+async function claimNext(store: Store, media: R2Bucket, now = Date.now(), voice: VoiceConfig | null = null): Promise<RunnerClaim | null> {
   const record = (await store.promoQueue()).find(candidate => claimable(candidate, now));
   if (!record) return null;
   if (record.lease) await media.delete(Object.keys(RUNNER_MEDIA).map(name => promoMediaKey(record.job.id, name as RunnerMedia)));
@@ -91,14 +91,13 @@ async function upload(request: Request, env: Env, record: PromoRecord, name: Run
 }
 
 const jobPath = /^\/runner\/jobs\/([^/]+)(?:\/media\/([^/]+))?$/;
-const wrongMethod = (allow: string) => json({ error: 'method_not_allowed' }, 405, { allow });
 
 /** `/runner/*`, the promo runner's side of shared/runner.ts. Every route needs the token, env.local included. */
 export async function runnerApi(request: Request, env: Env, store: Store, pathname: string, voice: () => Promise<VoiceConfig | null> = async () => null) {
   if (!hasToken(request, env)) return unauthorized();
   const origin = new URL(request.url).origin;
   if (pathname === '/runner/next') {
-    if (request.method !== 'POST') return wrongMethod('POST');
+    if (request.method !== 'POST') return notAllowed('POST');
     const claim = await claimNext(store, env.MEDIA, Date.now(), await voice());
     return claim ? json(claim) : new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } });
   }
@@ -106,12 +105,10 @@ export async function runnerApi(request: Request, env: Env, store: Store, pathna
   if (!match || !promoJobId.safeParse(match[1]).success) return json({ error: 'not_found' }, 404);
   const [, id, name] = match;
   if (name !== undefined && !Object.hasOwn(RUNNER_MEDIA, name)) return json({ error: 'not_found' }, 404);
-  if (request.method !== (name === undefined ? 'POST' : 'PUT')) return wrongMethod(name === undefined ? 'POST' : 'PUT');
+  if (request.method !== (name === undefined ? 'POST' : 'PUT')) return notAllowed(name === undefined ? 'POST' : 'PUT');
   const record = await store.promo(id);
   if (!record) return json({ error: 'not_found' }, 404);
   if (name !== undefined) return reply(await upload(request, env, record, name as RunnerMedia, origin));
-  const sent = await readJson(request);
-  if (!sent) return json({ error: 'invalid_json' }, 400);
-  const parsed = runnerUpdateSchema.safeParse(sent.body);
-  return parsed.success ? reply(await update(store, env, record, parsed.data, origin)) : invalidBody(parsed.error);
+  const body = await parseBody(request, runnerUpdateSchema);
+  return body instanceof Response ? body : reply(await update(store, env, record, body.data, origin));
 }

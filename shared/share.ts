@@ -6,6 +6,8 @@ import { packagingOf, packagingSchema } from './packaging.ts';
 export const priceModes = ['hidden', 'range', 'exact'] as const;
 export type PriceMode = typeof priceModes[number];
 export const DEFAULT_NICKNAME = '屋主';
+/** The stored default nickname is Chinese; English readers see it as "Owner". A name the owner chose is shown as typed. */
+export const nicknameIn = (nickname: string, language: 'zh-TW' | 'en') => language === 'en' && nickname === DEFAULT_NICKNAME ? 'Owner' : nickname;
 export const NICKNAME_MAX = 24;
 
 /** `/s/<slug>`: the only path a visitor can open; anything else under /s gets the same 404. */
@@ -17,7 +19,6 @@ const priceMode = z.enum(priceModes);
 /** A stored record; one written before visitors had choices (`{ slug, enabled }`) reads as hidden prices and the default nickname. */
 export const shareSettingsSchema = z.strictObject({ slug, enabled: z.boolean(), prices: priceMode.default('hidden'), nickname: nickname.default(DEFAULT_NICKNAME) });
 export type ShareSettings = z.output<typeof shareSettingsSchema>;
-/** The owner's PUT body: every choice at once; the slug is never writable. */
 export const shareUpdateSchema = z.strictObject({ enabled: z.boolean(), prices: priceMode, nickname });
 export type ShareUpdate = z.output<typeof shareUpdateSchema>;
 

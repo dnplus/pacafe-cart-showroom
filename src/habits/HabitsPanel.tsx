@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { X } from 'lucide-react';
+import {  } from 'lucide-react';
 import type { Cart } from '../../shared/cart';
 import { formatTwd } from '../../shared/cart';
 import { habitsReport } from '../../shared/habits';
 import { emptyUnbox, unboxStateSchema, type UnboxState } from '../../shared/unbox';
 import { getLocale, t } from '../i18n';
+import { Panel } from '../share/Panel';
 import { ownerFetch } from '../owner';
 import '../share/share.css';
 import './habits.css';
@@ -64,11 +65,7 @@ export function HabitsPanel({ cart, close }: { cart: Cart | null; close: () => v
   const report = useMemo(() => habitsReport(cart?.items ?? [], opened ?? emptyUnbox(), new Date().toISOString(), getLocale()), [cart, opened]);
   const { totals, parcels } = report, empty = totals.lines === 0;
   const parcelTotal = Math.max(1, totals.lines);
-  return <section className="share-panel habits-panel" id="habits-panel" aria-labelledby="habits-title" data-testid="habits-panel">
-    <header className="share-panel-head">
-      <h2 id="habits-title">{t('Shopping habits')}</h2>
-      <button type="button" className="share-icon-button" onClick={close} aria-label={t('Close')} title={t('Close')}><X size={18} /></button>
-    </header>
+  return <Panel name="habits" className="habits-panel" title={t('Shopping habits')} close={close}>
     {!opened ? <p className="cart-note" role="status">{t('Loading…')}</p> : empty ? <p className="cart-note">{t('Nothing in the cart yet, so there are no habits to show.')}</p> : <>
       <dl className="habits-tiles">
         <div><dt>{t('Average per line')}</dt><dd>{totals.averageTwd === null ? '–' : formatTwd(totals.averageTwd)}</dd></div>
@@ -107,5 +104,5 @@ export function HabitsPanel({ cart, close }: { cart: Cart | null; close: () => v
       </div>
       <p className="habits-foot">{t('Only what is in the cart now is counted. Items you removed are gone from this report.')}</p>
     </>}
-  </section>;
+  </Panel>;
 }

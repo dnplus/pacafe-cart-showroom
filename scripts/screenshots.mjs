@@ -6,6 +6,7 @@ import path from 'node:path';
 import { launchBrowser } from './lib/browser.mjs';
 import { root } from './lib/root.mjs';
 import { build, startWorker } from './lib/wrangler.mjs';
+import { RENDER_READY } from './lib/room.mjs';
 
 const shots = [
   { file: 'desktop.png', viewport: { width: 1440, height: 900 } },
@@ -29,7 +30,7 @@ try {
     page.on('pageerror', error => problems.push(error.message));
     page.on('console', message => { if (message.type() === 'error') problems.push(message.text()); });
     await page.goto(worker.origin);
-    await page.waitForSelector('.house-world[data-render-ready="true"][data-renderer="three-webgl"]', { timeout: 60_000 });
+    await page.waitForSelector(RENDER_READY, { timeout: 60_000 });
     await page.waitForFunction(() => {
       const room = document.querySelector('.room-canvas');
       return room?.getAttribute('data-cart-shelf') === '5' && room.getAttribute('data-barista-source') !== 'loading' && (room.hasAttribute('data-studio-set') || room.hasAttribute('data-studio-set-error'));

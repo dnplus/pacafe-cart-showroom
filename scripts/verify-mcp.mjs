@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { root } from './lib/root.mjs';
 import { build, startWorker } from './lib/wrangler.mjs';
+import { mcpClient } from './lib/mcp.mjs';
 
 const token = crypto.randomBytes(24).toString('base64url');
 fs.mkdirSync(path.join(root, '.local'), { recursive: true });
@@ -14,18 +15,7 @@ build();
 
 // SEED_FIXTURE off so the cart holds only what this script adds.
 const worker = await startWorker(persistTo, { CART_MCP_TOKEN: token, SEED_FIXTURE: 'false' });
-let id = 0;
-const rpc = (method, params, auth = `Bearer ${token}`) => fetch(`${worker.origin}/mcp`, {
-  method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', ...(auth ? { authorization: auth } : {}) },
-  body: JSON.stringify({ jsonrpc: '2.0', id: ++id, method, params }),
-});
-const call = async (name, args) => {
-  const response = await rpc('tools/call', { name, arguments: args });
-  assert.equal(response.status, 200, `${name} answered 200`);
-  const { result } = await response.json();
-  assert.equal(result.isError, false, `${name} succeeded: ${result.content?.[0]?.text}`);
-  return result.structuredContent;
-};
+const { rpc, call } = mcpClient(worker.origin, token);
 
 try {
   assert.equal((await rpc('ping', {}, null)).status, 401, 'no token is refused');
@@ -34,8 +24,8 @@ try {
   const init = await (await rpc('initialize', { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'verify-mcp', version: '0' } })).json();
   assert.equal(init.result.protocolVersion, '2025-11-25');
   const { tools } = (await (await rpc('tools/list')).json()).result;
-  assert.deepEqual(tools.map(tool => tool.name).sort(), ['cart_add', 'cart_list', 'cart_remove', 'promo_generate', 'promo_status']);
-  assert.deepEqual(tools.filter(tool => tool.annotations.readOnlyHint).map(tool => tool.name).sort(), ['cart_list', 'promo_status']);
+  assert.deepEqual(tools.map(tool => tool.name).sort(), ['cart_add', 'cart_list', 'cart_remove', 'habits_report', 'promo_generate', 'promo_status']);
+  assert.deepEqual(tools.filter(tool => tool.annotations.readOnlyHint).map(tool => tool.name).sort(), ['cart_list', 'habits_report', 'promo_status']);
 
   await call('cart_add', { title: '陶瓷馬克杯', store: '小島陶房', priceTwd: 420, qty: 2 });
   await call('cart_add', { title: '亞麻餐墊', priceTwd: 290 });

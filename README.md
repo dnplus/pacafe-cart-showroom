@@ -46,6 +46,8 @@ npm test            # vitest run
 
 CI（`.github/workflows/ci.yml`）在每次 push 和 pull request 跑這三項，不需要 secret，也不需要瀏覽器。
 
+改完程式要怎麼驗、哪支腳本對應哪一塊、哪些結果不能當成通過，寫在 [`.claude/skills/verify-showroom`](.claude/skills/verify-showroom/SKILL.md)，給開發用的 coding agent 讀。
+
 ### 腳本
 
 | 指令 | 做什麼 |
@@ -56,6 +58,7 @@ CI（`.github/workflows/ci.yml`）在每次 push 和 pull request 跑這三項�
 | `npm run verify:promo` | 用真的 `wrangler dev` 透過 `/mcp` 的 `promo_generate` 排一支 30 秒的片，再跑真的 runner（`--once`、mock 看片、不配音、真的 Remotion 算圖），確認 job 到 `done`、上傳的 mp4 是 1280×720 h264 30 秒且 sha256 和回報的一樣、QA 第一輪抓到太長的商品名稱而最後一輪沒有問題、log 沒有印出 token。`--fake-worker` 改用 `tests/fake-runner-worker.ts` 代替 worker。`--script` 讓 job 帶一份 Muse 寫的腳本，並確認 `qa.json` 的 `storyboard` 是 `muse`。設 `PROMO_VERIFY_COPY_TO` 會把影片、縮圖、`qa.json` 和每輪 QA 畫面複製到那個目錄。需要 `ffmpeg`／`ffprobe`。 |
 | `npm run verify:adapter` | 對真的 `wrangler dev` 跑 `adapter/cli.ts --dry-run`，再用本機的假 Model API 跑一輪，確認東西進了購物車。見 [adapter 說明](adapter/README.md)。 |
 | `npm run verify:share` | 用真的 `wrangler dev`（有 token、`OPEN_OWNER_ACCESS=false`，跟正式環境一樣）走分享流程：`/api/cart` 沒 token 回 401；開分享後依序切 hidden、range、exact 檢查 `/s/<slug>` 的 JSON；關分享後回 404。 |
+| `ORIGIN=… CART_MCP_TOKEN=… node scripts/verify-remove.mjs` | 對已在跑的 `wrangler dev --env local`（五件 fixture）用瀏覽器移除一件並選原因、復原另一件，再從 `/mcp` 的 `cart_list` 和 `cart_add` 讀回移除紀錄。截圖存到 `REMOVE_SCREENSHOTS_DIR`。 |
 | `node scripts/screenshots.mjs` | 建置、啟動 `wrangler dev --env local`，先把 5 個快遞箱都記成拆過，等貨架擺上 5 件商品後存 `docs/screenshots/desktop.png` 和 `mobile-390.png`。 |
 | `npm run screenshots:share` | 存房間分享面板和訪客分享頁的截圖（1440 和 390 寬，range 模式）到 `docs/screenshots/`。設了 `SHARE_SCREENSHOTS_COPY_TO` 會另外複製一份到那個目錄。 |
 | `node scripts/screenshots-unbox-play.mjs` | 用真的 `wrangler dev` 跑一遍拆快遞，1440 和 390 寬各存一組圖到 `PLAY_SCREENSHOTS_DIR`（預設 `.local/screenshots-unbox-play`）：櫃台的箱子、單個拆開（3D 舞台、手寫小卡）、一鍵秒開的連抽（開到一半、結果列、放大一張卡）、貼紙本、從貨架或清單再拆一次、訪客分享頁自己拆（並檢查沒有呼叫屋主的 `/api/unbox`）。設 `PLAY_REDUCED_MOTION=1` 用「減少動態」再跑一次；設 `PLAY_ORIGIN` 可指定已在跑的 worker。 |
