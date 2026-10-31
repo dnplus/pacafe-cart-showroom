@@ -50,7 +50,7 @@ Both projects have the same owner as this repository, and the ported code is inc
 
 ## Original to this repository
 
-- `public/studio/showroom-set.glb`, the presenter studio set, is generated from three.js primitives by `scripts/generate-studio-set.mjs`. Apache-2.0.
-- The counter, cart shelf, plant, rug, product boxes and cash register are drawn in code by `src/room/furnitureModels.ts` and `src/cart/cartScene.ts`. Apache-2.0.
+- `public/studio/showroom-set.glb`, the presenter studio set, is PA Cafe's `public/creator/presenter.glb` (the #582 studio set, `pa-cafe/pa-cafe` branch `self-media-room`, commit `7cd1b461`), byte for byte (sha256 `d8a1cbaf001b6b0b5a7cdbe0a9f28056fa92865d9d612c8e0e2f160a3111d162`). Same author and terms as the furniture models above.
+- The product boxes and their picture cards are drawn in code by `src/cart/cartScene.ts`; `src/room/furnitureModels.ts` keeps box stand-ins for a furniture model that fails to load. Apache-2.0.
 - `docs/screenshots/*.png` are screenshots of this app made by `scripts/screenshots.mjs`. Apache-2.0.
 - The 圍裙店員 and 帽子店員 clerks and the plain stand-in figures used when no art loads are drawn in code as SVG by `src/room/characterArt.ts` and `src/room/silhouette.ts`. Apache-2.0. They are neutral figures: no character, logo or mascot of any company, and nothing was copied from another project's art.
