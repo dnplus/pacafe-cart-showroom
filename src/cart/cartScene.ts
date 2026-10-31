@@ -1,14 +1,8 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { SHELF_COLUMNS, SHELF_SLOTS } from '../../shared/cart';
-import { shelfFrame } from '../room/furnitureModels';
+import { SHELF_SLOTS } from '../../shared/cart';
+import { registerModel, shelfSlot } from '../room/furnitureModels';
 import type { Shelf, ShelfItem } from './shelf';
-
-/** Where slot `slot` stands in the shelf's own frame: rows fill from the top board down, left to right. */
-export function shelfSlotPosition(slot: number) {
-  const row = Math.floor(slot / SHELF_COLUMNS), column = slot % SHELF_COLUMNS, cell = shelfFrame.width / SHELF_COLUMNS;
-  return { x: -shelfFrame.width / 2 + cell * (column + .5), y: shelfFrame.firstBoard + (shelfFrame.rows - 1 - row) * shelfFrame.rowPitch + shelfFrame.board / 2, z: shelfFrame.back + shelfFrame.depth / 2 };
-}
 
 const palette = ['#e58f6b', '#6f9fc4', '#e2b64f', '#8bb174', '#b48ac8', '#d9707f', '#5fa8a0', '#c99c6b'];
 /** A stable number per title, so a product keeps its box and colour across polls, and looks the same to the owner and to visitors. */
@@ -33,8 +27,10 @@ function wrap(ctx: CanvasRenderingContext2D, text: string, width: number, lines:
 }
 
 function product(item: ShelfItem, slot: number) {
-  const h = seed(item.title), colour = palette[h % palette.length];
-  const width = .5 + (h >> 4) % 10 * .012, height = .36 + (h >> 8) % 14 * .013, depth = .26 + (h >> 12) % 6 * .01;
+  const h = seed(item.title), colour = palette[h % palette.length], space = shelfSlot(slot);
+  const wanted = { width: .5 + (h >> 4) % 10 * .012, height: .36 + (h >> 8) % 14 * .013, depth: .26 + (h >> 12) % 6 * .01 };
+  const fit = Math.min(1, space.width * .9 / wanted.width, space.height * .9 / wanted.height, space.depth * .9 / wanted.depth);
+  const width = wanted.width * fit, height = wanted.height * fit, depth = wanted.depth * fit;
   const geometries: THREE.BufferGeometry[] = [], materials: THREE.Material[] = [], textures: THREE.Texture[] = [];
   const node = new THREE.Group(); node.name = `cart-item:${slot}`;
   const body = new THREE.Mesh(new RoundedBoxGeometry(width, height, depth, 2, .025), new THREE.MeshStandardMaterial({ color: colour, roughness: .55 }));
@@ -60,34 +56,23 @@ function product(item: ShelfItem, slot: number) {
 }
 
 function register() {
-  const node = new THREE.Group(); node.name = 'cart-register';
-  const geometries: THREE.BufferGeometry[] = [], materials: THREE.Material[] = [];
-  const part = (geometry: THREE.BufferGeometry, material: THREE.Material, x: number, y: number, z: number, parent: THREE.Object3D = node) => {
-    geometries.push(geometry); materials.push(material); const mesh = new THREE.Mesh(geometry, material); mesh.position.set(x, y, z); mesh.castShadow = true; mesh.receiveShadow = true; parent.add(mesh); return mesh;
-  };
-  const shell = new THREE.MeshStandardMaterial({ color: '#f1e6d3', roughness: .5 }), trim = new THREE.MeshStandardMaterial({ color: '#3f5a4c', roughness: .6 });
-  part(new RoundedBoxGeometry(.62, .12, .5, 2, .03), trim, 0, .06, 0);
-  part(new RoundedBoxGeometry(.58, .2, .46, 2, .04), shell, 0, .22, -.01);
-  for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++) part(new RoundedBoxGeometry(.07, .025, .06, 1, .01), trim, -.12 + c * .085, .335, .1 - r * .075);
-  part(new THREE.CylinderGeometry(.03, .04, .16, 12), trim, .05, .4, -.14);
-  const screen = new THREE.Group(); screen.position.set(.05, .5, -.12); screen.rotation.x = -.35; node.add(screen);
-  part(new RoundedBoxGeometry(.5, .22, .06, 2, .02), trim, 0, 0, 0, screen);
+  const model = registerModel(); model.node.name = 'cart-register';
   let current = '';
-  const face = new THREE.MeshBasicMaterial({ toneMapped: false }); materials.push(face);
-  const display = part(new THREE.PlaneGeometry(.44, .16), face, 0, 0, .031, screen); display.name = 'cart-register-display';
+  const face = new THREE.MeshBasicMaterial({ toneMapped: false }), plane = new THREE.PlaneGeometry(1, 1);
+  const display = new THREE.Mesh(plane, face); display.name = 'cart-register-display'; model.display.add(display);
   return {
-    node,
+    node: model.node, ready: model.ready,
     show(text: string) {
       if (text === current) return; current = text;
       face.map?.dispose();
-      face.map = canvasTexture(440, 160, ctx => {
-        ctx.fillStyle = '#17302a'; ctx.fillRect(0, 0, 440, 160);
-        ctx.fillStyle = '#b9f3a0'; ctx.font = font(900, text.length > 11 ? 58 : 72); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(text, 220, 84, 412);
+      face.map = canvasTexture(512, 128, ctx => {
+        ctx.fillStyle = '#17302a'; ctx.fillRect(0, 0, 512, 128);
+        ctx.fillStyle = '#b9f3a0'; ctx.font = font(900, text.length > 11 ? 64 : 84); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(text, 256, 68, 488);
       });
       face.needsUpdate = true; display.userData.text = text;
     },
-    dispose() { face.map?.dispose(); geometries.forEach(g => g.dispose()); materials.forEach(m => m.dispose()); },
+    dispose() { face.map?.dispose(); face.dispose(); plane.dispose(); model.dispose(); },
   };
 }
 
@@ -96,7 +81,7 @@ export function cartScene() {
   const till = register();
   let drawn = new Map<number, { key: string; view: ReturnType<typeof product> }>();
   return {
-    products, register: till.node,
+    products, register: till.node, ready: till.ready,
     /** Draws `shelf`; true when anything on the shelf changed. */
     show(shelf: Shelf) {
       till.show(shelf.register);
@@ -106,7 +91,7 @@ export function cartScene() {
         const key = JSON.stringify([item.title, item.price, item.qty]); let entry = drawn.get(slot);
         if (entry && entry.key !== key) { entry.view.node.removeFromParent(); entry.view.dispose(); entry = undefined; }
         if (!entry) { entry = { key, view: product(item, slot) }; products.add(entry.view.node); changed = true; }
-        const at = shelfSlotPosition(slot); entry.view.node.position.set(at.x, at.y, at.z);
+        const at = shelfSlot(slot); entry.view.node.position.set(at.x, at.y + .002, at.z);
         next.set(slot, entry);
       });
       for (const [id, entry] of drawn) if (!next.has(id)) { entry.view.node.removeFromParent(); entry.view.dispose(); changed = true; }
@@ -114,6 +99,6 @@ export function cartScene() {
       products.userData.count = drawn.size;
       return changed;
     },
-    dispose() { for (const entry of drawn.values()) entry.view.dispose(); drawn.clear(); till.dispose(); products.removeFromParent(); till.node.removeFromParent(); },
+    dispose() { for (const entry of drawn.values()) entry.view.dispose(); drawn.clear(); till.dispose(); products.removeFromParent(); },
   };
 }
