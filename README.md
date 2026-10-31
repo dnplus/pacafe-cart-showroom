@@ -60,6 +60,7 @@ CI（`.github/workflows/ci.yml`）在每次 push 和 pull request 跑這三項�
 | `npm run screenshots:share` | 存房間分享面板和訪客分享頁的截圖（1440 和 390 寬，range 模式）到 `docs/screenshots/`。設了 `SHARE_SCREENSHOTS_COPY_TO` 會另外複製一份到那個目錄。 |
 | `node scripts/screenshots-unbox.mjs` | 用真的 `wrangler dev` 跑一遍拆快遞：桌機用滑鼠、390 寬用真的觸控事件（CDP）劃開一件、沒劃完就放手、劃開（檢查升起的商品卡有品名和商品連結）上架、再一鍵秒開，每一步存一張圖到 `UNBOX_SCREENSHOTS_DIR`（預設 `.local/screenshots-unbox`）。設 `UNBOX_REDUCED_MOTION=1` 會開「減少動態」再跑一次。 |
 | `node scripts/screenshots-cast.mjs` | 存角色面板和房間（Muse 和店主、換店員前後、沒金鑰的說明、用假 Meta API 生成的角色、訪客頁，以及走路、拆快遞後的歡呼和店員去貨架、新東西進來的反應）的截圖到 `$CAST_SCREENSHOTS_DIR`，1440 和 390 寬各一套。 |
+| `node scripts/promo-plates.mjs` | 在 Vite 開發伺服器開 `plates.html`，從房間的直播棚拍介紹片的背景板（遠景、近景各一張去掉角色的房間、一張只有桌子），連同屋主站的位置寫到 `runner/composition/plates/`。房間或棚景改了以後要重拍。 |
 | `node tools/meta-hackathon/probe/run-all.ts --dry-run` | 不呼叫 API，印出 Meta Model API 探針的請求和費用估算。見 [探針說明](tools/meta-hackathon/probe/README.md)。 |
 
 截圖和算圖腳本需要 Playwright 的 Chromium（`npx playwright-core install chromium`），用 SwiftShader 在沒有 GPU 的機器上畫 WebGL。
@@ -266,10 +267,12 @@ npm run runner -- --once       # 做完一個 job（或沒有 job）就結束
 
 一個 job 依序經過這幾步，每一步都回報給 worker：
 
-1. **分鏡**（`runner/storyboard.ts`、`runner/spark.ts`）。畫面、時間和價格都從 claim 的 `view` 來：開場、最多 8 件商品各一景、結尾。寫字幕的只負責文字，所以 Spark 拿不到也秀不出屋主藏起來的價格。結尾的免責聲明固定畫在畫面上，不在分鏡裡。
+1. **分鏡**（`runner/storyboard.ts`、`runner/spark.ts`）。畫面、時間和價格都從 claim 的 `view` 來：開場、最多 8 件商品各一景、結尾。寫字幕的只負責文字，所以 Spark 拿不到也秀不出屋主藏起來的價格。字幕是屋主主持的口白，用第一人稱。結尾的免責聲明固定畫在畫面上，不在分鏡裡。
 2. **配音**（`runner/tts.ts`）。每一景的字幕各念一段，依文字快取，QA 改過字的景才會重念。每段都量出實際長度。
 3. **QA**（`runner/qa.ts`）。每輪在每一景的中點，加上前一輪抓到問題的時間點各算一張 still，交給看片的人（Spark 或 mock 規則）找三種問題：`forbidden_wording`（結帳、下單這類字，error）、`subtitle_overflow`（一行比 24 個全形字寬，error）、`pacing_too_fast`（每秒超過 9 個字，warning）。每種問題各有一個修法：換字、斷行、從沒問題的景借時間；下一輪看修過的版本。最後一輪還有 error 時 job 就 `failed`；只剩 warning 照樣出片。`qa.json` 不論成敗都會上傳。
 4. **算圖**（`runner/render.ts`、`runner/composition/`）。景的長度原本照閱讀速度估，配音可能念得比較慢。算圖前，配音比那一景長的景會加長到念得完再多 0.3 秒，時間從有餘裕的景借，結尾和總片長不變（`fitVoice`）。然後 Remotion 算出 1280×720、30 fps 的 h264，再用開場那一景的中點算縮圖，上傳後回報 `done`。
+
+   影片由屋主在房間左邊的直播棚主持。開場屋主從右邊走進棚、對鏡頭打招呼；每件商品切近景，屋主站左邊，右邊滑進商品卡（有商品圖就放圖，載不到就用品名首字的色塊），屋主跳一下、頭上冒「!」或「♪」；結尾 Muse 走到屋主旁邊，兩人一起冒「♥」。背景是房間的直播棚照片：`runner/composition/plates/` 每個鏡位兩張，一張是去掉角色的房間，一張只有桌子，角色畫在兩張中間，所以會站在桌子後面。房間或棚景改了以後，用 `node scripts/promo-plates.mjs` 重拍（它在 Vite 開發伺服器上開 `plates.html`，這一頁不進正式 build）。
 
 錯誤訊息回報給 worker 和印到 log 之前，會先把 `META_API_KEY`、`ELEVENLABS_API_KEY`、`MINIMAX_API_KEY`、`CART_MCP_TOKEN` 的值換成 `[REDACTED]`。
 

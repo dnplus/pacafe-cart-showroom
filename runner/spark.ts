@@ -29,6 +29,7 @@ async function chat(config: MetaConfig, messages: unknown[], estimate: { inputTo
 
 const STORYBOARD_RULES = [
   '你是小屋購物車的短片字幕編劇。小屋把屋主的 Muse 採買時記下的東西擺上貨架；它沒有結帳，也不是購物網站。',
+  '影片由屋主本人坐在小屋的直播棚主持，字幕就是屋主的口白：用第一人稱（我、我的小屋），Muse 是幫屋主採買的店員。',
   '依輸入的每個 scene 寫字幕，用台灣繁體中文，口吻溫暖、簡短。每句一行，每景 1 到 3 行。',
   `每行不超過 ${SUBTITLE.maxWidthEm} 個全形字寬，每秒不超過 ${MAX_CPS} 個字。`,
   '不得出現結帳、下單、購買、付款、立即購買這類字眼。只能用輸入裡的資訊；price 是 null 的地方不提價格，也不要猜。',

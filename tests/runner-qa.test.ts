@@ -6,7 +6,7 @@ import { claimFor } from './fake-runner-worker';
 
 const board = (scenes: Storyboard['scenes']): Storyboard => storyboardSchema.parse({ durationSec: scenes.at(-1)!.endSec, priceMode: 'hidden', scenes });
 const opening = (endSec: number, subtitle: string[]) => ({ kind: 'opening' as const, id: 'opening', startSec: 0, endSec, subtitle, nickname: '小島', count: 1, total: null });
-const item = (startSec: number, endSec: number, subtitle: string[], id = 'item-1') => ({ kind: 'item' as const, id, startSec, endSec, subtitle, title: '帆布托特包', qty: 1, price: null });
+const item = (startSec: number, endSec: number, subtitle: string[], id = 'item-1') => ({ kind: 'item' as const, id, startSec, endSec, subtitle, title: '帆布托特包', qty: 1, price: null, image: null });
 const seconds = (scene: Storyboard['scenes'][number]) => scene.endSec - scene.startSec;
 const ending = (startSec: number, endSec: number) => ({ kind: 'ending' as const, id: 'ending', startSec, endSec, subtitle: ['都擺在小屋的貨架上。'], more: 0 });
 

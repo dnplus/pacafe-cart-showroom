@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { formatTwd } from '../shared/cart.ts';
+import { formatTwd, webUrl } from '../shared/cart.ts';
 import type { PromoJob } from '../shared/promo.ts';
 import { priceModes, type PriceRange, type ShareView } from '../shared/share.ts';
 
@@ -25,7 +25,7 @@ const line = z.string().trim().min(1).max(200);
 const timing = { id: z.string().min(1), startSec: z.number().nonnegative(), endSec: z.number().positive(), subtitle: z.array(line).min(1) };
 export const sceneSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('opening'), ...timing, nickname: z.string(), count: z.number().int().nonnegative(), total: z.string().nullable() }),
-  z.strictObject({ kind: z.literal('item'), ...timing, title: z.string(), qty: z.number().int().positive(), price: z.string().nullable() }),
+  z.strictObject({ kind: z.literal('item'), ...timing, title: z.string(), qty: z.number().int().positive(), price: z.string().nullable(), image: webUrl.nullable() }),
   z.strictObject({ kind: z.literal('ending'), ...timing, more: z.number().int().nonnegative() }),
 ]);
 export type Scene = z.infer<typeof sceneSchema>;
@@ -67,7 +67,7 @@ export function sceneFrames(view: ShareView, job: Pick<PromoJob, 'durationSec'>)
   const prices = viewPrices(view), shown = view.items.slice(0, itemSceneCount(view.items.length, job.durationSec));
   const scenes: Scene[] = [
     { kind: 'opening', id: 'opening', startSec: 0, endSec: 0, subtitle: [], nickname: view.nickname, count: view.items.length, total: prices.total },
-    ...shown.map((item, i): Scene => ({ kind: 'item', id: `item-${i + 1}`, startSec: 0, endSec: 0, subtitle: [], title: item.title, qty: item.qty, price: prices.items[i] })),
+    ...shown.map((item, i): Scene => ({ kind: 'item', id: `item-${i + 1}`, startSec: 0, endSec: 0, subtitle: [], title: item.title, qty: item.qty, price: prices.items[i], image: item.imageUrl })),
     { kind: 'ending', id: 'ending', startSec: 0, endSec: 0, subtitle: [], more: view.items.length - shown.length },
   ];
   const itemSec = shown.length ? (job.durationSec - OPENING_SEC - ENDING_SEC) / shown.length : 0;
@@ -75,12 +75,12 @@ export function sceneFrames(view: ShareView, job: Pick<PromoJob, 'durationSec'>)
   return retime(scenes, durations, job.durationSec);
 }
 
-/** A sentence per line from the view alone. The cards already show prices and the total, so the words stay short; fitting lines to the screen is the QA loop's job. */
+/** The owner hosts, so the lines are theirs: a sentence per line from the view alone. The cards already show prices and the total, so the words stay short; fitting lines to the screen is the QA loop's job. */
 export function fallbackSubtitle(scene: Scene, mode: ShareView['mode']): string[] {
   switch (scene.kind) {
-    case 'opening': return [`這是${scene.nickname}的小屋購物車。`, `架上 ${scene.count} 件，都是 Muse 採買時記下的東西。`];
+    case 'opening': return [`歡迎來到${scene.nickname}的小屋購物車！`, `架上 ${scene.count} 件，都是 Muse 幫我採買時記下的。`];
     case 'item': return [`「${scene.title}」${scene.qty > 1 ? ` ×${scene.qty}` : ''}${scene.price ? `，${mode === 'range' ? '大約 ' : ''}${scene.price}` : ''}。`];
-    case 'ending': return [`以上是 Muse 這次記下的東西${scene.more ? `，還有 ${scene.more} 件沒有入鏡` : ''}。`, '都擺在小屋的貨架上。'];
+    case 'ending': return [`今天就介紹到這裡${scene.more ? `，另外 ${scene.more} 件在小屋等你` : ''}。`, '想看全部，就來小屋的貨架逛逛吧！'];
   }
 }
 
