@@ -4,6 +4,7 @@ import { DEFAULT_NICKNAME } from '../shared/share';
 import { sharePath, shareView, type ShareSettings } from '../shared/share';
 import { CastPanel } from './cast/CastPanel';
 import { useCast } from './cast/useCast';
+import { useCue } from './cast/useCue';
 import { CartHud } from './cart/CartHud';
 import { UnboxTray } from './cart/UnboxTray';
 import { ownerShelf, sharedShelf } from './cart/shelf';
@@ -36,6 +37,7 @@ function Showroom() {
   const cart = state.status === 'ready' || state.status === 'offline' ? state.cart : null;
   const cast = useCast(state.status === 'ready' || state.status === 'offline', sharing);
   const unbox = useUnbox(cart);
+  const cue = useCue(cart, unbox.shelved.size, unbox.ready && cart?.items.length === unbox.boxes.length);
   // While the share panel is open the room draws what a visitor would see, so the card it captures shows no more than that.
   const shelf = useMemo(() => !cart ? null : preview ? sharedShelf(shareView(cart, preview)) : ownerShelf(cart, unbox.shelved), [cart, preview, unbox.shelved]);
   return <main className="agent-house-app showroom">
@@ -47,7 +49,7 @@ function Showroom() {
     </CartHud>
     <section className="world-stage game-stage" aria-label={t('Cart showroom')}>
       <RoomZones>
-        <RoomScene scenery="peach" shelf={shelf} controls={controls} counter={() => setListOpen(true)} baristaName={t('Clerk')} barista={preview ? DEFAULT_CHARACTER : cast.view?.character} owner={{ name: preview?.nickname ?? cast.view?.nickname ?? DEFAULT_NICKNAME, sprite: preview ? null : cast.spriteUrl, open: () => { setCasting(true); setSharing(false); } }} studioSet={showroomStudioSet} hour={14} />
+        <RoomScene scenery="peach" cue={preview ? null : cue} shelf={shelf} controls={controls} counter={() => setListOpen(true)} baristaName={t('Clerk')} barista={preview ? DEFAULT_CHARACTER : cast.view?.character} owner={{ name: preview?.nickname ?? cast.view?.nickname ?? DEFAULT_NICKNAME, sprite: preview ? null : cast.spriteUrl, open: () => { setCasting(true); setSharing(false); } }} studioSet={showroomStudioSet} hour={14} />
       </RoomZones>
     </section>
     {!sharing && !casting && !habiting && <UnboxTray {...unbox} items={cart?.items ?? []} />}

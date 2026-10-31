@@ -3,7 +3,7 @@ import { Sparkles, Undo2, X } from 'lucide-react';
 import { characters } from '../../shared/domain';
 import { t } from '../i18n';
 import { residentArt } from '../room/residentArt';
-import { ownerSilhouette } from '../room/silhouette';
+import { ownerArt } from '../room/residentArt';
 import type { CastController } from './useCast';
 import '../share/share.css';
 import './cast.css';
@@ -35,10 +35,10 @@ export function CastPanel({ cast, close }: { cast: CastController; close: () => 
       <div className="cast-owner">
         <h3>{t('You, in the middle of the room')}</h3>
         <div className="cast-owner-row">
-          <img className="cast-sprite" src={spriteUrl ?? ownerSilhouette} alt={t(generated ? 'Your generated figure' : 'Placeholder figure')} height="112" data-testid="cast-sprite" data-kind={generated ? 'generated' : 'placeholder'} />
+          <img className="cast-sprite" src={spriteUrl ?? ownerArt.portrait} alt={t(generated ? 'Your generated figure' : 'Shop owner figure')} height="112" data-testid="cast-sprite" data-kind={generated ? 'generated' : 'placeholder'} />
           <p className="cart-note">
-            {generated ? <strong className="cast-ai" data-testid="cast-ai-label">{t('AI generated (Muse Image)')}</strong> : t('A plain stand-in until you make your own.')}
-            <small>{t('Only you see this figure. People who open your share link see the stand-in.')}</small>
+            {generated ? <strong className="cast-ai" data-testid="cast-ai-label">{t('AI generated (Muse Image)')}</strong> : t('The shop owner, drawn with an image model. Make your own from a photo if you like.')}
+            <small>{t('Only you see a figure made from your photo. People who open your share link see the shop owner.')}</small>
           </p>
         </div>
         <div className="share-field">
@@ -53,7 +53,7 @@ export function CastPanel({ cast, close }: { cast: CastController; close: () => 
           <button type="button" className="share-button primary" disabled={busy || unavailable || !photo || !consent} onClick={() => {
             if (photo) void cast.generate(photo).then(() => { setPhoto(null); setConsent(false); if (picker.current) picker.current.value = ''; });
           }} data-testid="cast-generate"><Sparkles size={16} aria-hidden="true" />{t(busy ? 'Drawing…' : 'Ask Muse to draw it')}</button>
-          {generated && <button type="button" className="share-button" disabled={busy} onClick={() => void cast.reset()} data-testid="cast-reset"><Undo2 size={16} aria-hidden="true" />{t('Back to the stand-in')}</button>}
+          {generated && <button type="button" className="share-button" disabled={busy} onClick={() => void cast.reset()} data-testid="cast-reset"><Undo2 size={16} aria-hidden="true" />{t('Back to the shop owner')}</button>}
         </div>
         {unavailable && <p className="cart-note cast-needs" role="status" data-testid="cast-needs-key">{t('Needs META_API_KEY and META_API_BASE_URL on the server (set them with wrangler secret put).')}</p>}
         <p className="cart-note">{t('The photo is only sent to make the figure and is never kept. The figure is AI generated, and image search is switched off for it.')}</p>

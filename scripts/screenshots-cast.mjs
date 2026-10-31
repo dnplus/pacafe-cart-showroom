@@ -1,5 +1,5 @@
 // Builds the app and saves the cast panel and the room at 1440 and 390 wide to $CAST_SCREENSHOTS_DIR (default .local/screenshots-cast):
-// 1. a worker with no Meta key: the room with the default clerk and the owner placeholder, the panel with its "needs META_API_KEY"
+// 1. a worker with no Meta key: the room with the default clerk (Muse) and the default owner figure, the panel with its "needs META_API_KEY"
 //    note and a disabled button, then another clerk picked, kept over a reload;
 // 2. a worker pointed at a fake Meta API on 127.0.0.1 (a made-up key, a PNG drawn here): a photo, the consent box, the generated
 //    sprite beside its "AI generated" label, and the visitor's /s/<slug> page, which keeps the placeholder.
@@ -79,9 +79,10 @@ try {
   for (const shape of viewports) {
     const problems = [], { size } = shape;
     const page = await open(workerA, shape, problems);
-    assert.equal(await roomAttr(page, 'data-character'), 'clerk', 'the default clerk');
-    assert.equal(await roomAttr(page, 'data-owner-source'), 'placeholder', 'the owner spot starts as the placeholder');
-    await shoot(page, `room-owner-placeholder-${size}.png`);
+    assert.equal(await roomAttr(page, 'data-character'), 'muse', 'the default clerk');
+    assert.equal(await roomAttr(page, 'data-barista-source'), 'sheet', 'Muse walks on her sheet');
+    assert.equal(await roomAttr(page, 'data-owner-source'), 'sheet', 'the owner spot starts as the generated shop owner');
+    await shoot(page, `room-muse-and-owner-${size}.png`);
 
     await page.click('[data-testid="cast-button"]');
     await page.waitForSelector('[data-testid="cast-panel"] [data-testid="cast-sprite"]');
@@ -104,7 +105,7 @@ try {
     await shoot(page, `room-clerk-changed-${size}.png`);
     report.push({ size, step: 'no key', character: await roomAttr(page, 'data-character'), needs, problems: problems.splice(0) });
     await page.close();
-    await fetch(`${workerA.origin}/api/cast`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ character: 'clerk' }) });
+    await fetch(`${workerA.origin}/api/cast`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ character: 'muse' }) });
   }
 
   const share = await (await fetch(`${workerB.origin}/api/share`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ enabled: true, prices: 'hidden', nickname: '小島' }) })).json();
@@ -131,14 +132,46 @@ try {
     await visitor.goto(share.url);
     await visitor.waitForSelector(ready, { timeout: 60_000 });
     await visitor.waitForFunction(() => { const room = document.querySelector('.room-canvas'); return room?.getAttribute('data-owner-source') && room.getAttribute('data-owner-source') !== 'loading' && room.getAttribute('data-barista-source') !== 'loading'; }, undefined, { timeout: 60_000 });
-    assert.equal(await roomAttr(visitor, 'data-owner-source'), 'placeholder', 'a visitor sees the placeholder, not the owner\'s sprite');
+    assert.equal(await roomAttr(visitor, 'data-owner-source'), 'sheet', 'a visitor sees the shop owner, not the owner\'s photo sprite');
     const body = await (await fetch(share.url, { headers: { accept: 'application/json' } })).text();
     assert.ok(!/owner\/|sprite|generated/.test(body), 'the share view carries nothing of the sprite');
-    await shoot(visitor, `share-visitor-placeholder-${size}.png`);
+    await shoot(visitor, `share-visitor-owner-${size}.png`);
     await visitor.close();
     report.push({ size, step: 'with a fake key', problems: problems.splice(0) });
     await page.close();
     if (size === '1440') await fetch(`${workerB.origin}/api/cast/owner-sprite`, { method: 'DELETE' });
+  }
+
+  // 3. Motion on a fresh worker per size (the parcels start closed): a mid-walk frame, the cheer and the clerk's trip to the shelf after an unbox, and the reaction to a new item.
+  for (const shape of viewports) {
+    const problems = [], { size } = shape;
+    const persistM = fs.mkdtempSync(path.join(root, '.local', 'screenshots-cast-'));
+    const workerM = await startWorker(persistM, { SEED_FIXTURE: 'true' });
+    try {
+    const page = await open(workerM, shape, problems);
+    const motion = () => page.evaluate(() => JSON.parse(document.querySelector('.room-canvas').dataset.castMotion));
+    const until = async (test, what, ms = 60_000) => { const end = Date.now() + ms; for (;;) { const value = await test(); if (value) return value; if (Date.now() > end) throw new Error(`timed out: ${what}`); await page.waitForTimeout(100); } };
+    const walker = await until(async () => { const m = await motion(); return m.owner.moving ? 'owner' : m.clerk.moving ? 'clerk' : null; }, 'a figure walking');
+    await page.screenshot({ path: path.join(out, `motion-mid-walk-${size}.png`) });
+    report.push({ size, step: 'mid-walk', walker, motion: await motion() });
+    const items = (await (await fetch(`${workerM.origin}/api/cart`)).json()).items.map(({ title, store, url, priceTwd, imageUrl, qty }) => Object.fromEntries(Object.entries({ title, store, url, priceTwd, imageUrl, qty }).filter(([, value]) => value != null)));
+    await page.waitForSelector('[data-testid="unbox-all"]');
+    await page.click('[data-testid="unbox-all"]');
+    await until(() => page.evaluate(() => document.querySelector('.room-canvas').dataset.cue === 'unboxed'), 'the unboxed cue');
+    await page.waitForTimeout(250);
+    await page.screenshot({ path: path.join(out, `motion-unboxed-cheer-${size}.png`) });
+    const fetched = await until(async () => { const m = await motion(); return m.clerk.moving && m.clerk.z < -3.9 ? m : null; }, 'the clerk walking to the shelf', 15_000).catch(() => null);
+    if (fetched) await page.screenshot({ path: path.join(out, `motion-clerk-to-shelf-${size}.png`) });
+    report.push({ size, step: 'unboxed', clerkToShelf: fetched?.clerk ?? null });
+    const next = [...items, { title: '木頭湯匙', store: '小島陶房', priceTwd: 180, qty: 1 }];
+    await fetch(`${workerM.origin}/api/cart`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ items: next }) });
+    await until(() => page.evaluate(() => document.querySelector('.room-canvas').dataset.cue === 'arrival'), 'the arrival cue', 20_000);
+    await page.waitForTimeout(150);
+    await page.screenshot({ path: path.join(out, `motion-new-item-${size}.png`) });
+    const poked = await page.evaluate(() => { const room = document.querySelector('.room-canvas'); return room.dataset.cue; });
+    report.push({ size, step: 'new item', cue: poked, problems: problems.splice(0) });
+    await page.close();
+    } finally { await workerM.stop(); fs.rmSync(persistM, { recursive: true, force: true }); }
   }
 
   assert.ok(received.length >= 1, 'the fake Meta API was asked');

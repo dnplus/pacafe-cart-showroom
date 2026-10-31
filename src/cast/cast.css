@@ -1,6 +1,6 @@
 .cast-clerks{display:grid;gap:6px}
 .cast-clerks legend{font-size:12px;color:var(--muted);font-weight:800;margin-bottom:6px}
-.cast-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.cast-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
 .cast-choice{position:relative;display:grid;justify-items:center;gap:4px;padding:6px 2px;border:1.5px solid #e6dcc5;border-radius:12px;background:#fffef8;cursor:pointer;font-size:11.5px;font-weight:850;text-align:center}
 .cast-choice:has(input:checked){border-color:var(--forest);background:#eef3e4}
 .cast-choice:has(input:focus-visible){outline:2px solid var(--forest);outline-offset:2px}
