@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { addCartItem, cartItemInputSchema, cartQty, MAX_CART_ITEMS, removeCartItem, type Cart } from '../shared/cart';
+import { habitsReport } from '../shared/habits';
+import type { UnboxState } from '../shared/unbox';
 import { promoJobId, promoRequestSchema, type PromoRecord } from '../shared/promo';
 import { shareUrl, type ShareSettings } from '../shared/share';
 import { withProductImages } from './productPage';
@@ -8,6 +10,8 @@ import { queuePromo } from './promo';
 export interface Store {
   cart(): Promise<Cart>;
   saveCart(cart: Cart): Promise<void>;
+  /** Which parcels the owner has opened. */
+  unbox(): Promise<UnboxState>;
   /** Made on first ask, so a showroom nobody shares never gets a slug. */
   share(): Promise<ShareSettings>;
   saveShare(settings: ShareSettings): Promise<void>;
@@ -53,6 +57,14 @@ export const tools: readonly Tool[] = [
     async run(store, _args, origin) {
       const [cart, share] = await Promise.all([store.cart(), store.share()]);
       return { ...cart, share: { url: shareUrl(origin, share.slug), enabled: share.enabled, prices: share.prices } };
+    },
+  }),
+  tool({
+    name: 'habits_report', title: '購物習慣報表', description: '讀取購物習慣報表：各分類和各店的花費與件數、價位分布、記下東西的星期和時段（台灣時間）、平均與最貴的一筆、沒標價的件數、已拆和還沒拆的快遞，以及幾句從數字推出來的觀察。只算目前購物車裡的東西，已移除的不在內。唯讀。',
+    input: z.strictObject({}), annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    async run(store) {
+      const [cart, unbox] = await Promise.all([store.cart(), store.unbox()]);
+      return habitsReport(cart.items, unbox, now());
     },
   }),
   tool({

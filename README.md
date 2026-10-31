@@ -124,6 +124,17 @@ echo "CART_MCP_TOKEN=$(openssl rand -base64 24)" > .dev.vars
 |---|---|
 | ![桌機截圖：右側分享面板，開放分享、選了價格區間，暱稱小島，下方有分享連結、預覽和下載分享卡；房間收銀機顯示 NT$ 5,000–10,000](docs/screenshots/room-share-settings-1440.png) | ![桌機截圖：小島 的小屋購物車，總額 NT$ 5,000–10,000，清單每件只顯示價格區間和看商品連結](docs/screenshots/share-page-1440.png) |
 
+## 購物習慣：房間裡的「習慣」面板和 `habits_report`
+
+屋主在房間按購物車面板上的「習慣」打開報表（只有屋主看得到，分享頁沒有）。報表從購物車裡目前的東西和拆快遞紀錄算出來，不存任何新資料。算法是 `shared/habits.ts` 的純函式 `habitsReport(items, unbox, now)`，房間畫面和 MCP 的 `habits_report` 用同一個函式，所以 Muse 講的數字和屋主看到的一樣。
+
+- **算什麼。** 各分類和各店的花費與筆數（沒分類的歸「未分類」，沒填店名的另計）、四個價位區間、記下東西的星期和時段、平均每筆和最貴一筆、沒標價的筆數、已拆和未拆的快遞（含最久沒拆的那件放了幾天），最後是最多三句從數字推出來的話，例如花最多的分類、凌晨記下的比例、放很久沒拆的東西。
+- **「一筆」是購物車的一行**，金額是單價乘數量。沒標價的筆不算進總額、平均和價位區間。花費相同時，依筆數、再依第一次出現的順序排，結果每次都一樣；最高的分類和第二名打平，就不說「花最多」。
+- **時間用台灣時間（UTC+8）**，時段分凌晨 0–5、上午 6–11、下午 12–17、晚上 18–23 時。時間是東西第一次被記進小屋的時間（`addedAt`），不是下單時間，一次寫入很多件就會是同一個時間。購物車不到 4 筆時不下時間的結論。
+- **只算目前購物車裡的東西。** 已經移除的不在內，報表裡也這樣寫。
+- 觀察的句子是繁體中文，不分語系。圖是 SVG 和 CSS 畫的，沒有圖表套件；數字都是文字，不靠顏色讀。
+- 分類來自 `cart_add` 的 `category`。沒給的東西就是未分類。
+
 ## 角色與 C 位
 
 屋主在房間按「角色」打開面板。選擇存在屋主設定裡（Durable Object 的 `cast`），重新整理和換裝置都會保留。
@@ -159,13 +170,14 @@ echo "CART_MCP_TOKEN=$(openssl rand -base64 24)" > .dev.vars
 
 伺服器不保存 session，每個 POST 回一個 JSON。支援 `initialize`、`ping`、`tools/list`、`tools/call`。不開 SSE 串流，所以 `GET /mcp` 回 `405`。
 
-工具固定 5 支：
+工具固定 6 支：
 
 | 工具 | 輸入 | 回傳 | 唯讀 |
 |---|---|---|---|
-| `cart_add` | `{ title, store?, url?, priceTwd?, imageUrl?, qty? }`，`qty` 預設 1 | `Cart` | 否 |
+| `cart_add` | `{ title, store?, url?, priceTwd?, imageUrl?, category?, qty? }`，`qty` 預設 1 | `Cart` | 否 |
 | `cart_list` | `{}` | `Cart`，加上 `share: { url, enabled, prices }` | 是 |
 | `cart_remove` | `{ itemId, qty? }`，不給 `qty` 就整件移除 | `Cart` | 否 |
+| `habits_report` | `{}` | `HabitsReport`，見下面「購物習慣」 | 是 |
 | `promo_generate` | `{ durationSec?, style? }`，`durationSec` 介於 15 到 45，預設 30 | `{ jobId, status: 'queued' }` | 否 |
 | `promo_status` | `{ jobId }` | `PromoJob` | 是 |
 
@@ -215,6 +227,7 @@ echo "CART_MCP_TOKEN=$(openssl rand -base64 24)" > .dev.vars
 | skill | 做什麼 |
 |---|---|
 | `showroom-cart` | 用 `cart_add`、`cart_list`、`cart_remove` 記下、查看、移除東西 |
+| `showroom-cart` 的「購物習慣」一節 | 用 `habits_report` 讀報表，照數字回答屋主 |
 | `showroom-promo` | `promo_generate` 之後每 15 秒 `promo_status`，直到 `done` 或 `failed`，回報成片和分享連結 |
 
 Demo 任務在 `muse/demo-task.txt`：
@@ -237,7 +250,7 @@ muse exec --prompt-file muse/demo-task.txt --disable-approval --max-model-steps 
 | 購物車資料形狀與推導、fixture | `shared/cart.ts`、`shared/fixtures/cart.ts` | 無 | 賽中新寫 |
 | Worker 與 Showroom Durable Object | `worker/index.ts`、`worker/showroom.ts`、`worker/env.ts`、`wrangler.jsonc` | 無 | 賽中新寫 |
 | MCP 傳輸 | `worker/mcp.ts` | 參考 pa-cafe main 的 `worker/streamable-mcp.ts`、`worker/protocol.ts` | 賽中重寫：只留 JSON-RPC 和協定協商，刪掉配對、Clerk session、簽章、版本偏差 |
-| 5 支 MCP 工具、介紹片 job、分享設定 | `worker/tools.ts`、`shared/promo.ts`、`shared/share.ts` | 無 | 賽中新寫 |
+| 6 支 MCP 工具、介紹片 job、分享設定 | `worker/tools.ts`、`shared/promo.ts`、`shared/share.ts` | 無 | 賽中新寫 |
 | skills、Muse Code 設定範例、demo 任務 | `.agents/skills/`、`muse/` | 無 | 賽中新寫 |
 | Model API function calling 轉 MCP 的備援 | `adapter/` | 無 | 賽中新寫 |
 | 貨架商品、收銀機、HUD、輪詢、拆快遞 | `src/cart/`、`src/App.tsx`、`shared/unbox.ts` | 無 | 賽中新寫 |

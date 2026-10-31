@@ -83,6 +83,22 @@
       }
     },
     {
+      "name": "habits_report",
+      "title": "購物習慣報表",
+      "description": "讀取購物習慣報表：各分類和各店的花費與件數、價位分布、記下東西的星期和時段（台灣時間）、平均與最貴的一筆、沒標價的件數、已拆和還沒拆的快遞，以及幾句從數字推出來的觀察。只算目前購物車裡的東西，已移除的不在內。唯讀。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
       "name": "cart_remove",
       "title": "移出購物車",
       "description": "從購物車拿掉一項東西。不給 qty 就整項移除；給 qty 就只減少那個數量。itemId 來自 cart_list。",
