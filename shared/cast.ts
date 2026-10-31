@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { characters } from './domain';
 
-export const DEFAULT_CHARACTER = 'clerk' satisfies typeof characters[number];
+export const DEFAULT_CHARACTER = 'muse' satisfies typeof characters[number];
 /** The Durable Object key of the owner's cast. Only the owner's `/api/cast` reads it; `/s/<slug>` never does. */
 export const CAST_KEY = 'cast';
 
@@ -13,7 +13,10 @@ export const ownerSpriteSchema = z.discriminatedUnion('kind', [
 export type OwnerSprite = z.infer<typeof ownerSpriteSchema>;
 
 /** The stored record; the owner has chosen nothing until the first PUT, so every field has a default. */
-export const castSchema = z.strictObject({ character: z.enum(characters).default(DEFAULT_CHARACTER), owner: ownerSpriteSchema.default({ kind: 'placeholder' }) });
+/** Picks stored before Muse took the counter named the Kenney figures; they stand as Muse now. */
+const retired = new Set(['clerk', 'clerk-mint']);
+const storedCharacter = z.preprocess(value => typeof value === 'string' && retired.has(value) ? DEFAULT_CHARACTER : value, z.enum(characters));
+export const castSchema = z.strictObject({ character: storedCharacter.default(DEFAULT_CHARACTER), owner: ownerSpriteSchema.default({ kind: 'placeholder' }) });
 export type Cast = z.output<typeof castSchema>;
 /** The owner's PUT body. */
 export const castUpdateSchema = z.strictObject({ character: z.enum(characters) });

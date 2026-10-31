@@ -58,8 +58,7 @@ CI（`.github/workflows/ci.yml`）在每次 push 和 pull request 跑這三項�
 | `node scripts/screenshots.mjs` | 建置、啟動 `wrangler dev --env local`，先把 5 個快遞箱都記成拆過，等貨架擺上 5 件商品後存 `docs/screenshots/desktop.png` 和 `mobile-390.png`。 |
 | `npm run screenshots:share` | 存房間分享面板和訪客分享頁的截圖（1440 和 390 寬，range 模式）到 `docs/screenshots/`。設了 `SHARE_SCREENSHOTS_COPY_TO` 會另外複製一份到那個目錄。 |
 | `node scripts/screenshots-unbox.mjs` | 用真的 `wrangler dev` 跑一遍拆快遞：桌機用滑鼠、390 寬用真的觸控事件（CDP）劃開一件、沒劃完就放手、劃開上架、再一鍵秒開，每一步存一張圖到 `UNBOX_SCREENSHOTS_DIR`（預設 `.local/screenshots-unbox`）。設 `UNBOX_REDUCED_MOTION=1` 會開「減少動態」再跑一次。 |
-| `node scripts/render-character.mjs` | 把 Kenney 的 CC0 角色算成 `public/art/characters/clerk-standee.png`、`clerk-portrait.png`，和綠色版 `clerk-mint-*.png`。 |
-| `node scripts/screenshots-cast.mjs` | 存角色面板和房間（換店員前後、C 位剪影、沒金鑰的說明、用假 Meta API 生成的角色、訪客頁）的截圖到 `$CAST_SCREENSHOTS_DIR`，1440 和 390 寬各一套。 |
+| `node scripts/screenshots-cast.mjs` | 存角色面板和房間（Muse 和店主、換店員前後、沒金鑰的說明、用假 Meta API 生成的角色、訪客頁，以及走路、拆快遞後的歡呼和店員去貨架、新東西進來的反應）的截圖到 `$CAST_SCREENSHOTS_DIR`，1440 和 390 寬各一套。 |
 | `node scripts/generate-studio-set.mjs` | 用 three.js 基本形狀產生主播台棚景 `public/studio/showroom-set.glb`。 |
 | `node tools/meta-hackathon/probe/run-all.ts --dry-run` | 不呼叫 API，印出 Meta Model API 探針的請求和費用估算。見 [探針說明](tools/meta-hackathon/probe/README.md)。 |
 
@@ -128,29 +127,38 @@ echo "CART_MCP_TOKEN=$(openssl rand -base64 24)" > .dev.vars
 
 屋主在房間按「角色」打開面板。選擇存在屋主設定裡（Durable Object 的 `cast`），重新整理和換裝置都會保留。
 
-**櫃台後的店員。** 有四個可選，圖都不是從別的專案搬來的：
+**櫃台後的店員。** 有三個可選，預設是 Muse：
 
 | id | 名稱 | 來源 |
 |---|---|---|
-| `clerk` | 店員 | Kenney 的 CC0 角色 |
-| `clerk-mint` | 薄荷店員 | 同一個 Kenney 角色，紫色換成綠色（`scripts/render-character.mjs`） |
-| `apron` | 圍裙店員 | 用程式畫的 SVG（`src/room/characterArt.ts`） |
-| `cap` | 帽子店員 | 用程式畫的 SVG（`src/room/characterArt.ts`） |
+| `muse` | Muse | PA Cafe 的 Muse 住民圖（同一位作者），含 2048×1024 四向走路 spritesheet（`public/art/characters/muse-*`） |
+| `apron` | 圍裙店員 | 用程式畫的 SVG（`src/room/characterArt.ts`），單張圖 |
+| `cap` | 帽子店員 | 用程式畫的 SVG（`src/room/characterArt.ts`），單張圖 |
 
-**C 位是屋主本人。** 房間中間（櫃台左前方的地板）站一個代表屋主的立牌，名牌是分享設定的暱稱，預設「屋主」。還沒有自己的角色時，站的是程式畫的中性剪影。屋主可以選一張自己的照片，勾選「這是我本人，並同意用這張照片生成角色」，按「請 Muse 生成」：伺服器透過 Meta Model API 使用 Meta 的 Muse 模型（`muse-image-1.0`）畫一張 chibi 全身立牌。
+以前存下來的 `clerk`、`clerk-mint`（Kenney 角色，已移除）讀回來時當成 `muse`。
+
+**動起來。** 兩個角色都會動，邏輯在 `src/room/castMotion.ts`（純函式，有測試），畫面接線在 `src/room/roomModel.ts`。
+
+- 店員在櫃台後面沿著櫃台踱步，屋主在地板空地上晃。有 spritesheet 的用走路格（第 0 格站立，第 1 到 7 格走路，四個朝向），沒有的（圍裙、帽子）用上下彈和左右翻面。站著時有緩慢的呼吸起伏。
+- 新東西進購物車（件數增加）：兩人各跳一下，頭旁邊冒「!」。拆開快遞、東西上貨架：兩人跳兩下冒「♪」，店員走到貨架前站一下再走回來。點店員或屋主：跳一下冒「♥」（點店員仍然會打開清單）。
+- 系統開了「減少動態」或房間暫停：不走、不跳、不起伏，只在頭旁邊短暫顯示標記。房間睡著（離開畫面或分頁）時整個動畫迴圈停止，和原本的繪製迴圈一樣。
+- 剛打開房間不算新消息：只有購物車和拆封紀錄都讀進來之後的變化才觸發（`src/cast/useCue.ts`）。
+- 測試用的掛鉤：房間元素的 `data-cast-motion`（兩人的位置、是否在走、目前的 sheet 格）、`data-cue`（最近一次反應）。
+
+**C 位是屋主本人。** 房間中間（櫃台左前方的地板）站一個代表屋主的立牌，名牌是分享設定的暱稱，預設「屋主」。還沒有自己的角色時，站的是預設的店主（用 Codex 的 AI 繪圖畫的 chibi 角色，含和 Muse 同格式的走路 spritesheet、立牌和頭像）。屋主可以選一張自己的照片，勾選「這是我本人，並同意用這張照片生成角色」，按「請 Muse 生成」：伺服器透過 Meta Model API 使用 Meta 的 Muse 模型（`muse-image-1.0`）畫一張 chibi 全身立牌。
 
 | 請求 | 回應 |
 |---|---|
 | `GET /api/cast`（屋主） | `200`，`{ character, owner, nickname, spriteGeneration }`。`owner` 是 `{ kind: 'placeholder' }` 或 `{ kind: 'generated', key, generatedAt, model }`。 |
 | `PUT /api/cast`（屋主），body `{ character }` | `200`，同上。`character` 不在清單裡回 `400`。 |
 | `POST /api/cast/owner-sprite`（屋主），multipart：`photo`（JPEG 或 PNG，2 MB 以內）、`consent=true` | `200`，同上。沒勾同意或照片不對回 `400`，太大回 `413`，沒設 Meta 金鑰回 `503`，模型失敗回 `502`。 |
-| `DELETE /api/cast/owner-sprite`（屋主） | 改回剪影，並刪掉生成的圖。 |
+| `DELETE /api/cast/owner-sprite`（屋主） | 改回預設的店主，並刪掉生成的圖。 |
 
 - 沒有 `META_API_KEY` 和 `META_API_BASE_URL`（都用 `wrangler secret put` 設）時，`GET /api/cast` 回 `spriteGeneration: { available: false, reason: 'needs_meta_api_key' }`，面板的按鈕是灰的並說明要設什麼；`POST` 回 `503`，完全不呼叫外部 API。
 - 送出的請求固定帶 `enable_image_search: false`，prompt 是固定範本，不含任何品牌或產品名稱。模型的錯誤內容和金鑰都不會回給前端；失敗一律是 `502 { error: 'generation_failed' }`。
 - 生成的 PNG 存在 R2 的 `owner/sprite-<uuid>.png`，`customMetadata` 記 `aiGenerated: 'true'`、`model`、`generatedAt`、`enableImageSearch: 'false'`。照片只在這次請求裡轉給模型，不存。面板在圖旁標「AI 生成（Muse Image）」。
-- **隱私：生成的角色只出現在屋主自己的房間。** 讀圖走 `/media/owner/...`，要屋主金鑰，前端用 `ownerFetch` 取回再轉成 object URL。訪客的 `/s/<slug>` 回應和頁面都不含它，C 位一律畫剪影、名牌是分享暱稱。分享面板開著時，房間也照訪客看到的樣子畫（剪影加預設店員），下載的分享卡才不會漏出來。
-- 訪客看到的店員目前一律是預設的「店員」，不跟著屋主的選擇走。
+- **隱私：生成的角色只出現在屋主自己的房間。** 讀圖走 `/media/owner/...`，要屋主金鑰，前端用 `ownerFetch` 取回再轉成 object URL。訪客的 `/s/<slug>` 回應和頁面都不含它，C 位一律畫預設的店主、名牌是分享暱稱。分享面板開著時，房間也照訪客看到的樣子畫（預設店主加預設店員），下載的分享卡才不會漏出來。
+- 訪客看到的店員目前一律是預設的 Muse，不跟著屋主的選擇走。
 - `node scripts/screenshots-cast.mjs` 用本機假的 Meta API（127.0.0.1，假金鑰，程式畫的 PNG）存面板和房間的截圖到 `$CAST_SCREENSHOTS_DIR`，不會打真的 API。
 
 ## `/mcp`
@@ -242,7 +250,10 @@ muse exec --prompt-file muse/demo-task.txt --disable-approval --max-model-steps 
 | Model API function calling 轉 MCP 的備援 | `adapter/` | 無 | 賽中新寫 |
 | 貨架商品、收銀機、HUD、輪詢、拆快遞 | `src/cart/`、`src/App.tsx`、`shared/unbox.ts` | 無 | 賽中新寫 |
 | 櫃台、貨架、植物、地毯的模型 | `src/room/furnitureModels.ts` | 無 | 賽中新寫 |
-| 角色算圖、棚景產生、截圖、持久化驗證、MCP 驗證 | `scripts/` | 無 | 賽中新寫 |
+| Muse 店員圖：立牌、頭像、2048×1024 走路 spritesheet | `public/art/characters/muse-*` | pa-cafe `public/art/residents/defaults/muse-*`（同一位作者） | 賽前搬來，原檔不改 |
+| 走路、反應、拆快遞時的歡呼（pa-cafe 的 sheet 格、朝向和 `facingOf` 做法） | `src/room/castMotion.ts`、`src/room/behavior.ts`、`src/room/roomModel.ts`、`src/cast/useCue.ts` | 做法參考 pa-cafe `baristaLocomotion.ts`、`behavior.ts` | 賽中重寫：不要導航格，只有踱步、跑腿和跳 |
+| 店主角色：立牌、頭像、走路 spritesheet | `public/art/characters/owner-*` | Codex 圖像生成（`codex exec`，見 THIRD_PARTY.md），綠幕摳背後存成透明 PNG | 賽中新寫 |
+| 棚景產生、截圖、持久化驗證、MCP 驗證 | `scripts/` | 無 | 賽中新寫 |
 | 測試 | `tests/` | 無 | 賽中新寫 |
 
 pa-cafe 房間的 import 閉包有 214 檔、約 3.6 萬行。住民、任務、額度、書櫃、多樓層、窗戶實驗和經濟機制都刪掉了，家具的 GLB 也沒有搬，櫃台、貨架和裝飾都改用程式畫。
@@ -251,7 +262,6 @@ pa-cafe 房間的 import 閉包有 214 檔、約 3.6 萬行。住民、任務、
 
 | 素材 | 用在哪裡 | 出處 | 作者 | 授權 |
 |---|---|---|---|---|
-| Starter Kit 3D Platformer 的 `character.glb`、`Textures/colormap.png` | 店員立牌和頭像（`scripts/render-character.mjs` 算圖） | https://github.com/KenneyNL/Starter-Kit-3D-Platformer ，commit 3fa8a04b | Kenney | CC0 1.0 |
 | Nunito Sans（`@fontsource-variable/nunito-sans` 5.3.0） | 介面字型 | https://github.com/Fonthausen/NunitoSans | The Nunito Sans Project Authors | SIL OFL 1.1 |
 | Lucide 圖示（`lucide-react` 1.54.0） | 介面圖示 | https://github.com/lucide-icons/lucide | Lucide Icons and Contributors | ISC |
 | 主播台棚景 `public/studio/showroom-set.glb` | 房間左邊的棚景 | 本 repo，`scripts/generate-studio-set.mjs` | pacafe-cart-showroom authors | Apache-2.0（原創） |

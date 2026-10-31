@@ -32,9 +32,9 @@ export function measureImage(image: CanvasImageSource & { width: number; height:
   return { union, idle, pixel: solid > 40 && soft / solid < .03 && colours.size < 48 };
 }
 
-export function sheetLayout(measured: Measured, imageHeight: number, rows: number): Layout {
+export function sheetLayout(measured: Measured, imageHeight: number, rows: number, target = RESIDENT_HEIGHT): Layout {
   const { union, idle, pixel } = measured;
-  return { cols: 8, rows, crop: union, foot: idle.b, middle: (idle.l + idle.r) / 2, cellAspect: 1, cellPx: imageHeight / rows, unit: RESIDENT_HEIGHT / Math.max(.05, idle.b - idle.t), pixel };
+  return { cols: 8, rows, crop: union, foot: idle.b, middle: (idle.l + idle.r) / 2, cellAspect: 1, cellPx: imageHeight / rows, unit: target / Math.max(.05, idle.b - idle.t), pixel };
 }
 export function singleLayout(measured: Measured | null, width: number, height: number, target = RESIDENT_HEIGHT): Layout {
   const crop = measured?.union ?? { l: 0, t: 0, r: 1, b: 1 };
