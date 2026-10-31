@@ -1,5 +1,5 @@
 // Builds the app, runs it on `wrangler dev --env local` (so the five-item fixture arrives as five parcels), and at desktop and phone sizes
-// cuts one parcel halfway, lets go, cuts it open, then opens the rest at once, saving a picture of each step to $UNBOX_SCREENSHOTS_DIR
+// cuts one parcel halfway, lets go, cuts it open (the product, its link and price come out of the box), then opens the rest at once, saving a picture of each step to $UNBOX_SCREENSHOTS_DIR
 // (default .local/screenshots-unbox; set UNBOX_REDUCED_MOTION=1 to run with prefers-reduced-motion). The phone run swipes with real touch events through CDP. Each size gets a fresh worker and storage.
 // Run: node scripts/screenshots-unbox.mjs. Needs Playwright's Chromium (npx playwright-core install chromium); CI does not run this.
 import assert from 'node:assert/strict';
@@ -74,6 +74,14 @@ try {
       await page.waitForSelector('[data-testid="unbox-box"][data-phase="opened"]', { timeout: 5000 });
       await page.waitForTimeout(260);
       await shoot('3-opened');
+      const reveal = page.locator('[data-testid="unbox-reveal"]');
+      assert.equal(await reveal.count(), 1, 'the opened parcel shows what came out of it');
+      assert.match(await reveal.textContent(), /手沖咖啡濾杯/, 'the reveal names the product');
+      const link = page.locator('[data-testid="unbox-reveal-link"]');
+      assert.match(await link.getAttribute('href'), /^https:\/\/example\.com\/shanlan\//, 'the reveal links to the product page');
+      assert.equal(await link.getAttribute('rel'), 'noopener noreferrer');
+      await page.waitForTimeout(process.env.UNBOX_REDUCED_MOTION ? 300 : 700);
+      await shoot('3b-reveal-hold');
       await pointer.up();
       await waitShelf(page, 1);
       await page.waitForFunction(() => document.querySelectorAll('[data-testid="unbox-box"]').length === 4, null, { timeout: 5000 });

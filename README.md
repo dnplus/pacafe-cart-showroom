@@ -57,7 +57,7 @@ CI（`.github/workflows/ci.yml`）在每次 push 和 pull request 跑這三項�
 | `npm run verify:share` | 用真的 `wrangler dev`（有 token、`OPEN_OWNER_ACCESS=false`，跟正式環境一樣）走分享流程：`/api/cart` 沒 token 回 401；開分享後依序切 hidden、range、exact 檢查 `/s/<slug>` 的 JSON；關分享後回 404。 |
 | `node scripts/screenshots.mjs` | 建置、啟動 `wrangler dev --env local`，先把 5 個快遞箱都記成拆過，等貨架擺上 5 件商品後存 `docs/screenshots/desktop.png` 和 `mobile-390.png`。 |
 | `npm run screenshots:share` | 存房間分享面板和訪客分享頁的截圖（1440 和 390 寬，range 模式）到 `docs/screenshots/`。設了 `SHARE_SCREENSHOTS_COPY_TO` 會另外複製一份到那個目錄。 |
-| `node scripts/screenshots-unbox.mjs` | 用真的 `wrangler dev` 跑一遍拆快遞：桌機用滑鼠、390 寬用真的觸控事件（CDP）劃開一件、沒劃完就放手、劃開上架、再一鍵秒開，每一步存一張圖到 `UNBOX_SCREENSHOTS_DIR`（預設 `.local/screenshots-unbox`）。設 `UNBOX_REDUCED_MOTION=1` 會開「減少動態」再跑一次。 |
+| `node scripts/screenshots-unbox.mjs` | 用真的 `wrangler dev` 跑一遍拆快遞：桌機用滑鼠、390 寬用真的觸控事件（CDP）劃開一件、沒劃完就放手、劃開（檢查升起的商品卡有品名和商品連結）上架、再一鍵秒開，每一步存一張圖到 `UNBOX_SCREENSHOTS_DIR`（預設 `.local/screenshots-unbox`）。設 `UNBOX_REDUCED_MOTION=1` 會開「減少動態」再跑一次。 |
 | `node scripts/screenshots-cast.mjs` | 存角色面板和房間（Muse 和店主、換店員前後、沒金鑰的說明、用假 Meta API 生成的角色、訪客頁，以及走路、拆快遞後的歡呼和店員去貨架、新東西進來的反應）的截圖到 `$CAST_SCREENSHOTS_DIR`，1440 和 390 寬各一套。 |
 | `node scripts/generate-studio-set.mjs` | 用 three.js 基本形狀產生主播台棚景 `public/studio/showroom-set.glb`。 |
 | `node tools/meta-hackathon/probe/run-all.ts --dry-run` | 不呼叫 API，印出 Meta Model API 探針的請求和費用估算。見 [探針說明](tools/meta-hackathon/probe/README.md)。 |
@@ -81,11 +81,29 @@ echo "CART_MCP_TOKEN=$(openssl rand -base64 24)" > .dev.vars
 | `GET /api/cart` | `200`，`Cart`。沒有 token 回 `401`（`env.local` 除外）。 |
 | `POST /api/cart`，body `{ "items": CartItemInput[] }` | `200`，取代後的 `Cart`。body 不對回 `400`，沒有 token 回 `401`。 |
 
-- `CartItemInput` 是 `{ title, store?, url?, priceTwd?, imageUrl?, qty? }`，`qty` 預設 1，`url` 和 `imageUrl` 只接受 http 或 https。一次最多 50 件。
+- `CartItemInput` 是 `{ title, store?, url?, priceTwd?, imageUrl?, category?, qty? }`，`qty` 預設 1，`url` 和 `imageUrl` 只接受 http 或 https。一次最多 50 件。
 - `Cart` 是 `{ revision, items: CartItem[], totalTwd, fill, updatedAt }`。`CartItem` 多了 `id`、`cutoutUrl`、`addedAt`、`shelfSlot`。schema 在 `shared/cart.ts`。
 - `totalTwd` 是每件 `priceTwd × qty` 的總和，沒標價的算 0。
 - 貨架有 12 格（3 層 × 4 格）。每件依清單順序佔一格，`fill = min(1, 件數 / 12)`；超過 12 件的照樣算進總額，但擺不上貨架。
 - 同樣的內容寫兩次，回來的是同一個購物車，`revision` 不變。標題、店名和連結不變的東西，會保留原本的 `id` 和 `addedAt`。
+
+## 清單、商品圖和連結：`/api/image`
+
+房間的「看清單」每一行是一件東西：左邊縮圖（有去背圖用去背圖，沒有就用 `imageUrl`；沒圖或載入失敗時，是一格依類別上色、畫類別圖示的方塊，不放任何「示意」字樣）、品名（有 `url` 就是連結，新分頁開，`rel="noopener noreferrer"`）、店名、類別標籤（服飾配件、美妝保養、3C 家電、居家生活、廚房餐具、食品飲料、書籍文具、玩具嗜好、運動戶外、其他）、價格和數量。圖片用 `referrerpolicy="no-referrer"` 載入。訪客的分享頁同樣有縮圖和品名連結，但沒有店名和類別（`ShareView` 本來就不給）。
+
+貨架上的商品盒子，有圖的會把商品圖貼在盒面上。WebGL 讀跨網域圖片要 CORS，所以由 worker 代送：
+
+| 請求 | 回應 |
+|---|---|
+| `GET /api/image?u=<圖片網址>`（屋主） | `200`，圖片。沒有 token 回 `401`（`env.local` 除外）。 |
+| `GET /api/image?s=<slug>&u=<圖片網址>`（訪客） | `200`，圖片。分享關著、slug 不對，一律同一個 `404`，不用 token。 |
+
+- 這條路不是開放的中繼：`u` 必須是購物車目前某一件的 `imageUrl` 或 `cutoutUrl`（訪客是分享畫面裡有的那幾張），其餘一律 `404`，而且根本不會去抓。東西移出購物車，它的圖就不再送。
+- 抓圖前再擋一次：只接受 http(s)、預設埠、有網域名稱的主機；IP 位址、`localhost`、沒有點的主機名、`.local`、`.internal` 之類回 `403`。轉址最多跟 3 次，每一次都重新檢查，所以轉到內網位址也會被擋。對方回 429 或 503 並說 2 秒內可重試時，會等一次再問。
+- 回應的 `content-type` 必須是 `image/*`，而且不能是 SVG（SVG 可以夾 script），否則回 `415`。超過 4 MB 回 `413`（先看 `content-length`，沒有的話邊讀邊數，超過就中斷）。對方失敗、逾時（6 秒）回 `502`。
+- 送出的圖帶 `cache-control: private, max-age=86400`、`x-content-type-options: nosniff` 和 `content-security-policy: default-src 'none'; sandbox`。程式在 `worker/imageProxy.ts`。
+- 圖片載不到時，盒面照舊只有品名和價格，10 秒後再試，最多兩次。
+- 點貨架上的商品：清單展開、捲到那一行、那一行閃一下黃底（減少動態時只留底色）。
 
 ## 拆快遞：`/api/unbox`
 
@@ -100,8 +118,11 @@ echo "CART_MCP_TOKEN=$(openssl rand -base64 24)" > .dev.vars
 - `POST` 可以重送：已經拆過的保留原本的時間，不在購物車裡的 id 直接略過，同時刪掉已經不在購物車的紀錄。
 - 屋主的貨架只畫拆過的商品；收銀機的總額照舊算整個購物車。訪客的分享頁和 `/s/<slug>` 不變，看得到整個購物車。
 - 每個箱子走 `arriving`、`atCounter`、`slicing`、`opened`、`shelved` 五個階段（`src/cart/unbox.ts` 的 reducer）。膠帶劃過 85% 就打開；沒劃完就放手，箱子回到 `atCounter`，劃痕歸零，下一次重劃。商品跳出來的動畫放完、`POST` 成功之後才變 `shelved` 並出現在貨架上；寫入失敗會每 2 秒重試，箱子留在畫面上。
-- 介面疊在 `main` 底下、房間外面，所以一指劃動不會被房間的雙指相機手勢吃掉。箱子可以用鍵盤的 Enter 或空白鍵打開；系統開了「減少動態」就沒有動畫。
-- 測試用的掛鉤：`data-testid="unbox"`（介面）、`unbox-box`（每個箱子，帶 `data-item-id`、`data-phase`）、`unbox-tape`（膠帶）、`unbox-all`（秒開鈕）。
+- 介面疊在 `main` 底下、房間外面，所以一指劃動不會被房間的雙指相機手勢吃掉。箱子可以用鍵盤的 Enter 或空白鍵打開。
+- 打開的那一刻：蓋子向後翻、膠帶掉落、箱口迸出幾粒火花，商品卡（商品圖或類別方塊、品名、店名、價格，和「看商品」連結）從箱口升起、停在半空讓人讀約 1 秒，再縮小飛向貨架，貨架上的盒子「咚」一聲落在格子裡（`src/cart/UnboxTray.tsx`、`unbox-tray.css`、`cartScene.ts`）。商品卡在箱子淡出後獨自停著，下一個箱子等它升起後才滑進來。整段約 2.4 秒，寫入 `/api/unbox` 等它放完。
+- 一鍵秒開（兩個以上一起開）用精簡版：卡片只有圖和品名，約 0.7 秒就飛走，一個接一個錯開 90 毫秒。接下來的 3 個箱子的圖會先下載，卡片升起時已經在了。
+- 系統開了「減少動態」：蓋子直接是翻開的，商品卡原地淡入、停 1.1 秒、淡出，不升也不飛；一鍵秒開不等。貨架上的盒子不做落下動畫。
+- 測試用的掛鉤：`data-testid="unbox"`（介面）、`unbox-box`（每個箱子，帶 `data-item-id`、`data-phase`）、`unbox-tape`（膠帶）、`unbox-all`（秒開鈕）、`unbox-reveal`（升起的商品卡）、`unbox-reveal-link`（卡上的連結）；清單是 `cart-row`、`cart-row-link`，訪客頁是 `share-row`、`share-row-link`。
 
 ## 分享：`/api/share` 和 `/s/<slug>`
 

@@ -11,6 +11,7 @@ import { promoApi } from './promo';
 import { runnerApi } from './runner';
 import { castPath, handleCast } from './cast';
 import { DEFAULT_NICKNAME } from '../shared/share';
+import { cartImageUrls, serveImage, shareImageUrls } from './imageProxy';
 import { withProductImages } from './productPage';
 import { tools, type Store } from './tools';
 
@@ -84,6 +85,22 @@ export class Showroom {
     return json(shareView(await this.read(), settings));
   }
 
+  /**
+   * A product picture as a same-origin image: `?u=<picture>` for the owner, `?s=<slug>&u=<picture>` for a visitor. Only a picture the
+   * cart (or, for a slug, the shared view) names is served, so this is not a relay.
+   */
+  private async image(request: Request) {
+    if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405, { allow: 'GET' });
+    const { searchParams } = new URL(request.url), slug = searchParams.get('s'), target = searchParams.get('u');
+    if (slug === null) {
+      if (!isOwner(request, this.env)) return unauthorized();
+      return serveImage(target, cartImageUrls(await this.read()));
+    }
+    const settings = await this.storedShare();
+    if (!settings?.enabled || !sameSecret(slug, settings.slug)) return json({ error: 'not_found' }, 404);
+    return serveImage(target, shareImageUrls(shareView(await this.read(), settings)));
+  }
+
   private async share(request: Request) {
     if (request.method !== 'GET' && request.method !== 'PUT') return json({ error: 'method_not_allowed' }, 405, { allow: 'GET, PUT' });
     if (!isOwner(request, this.env)) return unauthorized();
@@ -122,6 +139,7 @@ export class Showroom {
     if (pathname.startsWith('/s/')) return this.shared(request, pathname);
     if (pathname === '/api/share') return this.share(request);
     if (pathname === '/api/unbox') return this.unbox(request);
+    if (pathname === '/api/image') return this.image(request);
     if (castPath.test(pathname)) return handleCast(request, { storage: this.ctx.storage, env: this.env, nickname: async () => (await this.storedShare())?.nickname ?? DEFAULT_NICKNAME });
     if (pathname !== '/api/cart') return json({ error: 'not_found' }, 404);
     if (request.method !== 'GET' && request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405, { allow: 'GET, POST' });

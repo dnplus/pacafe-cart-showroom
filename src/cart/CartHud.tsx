@@ -1,9 +1,12 @@
-import { useState, type ReactNode } from 'react';
-import { ChartNoAxesColumn, ChevronDown, ChevronUp, KeyRound, Share2, ShoppingBasket, UsersRound } from 'lucide-react';
+import { useRef, useState, type ReactNode } from 'react';
+import { ChartNoAxesColumn, ChevronDown, ChevronUp, ExternalLink, KeyRound, Share2, ShoppingBasket, UsersRound } from 'lucide-react';
 import { cartView, formatTwd } from '../../shared/cart';
 import { t } from '../i18n';
 import { hasOwnerKey } from '../owner';
+import { categoryLabel } from './category';
+import { ProductThumb } from './ProductThumb';
 import type { CartState } from './useCart';
+import { useFlashedLine, type ProductFocus } from './useProductPoke';
 import './cart.css';
 
 /** Asked for when the worker wants the owner key; the key stays in this browser's localStorage. */
@@ -20,7 +23,9 @@ function OwnerKeyForm({ unlock }: { unlock: (key: string) => void }) {
   </form>;
 }
 
-export function CartHud({ state, open, onToggle, unlock, sharing, onShare, casting = false, onCast, habits = false, onHabits, children }: { state: CartState; open: boolean; onToggle: () => void; unlock: (key: string) => void; sharing: boolean; onShare: () => void; casting?: boolean; onCast?: () => void; habits?: boolean; onHabits?: () => void; children?: ReactNode }) {
+export function CartHud({ state, open, onToggle, unlock, sharing, onShare, casting = false, onCast, habits = false, onHabits, focus = null, children }: { state: CartState; open: boolean; onToggle: () => void; unlock: (key: string) => void; sharing: boolean; onShare: () => void; casting?: boolean; onCast?: () => void; habits?: boolean; onHabits?: () => void; /** The shelf product last clicked in the room; its line is scrolled into view and flagged. */ focus?: ProductFocus | null; children?: ReactNode }) {
+  const list = useRef<HTMLOListElement>(null);
+  const flashed = useFlashedLine(focus, open, () => list.current);
   if (state.status === 'locked') return <aside className="cart-hud" aria-label={t('Cart showroom')} data-testid="cart-hud">
     <header className="cart-hud-head">
       <span className="cart-hud-mark" aria-hidden="true"><ShoppingBasket size={18} /></span>
@@ -49,9 +54,18 @@ export function CartHud({ state, open, onToggle, unlock, sharing, onShare, casti
     {state.status === 'offline' && <p className="cart-note cart-offline" role="status">{t('Cannot reach the cart right now. Trying again.')}</p>}
     {state.status !== 'loading' && !view.count && <p className="cart-note">{t('The shelf is empty. What your Muse notes while shopping shows up here.')}</p>}
     {view.count > 0 && <button type="button" className="cart-toggle" aria-expanded={open} aria-controls="cart-list" onClick={onToggle}>{open ? t('Hide the list') : t('Show the list')}{open ? <ChevronUp size={16} aria-hidden="true" /> : <ChevronDown size={16} aria-hidden="true" />}</button>}
-    {open && view.count > 0 && <ol className="cart-list" id="cart-list" aria-label={t('On the shelf')}>
-      {items.map(item => <li key={item.id}>
-        <span className="cart-line-title">{item.title}{item.store && <small>{item.store}</small>}</span>
+    {open && view.count > 0 && <ol className="cart-list" id="cart-list" ref={list} aria-label={t('On the shelf')}>
+      {items.map(item => <li key={item.id} data-key={item.id} data-testid="cart-row" className={flashed === item.id ? 'is-flashed' : undefined}>
+        <ProductThumb src={item.cutoutUrl ?? item.imageUrl} category={item.category} />
+        <span className="cart-line-main">
+          {item.url
+            ? <a className="cart-line-title cart-line-link" href={item.url} target="_blank" rel="noopener noreferrer" data-testid="cart-row-link">{item.title}<ExternalLink size={12} aria-hidden="true" /></a>
+            : <span className="cart-line-title">{item.title}</span>}
+          <span className="cart-line-meta">
+            {item.store && <small>{item.store}</small>}
+            {item.category && <small className="cart-chip" data-category={item.category}>{categoryLabel(item.category)}</small>}
+          </span>
+        </span>
         <span className="cart-line-price">{item.priceTwd === null ? t('No price') : formatTwd(item.priceTwd)}{item.qty > 1 && <small>×{item.qty}</small>}</span>
       </li>)}
     </ol>}
