@@ -53,6 +53,7 @@ CI（`.github/workflows/ci.yml`）在每次 push 和 pull request 跑這三項�
 | `npm run verify:persist` | 用真的 `wrangler dev` 寫入購物車，關掉再重開同一個 `--persist-to` 目錄，確認讀回來的購物車一樣。 |
 | `npm run verify:mcp` | 用真的 `wrangler dev` 走一遍住民的流程：`initialize`、`tools/list`、記兩件、`cart_list`、移除一件、排介紹片、查進度，再確認 `/api/cart` 讀到同一個購物車，以及沒有 token 和 token 錯誤都回 401。token 每次隨機產生，不會印出來。 |
 | `npm run verify:runner` | 用真的 `wrangler dev` 扮演 runner：排隊、`/runner/next` 認領、回報 `storyboard`、`voice`、`rendering`、上傳假的 mp4 和 jpg、`done`，再確認 `promo_status`、`/api/promo` 和 `/media/promo/...` 看到同一支片、讀到上傳的位元組；也檢查沒 token 回 401、沒有 job 回 204、沒上傳就 `done` 回 409。token 隨機產生，不會印出來。 |
+| `npm run verify:promo` | 用真的 `wrangler dev` 透過 `/mcp` 的 `promo_generate` 排一支 30 秒的片，再跑真的 runner（`--once`、mock 看片、不配音、真的 Remotion 算圖），確認 job 到 `done`、上傳的 mp4 是 1280×720 h264 30 秒且 sha256 和回報的一樣、QA 第一輪抓到太長的商品名稱而最後一輪沒有問題、log 沒有印出 token。`--fake-worker` 改用 `tests/fake-runner-worker.ts` 代替 worker。設 `PROMO_VERIFY_COPY_TO` 會把影片、縮圖、`qa.json` 和每輪 QA 畫面複製到那個目錄。需要 `ffmpeg`／`ffprobe`。 |
 | `npm run verify:adapter` | 對真的 `wrangler dev` 跑 `adapter/cli.ts --dry-run`，再用本機的假 Model API 跑一輪，確認東西進了購物車。見 [adapter 說明](adapter/README.md)。 |
 | `npm run verify:share` | 用真的 `wrangler dev`（有 token、`OPEN_OWNER_ACCESS=false`，跟正式環境一樣）走分享流程：`/api/cart` 沒 token 回 401；開分享後依序切 hidden、range、exact 檢查 `/s/<slug>` 的 JSON；關分享後回 404。 |
 | `node scripts/screenshots.mjs` | 建置、啟動 `wrangler dev --env local`，先把 5 個快遞箱都記成拆過，等貨架擺上 5 件商品後存 `docs/screenshots/desktop.png` 和 `mobile-390.png`。 |
@@ -245,9 +246,33 @@ echo "CART_MCP_TOKEN=$(openssl rand -base64 24)" > .dev.vars
 | `POST /api/promo` | body 是 `{ durationSec?, style? }`（跟 `promo_generate` 一樣），回 `{ jobId, status }`。購物車是空的回 409 `empty_cart`。 |
 | `GET /api/promo` | 最新一筆 `PromoJob`，沒排過就是 `null`。 |
 
-按下「一鍵生片」排隊，之後每 3 秒讀一次 `GET /api/promo`，到 `done` 或 `failed` 停。面板顯示排隊中、分鏡、配音、算圖、完成或失敗，加進度條；完成時顯示縮圖當封面的影片（可播放）和下載連結；失敗時顯示錯誤和「重試」。購物車是空的時按鈕停用並說明原因。面板上有一句說明：影片在屋主自己的電腦上由 runner 製作，沒開 runner 時會停在排隊中。
+面板每 3 秒讀一次 `GET /api/promo`，到 `done` 或 `failed` 也不停，所以住民用 MCP 排的片會自己出現。按下「一鍵生片」排隊並立刻讀一次。面板顯示排隊中、分鏡、配音、算圖、完成或失敗，加進度條；完成時顯示縮圖當封面的影片（可播放）和下載連結；失敗時顯示錯誤和「重試」。購物車是空的時按鈕停用並說明原因。面板上有一句說明：影片在屋主自己的電腦上由 runner 製作，沒開 runner 時會停在排隊中。
 
 `npm run verify:runner` 用 HTTP 扮演 runner 走完整條路，見上面的腳本表。
+
+**在屋主的電腦上跑 runner。** runner 在 `runner/`，用 Node 直接跑 TypeScript，會讀 repo 根目錄的 `.env`（有的話）。
+
+```bash
+npm run runner                 # 每 15 秒問一次 /runner/next，一直跑
+npm run runner -- --once       # 做完一個 job（或沒有 job）就結束
+```
+
+`CART_MCP_TOKEN` 要跟 worker 同一把。`--origin` 預設 `http://127.0.0.1:8877`，接正式環境時改成 worker 的網址。`--interval` 是輪詢秒數，`--rounds` 是 QA 最多幾輪（預設 3）。
+
+| 變數 | 做什麼 |
+|---|---|
+| `META_API_KEY`、`META_API_BASE_URL` | 兩個都有時，字幕和看片用 Spark（`muse-spark-1.3`）。缺任何一個就用本地 fallback 字幕和 mock 看片規則，不花錢。Spark 回錯、漏了某一景，或在價格隱藏時寫出價格，這一步就退回本地版本。 |
+| `TTS_PROVIDER` | `none`（預設，只出字幕）、`elevenlabs`（要 `ELEVENLABS_API_KEY`、`ELEVENLABS_VOICE_ID`）或 `minimax`（要 `MINIMAX_API_KEY`，`MINIMAX_VOICE_ID` 選填）。金鑰缺了就改用 `none`，log 只寫缺哪個變數名稱。配音的費用記在屋主自己的帳號，不算進 `costUsd`。 |
+| `RUNNER_WORK_DIR` | 工作目錄，預設 `.local/runner`。每個 job 一個子目錄，認領時先清空，所以重做的 job 從乾淨的目錄開始。 |
+
+一個 job 依序經過這幾步，每一步都回報給 worker：
+
+1. **分鏡**（`runner/storyboard.ts`、`runner/spark.ts`）。畫面、時間和價格都從 claim 的 `view` 來：開場、最多 8 件商品各一景、結尾。寫字幕的只負責文字，所以 Spark 拿不到也秀不出屋主藏起來的價格。結尾的免責聲明固定畫在畫面上，不在分鏡裡。
+2. **配音**（`runner/tts.ts`）。每一景的字幕各念一段，依文字快取，QA 改過字的景才會重念。每段都量出實際長度。
+3. **QA**（`runner/qa.ts`）。每輪在每一景的中點，加上前一輪抓到問題的時間點各算一張 still，交給看片的人（Spark 或 mock 規則）找三種問題：`forbidden_wording`（結帳、下單這類字，error）、`subtitle_overflow`（一行比 24 個全形字寬，error）、`pacing_too_fast`（每秒超過 9 個字，warning）。每種問題各有一個修法：換字、斷行、從沒問題的景借時間；下一輪看修過的版本。最後一輪還有 error 時 job 就 `failed`；只剩 warning 照樣出片。`qa.json` 不論成敗都會上傳。
+4. **算圖**（`runner/render.ts`、`runner/composition/`）。景的長度原本照閱讀速度估，配音可能念得比較慢。算圖前，配音比那一景長的景會加長到念得完再多 0.3 秒，時間從有餘裕的景借，結尾和總片長不變（`fitVoice`）。然後 Remotion 算出 1280×720、30 fps 的 h264，再用開場那一景的中點算縮圖，上傳後回報 `done`。
+
+錯誤訊息回報給 worker 和印到 log 之前，會先把 `META_API_KEY`、`ELEVENLABS_API_KEY`、`MINIMAX_API_KEY`、`CART_MCP_TOKEN` 的值換成 `[REDACTED]`。
 
 ### 接上 Muse Code
 
@@ -280,6 +305,7 @@ muse exec --prompt-file muse/demo-task.txt --disable-approval --max-model-steps 
 | Worker 與 Showroom Durable Object | `worker/index.ts`、`worker/showroom.ts`、`worker/env.ts`、`wrangler.jsonc` | 無 | 賽中新寫 |
 | MCP 傳輸 | `worker/mcp.ts` | 參考 pa-cafe main 的 `worker/streamable-mcp.ts`、`worker/protocol.ts` | 賽中重寫：只留 JSON-RPC 和協定協商，刪掉配對、Clerk session、簽章、版本偏差 |
 | 6 支 MCP 工具、介紹片 job、分享設定 | `worker/tools.ts`、`shared/promo.ts`、`shared/share.ts` | 無 | 賽中新寫 |
+| 介紹片 runner：分鏡、配音、QA、Remotion 算圖 | `runner/`、`scripts/verify-promo.mjs` | 算圖流程參考 agentic-remotion-studio 的 `cli/lib/production.ts` | 賽中新寫 |
 | skills、Muse Code 設定範例、demo 任務 | `.agents/skills/`、`muse/` | 無 | 賽中新寫 |
 | Model API function calling 轉 MCP 的備援 | `adapter/` | 無 | 賽中新寫 |
 | 貨架商品、收銀機、HUD、輪詢、拆快遞 | `src/cart/`、`src/App.tsx`、`shared/unbox.ts` | 無 | 賽中新寫 |

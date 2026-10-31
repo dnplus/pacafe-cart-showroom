@@ -37,7 +37,7 @@ export const storyboardSchema = z.strictObject({ durationSec: z.number().positiv
 export type Storyboard = z.infer<typeof storyboardSchema>;
 
 /** A scene's voice as a data URL, which Remotion's renderer reads like any other asset; no public directory to keep in step. */
-export type VoiceClip = { sceneId: string; src: string };
+export type VoiceClip = { sceneId: string; src: string; durationSec: number };
 /** What the composition draws: the storyboard and, when a voice provider ran, one clip per scene. */
 export type PromoInput = { storyboard: Storyboard; voice: VoiceClip[] };
 

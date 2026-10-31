@@ -33,7 +33,7 @@ function SceneView({ scene, sec }: { scene: Scene; sec: number }) {
     case 'opening': return (
       <AbsoluteFill style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 72, paddingBottom: 120 }}>
         <div style={fadeIn(sec)}>
-          <div style={{ fontSize: 68, fontWeight: 800 }}>{scene.nickname} 的小屋購物車</div>
+          <div style={{ fontSize: 68, fontWeight: 800 }}>{scene.nickname}的小屋購物車</div>
           <div style={{ fontSize: 34, marginTop: 16 }}>架上 {scene.count} 件 Muse 採買時記下的東西</div>
           {scene.total && <div style={{ ...pill, fontSize: 32, marginTop: 24 }}>總額 {scene.total}</div>}
         </div>
