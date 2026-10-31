@@ -4,6 +4,7 @@ import { DEFAULT_CHARACTER } from '../shared/cast';
 import { DEFAULT_NICKNAME } from '../shared/share';
 import { sharePath, shareView, type ShareSettings } from '../shared/share';
 import { CastPanel } from './cast/CastPanel';
+import { ClerkPanel } from './clerk/ClerkPanel';
 import { ConnectionsPanel } from './connect/ConnectionsPanel';
 import { useCast } from './cast/useCast';
 import { useCue } from './cast/useCue';
@@ -34,7 +35,7 @@ export default function App() {
 function Showroom() {
   const { state, retry } = useCart();
   const [listOpen, setListOpen] = useState(false);
-  const [panel, setPanel] = useState<'share' | 'cast' | 'habits' | 'connect' | 'promo' | null>(null);
+  const [panel, setPanel] = useState<'share' | 'cast' | 'habits' | 'connect' | 'promo' | 'clerk' | null>(null);
   const toggle = (name: NonNullable<typeof panel>) => () => setPanel(open => open === name ? null : name);
   const sharing = panel === 'share', casting = panel === 'cast', habiting = panel === 'habits';
   const [preview, setPreview] = useState<ShareSettings | null>(null);
@@ -52,11 +53,12 @@ function Showroom() {
   // While the share panel is open the room draws what a visitor would see, so the card it captures shows no more than that.
   const shelf = useMemo(() => !cart ? null : preview ? sharedShelf(shareView(cart, preview), ownerImageLoader) : ownerShelf(cart, unbox.shelved, unbox.landed), [cart, preview, unbox.shelved, unbox.landed]);
   return <main className="agent-house-app showroom">
-    <CartHud state={state} open={listOpen} onToggle={() => setListOpen(open => !open)} unlock={key => { saveOwnerKey(key); retry(); }} focus={poked} removal={removal} sharing={sharing} onShare={toggle('share')} casting={casting} onCast={toggle('cast')} habits={habiting} onHabits={toggle('habits')} connecting={panel === 'connect'} onConnect={toggle('connect')} filming={panel === 'promo'} onFilm={toggle('promo')}>
+    <CartHud state={state} open={listOpen} onToggle={() => setListOpen(open => !open)} unlock={key => { saveOwnerKey(key); retry(); }} focus={poked} removal={removal} sharing={sharing} onShare={toggle('share')} casting={casting} onCast={toggle('cast')} habits={habiting} onHabits={toggle('habits')} connecting={panel === 'connect'} onConnect={toggle('connect')} talking={panel === 'clerk'} onTalk={toggle('clerk')} filming={panel === 'promo'} onFilm={toggle('promo')}>
       {habiting && <HabitsPanel cart={cart} close={() => setPanel(null)} />}
       {casting && <CastPanel cast={cast} close={() => setPanel(null)} />}
       {sharing && <SharingSettings cart={cart} controls={controls} onPreview={setPreview} close={() => setPanel(null)} />}
       {panel === 'connect' && <ConnectionsPanel close={() => setPanel(null)} onMuseSeen={() => react('poke')} />}
+      {panel === 'clerk' && <ClerkPanel close={() => setPanel(null)} onActed={() => { retry(); react('poke'); }} />}
       {panel === 'promo' && <PromoPanel count={cart?.items.length ?? 0} close={() => setPanel(null)} />}
     </CartHud>
     <section className="world-stage game-stage" aria-label={t('Cart showroom')}>

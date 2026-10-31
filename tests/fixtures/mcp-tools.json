@@ -85,10 +85,19 @@
     {
       "name": "habits_report",
       "title": "購物習慣報表",
-      "description": "讀取購物習慣報表：各分類和各店的花費與件數、價位分布、記下東西的星期和時段（台灣時間）、平均與最貴的一筆、沒標價的件數、已拆和還沒拆的快遞，以及幾句從數字推出來的觀察。只算目前購物車裡的東西，已移除的不在內。唯讀。",
+      "description": "讀取購物習慣報表：各分類和各店的花費與件數、價位分布、記下東西的星期和時段（台灣時間）、平均與最貴的一筆、沒標價的件數、已拆和還沒拆的快遞，以及幾句從數字推出來的觀察。只算目前購物車裡的東西，已移除的不在內。language 決定分類名稱和觀察句的語言（預設 zh-TW）。唯讀。",
       "inputSchema": {
         "type": "object",
-        "properties": {},
+        "properties": {
+          "language": {
+            "default": "zh-TW",
+            "type": "string",
+            "enum": [
+              "zh-TW",
+              "en"
+            ]
+          }
+        },
         "additionalProperties": false
       },
       "annotations": {
@@ -141,18 +150,18 @@
             "minimum": 15,
             "maximum": 45
           },
-          "language": {
-            "default": "zh-TW",
-            "enum": [
-              "zh-TW",
-              "en"
-            ],
-            "type": "string"
-          },
           "style": {
             "type": "string",
             "minLength": 1,
             "maxLength": 200
+          },
+          "language": {
+            "default": "zh-TW",
+            "type": "string",
+            "enum": [
+              "zh-TW",
+              "en"
+            ]
           },
           "script": {
             "type": "object",

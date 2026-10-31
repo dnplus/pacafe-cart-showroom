@@ -32,14 +32,14 @@ function toolResult(data: object) {
 }
 const toolFailure = (text: string) => ({ content: [{ type: 'text', text }], isError: true });
 
-async function callTool(tool: Tool, rawArgs: unknown, store: Store, origin: string) {
+export async function callTool(tool: Tool, rawArgs: unknown, store: Store, origin: string) {
   const parsed = tool.input.safeParse(rawArgs ?? {});
   if (!parsed.success) return toolFailure(`參數不正確：${parsed.error.issues.map(issue => `${issue.path.join('.') || '(整體)'} ${issue.message}`).join('；')}`);
   try { return toolResult(await tool.run(store, parsed.data, origin)); }
   catch (error) { if (error instanceof ToolError) return toolFailure(error.message); throw error; }
 }
 
-const listed = (tool: Tool) => {
+export const listed = (tool: Tool) => {
   const { $schema, ...inputSchema } = z.toJSONSchema(tool.input, { io: 'input' });
   return { name: tool.name, title: tool.title, description: tool.description, inputSchema, annotations: tool.annotations };
 };

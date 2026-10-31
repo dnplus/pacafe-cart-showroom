@@ -200,6 +200,17 @@ Muse 從兩個地方知道：`cart_list` 的 `removals` 列最近 20 筆（新�
 - 訪客看到的店員目前一律是預設的 Muse，不跟著屋主的選擇走。
 - `node scripts/screenshots-cast.mjs` 用本機假的 Meta API（127.0.0.1，假金鑰，程式畫的 PNG）存面板和房間的截圖到 `$CAST_SCREENSHOTS_DIR`，不會打真的 API。
 
+## 內建店員：房間裡的「跟 Muse 說話」和 `/api/clerk`
+
+不用裝 Muse Code 也能看 Muse 做事：worker 用 Meta Model API 的 `muse-spark-1.3` 跑 function calling（`/chat/completions`），工具就是 `/mcp` 提供的那六個，直接在 Durable Object 裡執行。
+
+- `GET /api/clerk` 讀對話；`POST /api/clerk` `{ message, language }` 送一句；`DELETE /api/clerk` 重新開始。只有屋主能用，分享頁碰不到。同一個小屋一次只跑一輪（第二個請求回 409 `busy`）。
+- 每輪最多 8 次工具呼叫、6 次模型請求；最後一次用 `tool_choice: "none"`，所以每輪都會以一段話結束。對話保留最近 24 則。
+- 小屋金鑰是 worker secret `META_API_KEY`、`META_API_BASE_URL`。每天（UTC）最多花 `CLERK_DAILY_USD` 美元（預設 2），花費用回應的 usage 和 Spark 公開價格估算。超過就回 429 `daily_limit`，面板請屋主貼自己的金鑰。
+- `PUT /api/clerk/key` `{ apiKey, baseUrl? }` 存屋主自己的金鑰，`DELETE` 刪除。存在小屋，畫面只顯示最後四碼；用自己的金鑰不算進每日上限。錯誤訊息裡的金鑰會換成 `[REDACTED]`。
+- 店員呼叫工具時，連線面板的 Muse 狀態會顯示「Showroom clerk」，房間裡的角色會有反應；做完一輪房間會重新讀購物車。
+- 沒有金鑰時可以用 `node scripts/fake-model-api.mjs` 起一個依關鍵字挑工具的假 API，再用 `--var META_API_KEY:local-fake-key --var META_API_BASE_URL:http://127.0.0.1:8899/v1` 跑 `wrangler dev`，走一遍整個流程。它只用來開發，不是模型。
+
 ## `/mcp`
 
 住民 agent（例如 Muse Code）用這個端點把採買過的東西記進小屋。協定是 JSON-RPC over streamable HTTP，支援 `2025-11-25` 和 `2025-06-18`。每個請求都要帶 `Authorization: Bearer <CART_MCP_TOKEN>`，沒有 token、token 錯誤或伺服器沒設 token 都回 `401`。

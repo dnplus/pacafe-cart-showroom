@@ -11,6 +11,7 @@ import { handleMcp } from './mcp';
 import { promoApi } from './promo';
 import { runnerApi } from './runner';
 import { castPath, handleCast } from './cast';
+import { clerkDesk, clerkPath } from './clerk';
 import { connections, connectionsPath } from './connections';
 import { DEFAULT_NICKNAME } from '../shared/share';
 import { cartImageUrls, serveImage, shareImageUrls } from './imageProxy';
@@ -156,12 +157,19 @@ export class Showroom {
     return json({ cart: next, removal: log[log.length - 1] });
   }
 
+  private desk?: ReturnType<typeof clerkDesk>;
+  /** One desk per object, so its one-turn-at-a-time flag holds across requests. */
+  private clerk(linked: ReturnType<typeof connections>) {
+    return this.desk ??= clerkDesk(this.ctx.storage, this.env, { tools, store: () => this.store(), nickname: async () => (await this.storedShare())?.nickname ?? DEFAULT_NICKNAME, note: call => linked.note(call) });
+  }
+
   async fetch(request: Request): Promise<Response> {
-    const { pathname } = new URL(request.url);
-    const linked = connections(this.ctx.storage, this.env), connection = connectionsPath.exec(pathname)?.[1];
+    const { pathname, origin } = new URL(request.url);
+    const linked = connections(this.ctx.storage, this.env), connection = connectionsPath.exec(pathname)?.[1], clerk = clerkPath.exec(pathname);
     if (pathname === '/mcp') return hasToken(request, this.env) ? handleMcp(request, tools, this.store(), linked.note) : unauthorized();
     if (pathname.startsWith('/runner/')) return runnerApi(request, this.env, this.store(), pathname, linked.runnerVoice);
     if (connection) return linked.handle(request, connection);
+    if (clerk) return this.clerk(linked).handle(request, clerk[1], origin);
     if (pathname === '/api/promo') return promoApi(request, this.env, this.store());
     if (pathname.startsWith('/s/')) return this.shared(request, pathname);
     if (pathname === '/api/share') return this.share(request);

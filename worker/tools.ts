@@ -3,7 +3,7 @@ import { addCartItem, cartItemInputSchema, cartQty, MAX_CART_ITEMS, removeCartIt
 import { habitsReport } from '../shared/habits';
 import { recentRemovals, removedBefore, removedNote, type Removal } from '../shared/removals';
 import type { UnboxState } from '../shared/unbox';
-import { promoJobId, promoRequestSchema, type PromoRecord } from '../shared/promo';
+import { PROMO_LANGUAGES, promoJobId, promoRequestSchema, type PromoRecord } from '../shared/promo';
 import { shareUrl, type ShareSettings } from '../shared/share';
 import { withProductImages } from './productPage';
 import { queuePromo, ScriptRefused } from './promo';
@@ -65,11 +65,11 @@ export const tools: readonly Tool[] = [
     },
   }),
   tool({
-    name: 'habits_report', title: '購物習慣報表', description: '讀取購物習慣報表：各分類和各店的花費與件數、價位分布、記下東西的星期和時段（台灣時間）、平均與最貴的一筆、沒標價的件數、已拆和還沒拆的快遞，以及幾句從數字推出來的觀察。只算目前購物車裡的東西，已移除的不在內。唯讀。',
-    input: z.strictObject({}), annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-    async run(store) {
+    name: 'habits_report', title: '購物習慣報表', description: '讀取購物習慣報表：各分類和各店的花費與件數、價位分布、記下東西的星期和時段（台灣時間）、平均與最貴的一筆、沒標價的件數、已拆和還沒拆的快遞，以及幾句從數字推出來的觀察。只算目前購物車裡的東西，已移除的不在內。language 決定分類名稱和觀察句的語言（預設 zh-TW）。唯讀。',
+    input: z.strictObject({ language: z.enum(PROMO_LANGUAGES).default('zh-TW') }), annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    async run(store, args) {
       const [cart, unbox] = await Promise.all([store.cart(), store.unbox()]);
-      return habitsReport(cart.items, unbox, now());
+      return habitsReport(cart.items, unbox, now(), args.language);
     },
   }),
   tool({

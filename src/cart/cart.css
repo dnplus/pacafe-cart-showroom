@@ -78,3 +78,4 @@
 .cart-undo button{flex:none;display:inline-flex;align-items:center;gap:4px;min-height:32px;padding:0 10px;border-radius:999px;background:#fffdf5;color:#3e4523;font-weight:850;font-size:13px}
 @keyframes undo-in{from{opacity:0;transform:translateY(4px)}}
 @media(prefers-reduced-motion:reduce){.cart-undo li{animation:none}}
+.cart-talk{background:#8a5a3b;color:#fbf4e8}
