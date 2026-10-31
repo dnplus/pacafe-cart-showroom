@@ -15,7 +15,7 @@ description: 把你替屋主採買或看中的東西記進小屋購物車，或�
 
 | 工具 | 什麼時候用 | 輸入 | 回傳 |
 |---|---|---|---|
-| `cart_add` | 每記下一件東西就呼叫一次 | `title`（必填）、`store`、`url`、`priceTwd`、`imageUrl`、`qty`（預設 1） | 整個購物車 `Cart` |
+| `cart_add` | 每記下一件東西就呼叫一次 | `title`（必填）、`url`（商品頁連結）、`store`、`priceTwd`、`imageUrl`、`category`、`qty`（預設 1） | 整個購物車 `Cart` |
 | `cart_list` | 想知道小屋裡現在有什麼、總額多少、分享連結是什麼 | `{}` | `Cart`，另加 `share: { url, enabled, prices }` |
 | `cart_remove` | 屋主說不要了，或你記錯了 | `itemId`（從 `cart_list` 拿）、`qty`（不填就整件拿掉） | 整個購物車 `Cart` |
 
@@ -26,9 +26,11 @@ description: 把你替屋主採買或看中的東西記進小屋購物車，或�
 1. 一件東西呼叫一次 `cart_add`。數量用 `qty`，不要重複呼叫。
 2. `title` 寫商品本身的名字，例如「鑄鐵平底鍋 24cm」。不要寫成一句話。
 3. `priceTwd` 是新台幣整數單價，不含小數。不知道價格就不要填，不要猜。
-4. `url` 和 `imageUrl` 只接受 http 或 https。不要放含有帳號、訂單編號或追蹤參數的網址；有疑慮就不要填。
-5. 同一件東西（標題、店名、連結都一樣）再記一次，小屋會把數量加上去，不會多一格。
-6. 要移除東西，先用 `cart_list` 找到那件的 `id`，再呼叫 `cart_remove`。
+4. `url` 一定要填：你看到這件東西的商品頁原始連結。屋主在房間裡點它就回到那一頁。只接受 http 或 https。不要放含有帳號、訂單編號或結帳流程的網址；`utm_`、`fbclid` 這類追蹤參數小屋會自己拿掉。
+5. 商品頁上看得到主圖時，把圖片網址填進 `imageUrl`。沒填時，小屋會自己讀商品頁的 Open Graph 圖或商品結構化資料來補圖，抓不到就只顯示品名。
+6. `category` 從下面挑一個，給購物習慣報表用：`fashion` 服飾配件、`beauty` 美妝保養、`electronics` 3C 家電、`home` 居家生活、`kitchen` 廚房餐具、`food` 食品飲料、`books` 書籍文具、`hobby` 玩具嗜好、`outdoor` 運動戶外、`other` 其他。
+7. 同一件東西（標題、店名、連結都一樣）再記一次，小屋會把數量加上去，不會多一格。
+8. 要移除東西，先用 `cart_list` 找到那件的 `id`，再呼叫 `cart_remove`。
 
 ## 回報給屋主
 

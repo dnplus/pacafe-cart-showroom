@@ -3,7 +3,7 @@
     {
       "name": "cart_add",
       "title": "加入購物車",
-      "description": "把買到或看上的東西記進小屋購物車。同名、同店、同連結的東西會合併數量。只做記錄，不會下單。",
+      "description": "把買到或看上的東西記進小屋購物車。url 請填商品頁的原始連結，小屋會在房間附上連結；沒給 imageUrl 時，小屋會從商品頁抓圖。category 是商品分類，給購物習慣報表用。同名、同店、同連結的東西會合併數量。只做記錄，不會下單。",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -31,6 +31,21 @@
             "type": "string",
             "maxLength": 2000,
             "format": "uri"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "fashion",
+              "beauty",
+              "electronics",
+              "home",
+              "kitchen",
+              "food",
+              "books",
+              "hobby",
+              "outdoor",
+              "other"
+            ]
           },
           "qty": {
             "default": 1,

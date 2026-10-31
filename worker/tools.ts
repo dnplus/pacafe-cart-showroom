@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { addCartItem, cartItemInputSchema, cartQty, MAX_CART_ITEMS, removeCartItem, type Cart } from '../shared/cart';
 import { promoJobId, promoRequestSchema, type PromoRecord } from '../shared/promo';
 import { shareUrl, type ShareSettings } from '../shared/share';
+import { withProductImages } from './productPage';
 import { queuePromo } from './promo';
 
 export interface Store {
@@ -38,10 +39,10 @@ const saved = async (store: Store, before: Cart, after: Cart) => { if (after !==
 
 export const tools: readonly Tool[] = [
   tool({
-    name: 'cart_add', title: '加入購物車', description: '把買到或看上的東西記進小屋購物車。同名、同店、同連結的東西會合併數量。只做記錄，不會下單。',
+    name: 'cart_add', title: '加入購物車', description: '把買到或看上的東西記進小屋購物車。url 請填商品頁的原始連結，小屋會在房間附上連結；沒給 imageUrl 時，小屋會從商品頁抓圖。category 是商品分類，給購物習慣報表用。同名、同店、同連結的東西會合併數量。只做記錄，不會下單。',
     input: cartItemInputSchema, annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     async run(store, args) {
-      const cart = await store.cart(), next = addCartItem(cart, args, now());
+      const cart = await store.cart(), [input] = await withProductImages([args], cart), next = addCartItem(cart, input, now());
       if (next.items.length > MAX_CART_ITEMS) throw new ToolError(`購物車已滿（最多 ${MAX_CART_ITEMS} 項），先用 cart_remove 移除不要的東西。`);
       return saved(store, cart, next);
     },

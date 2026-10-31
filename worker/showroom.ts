@@ -11,6 +11,7 @@ import { promoApi } from './promo';
 import { runnerApi } from './runner';
 import { castPath, handleCast } from './cast';
 import { DEFAULT_NICKNAME } from '../shared/share';
+import { withProductImages } from './productPage';
 import { tools, type Store } from './tools';
 
 const CART_KEY = 'cart';
@@ -129,8 +130,8 @@ export class Showroom {
     if (!sent) return json({ error: 'invalid_json' }, 400);
     const parsed = cartWriteSchema.safeParse(sent.body);
     if (!parsed.success) return invalidBody(parsed.error);
-    const stored = await this.stored();
-    const next = replaceCart(stored ?? emptyCart(), parsed.data.items, new Date().toISOString());
+    const stored = await this.stored(), previous = stored ?? emptyCart();
+    const next = replaceCart(previous, await withProductImages(parsed.data.items, previous), new Date().toISOString());
     // Unchanged items give back the stored cart itself; the first write is always kept, so the fixture never comes back.
     if (next !== stored) await this.ctx.storage.put(CART_KEY, next);
     return json(next);
