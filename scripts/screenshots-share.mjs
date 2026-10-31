@@ -69,7 +69,7 @@ try {
     await page.goto(share.url);
     const visitor = await shoot(page, `share-page-${size}.png`, count => {
       const room = document.querySelector('.room-canvas');
-      return room?.getAttribute('data-cart-shelf') === String(count) && room.getAttribute('data-barista-source') !== 'loading' && document.querySelector('[data-testid="share-hud"]') && (room.hasAttribute('data-studio-set') || room.hasAttribute('data-studio-set-error'));
+      return document.querySelectorAll('[data-testid="unbox-box"]').length === count && room?.getAttribute('data-barista-source') !== 'loading' && document.querySelector('[data-testid="share-hud"]') && (room.hasAttribute('data-studio-set') || room.hasAttribute('data-studio-set-error'));
     });
     const hud = await page.evaluate(() => ({ title: document.title, total: document.querySelector('[data-testid="share-total"]')?.textContent, links: [...document.querySelectorAll('.share-list a')].map(a => ({ href: a.getAttribute('href'), rel: a.getAttribute('rel') })), text: document.querySelector('[data-testid="share-hud"]')?.textContent ?? '' }));
     assert.equal(visitor.register, 'NT$ 5,000–10,000', 'the visitor\'s register shows the total\'s range');

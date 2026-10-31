@@ -38,7 +38,7 @@ try {
   const dry = await cli(['--dry-run']);
   assert.equal(dry.status, 0, `dry run exited 0: ${dry.stderr}`);
   const body = JSON.parse(dry.stdout);
-  assert.deepEqual(body.tools.map(tool => tool.name).sort(), ['cart_add', 'cart_list', 'cart_remove', 'promo_generate', 'promo_status']);
+  assert.deepEqual(body.tools.map(tool => tool.name).sort(), ['cart_add', 'cart_list', 'cart_remove', 'habits_report', 'promo_generate', 'promo_status']);
   assert.equal(body.tool_choice, 'auto');
   assert.equal(body.model, 'muse-spark-1.3');
   assert.match(body.instructions, /showroom-cart/);

@@ -24,8 +24,8 @@ try {
   const init = await (await rpc('initialize', { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'verify-mcp', version: '0' } })).json();
   assert.equal(init.result.protocolVersion, '2025-11-25');
   const { tools } = (await (await rpc('tools/list')).json()).result;
-  assert.deepEqual(tools.map(tool => tool.name).sort(), ['cart_add', 'cart_list', 'cart_remove', 'promo_generate', 'promo_status']);
-  assert.deepEqual(tools.filter(tool => tool.annotations.readOnlyHint).map(tool => tool.name).sort(), ['cart_list', 'promo_status']);
+  assert.deepEqual(tools.map(tool => tool.name).sort(), ['cart_add', 'cart_list', 'cart_remove', 'habits_report', 'promo_generate', 'promo_status']);
+  assert.deepEqual(tools.filter(tool => tool.annotations.readOnlyHint).map(tool => tool.name).sort(), ['cart_list', 'habits_report', 'promo_status']);
 
   await call('cart_add', { title: '陶瓷馬克杯', store: '小島陶房', priceTwd: 420, qty: 2 });
   await call('cart_add', { title: '亞麻餐墊', priceTwd: 290 });
