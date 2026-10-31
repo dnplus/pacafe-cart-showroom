@@ -24,13 +24,15 @@ export const ownerShelf = (cart: Cart, unboxed: ReadonlySet<string>, landed: Rea
 
 /**
  * A visitor's room, drawn from the narrowed view alone, so it can show no more price than the owner chose. Without `loadImage`
- * the boxes carry no pictures; products are keyed by slot, the same order the visitor's list shows.
+ * the boxes carry no pictures; products are keyed by slot, the same order the visitor's list shows. With `unboxed` (slots, in view order)
+ * only those parcels stand on the shelf, as in the owner's room, and `landed` ones drop onto it.
  */
-export function sharedShelf(view: ShareView, loadImage?: ImageLoader): Shelf {
-  const base = (item: ShareView['items'][number], slot: number, price: string | null): ShelfItem => ({ key: String(slot), title: item.title, qty: item.qty, price, image: item.imageUrl });
+export function sharedShelf(view: ShareView, loadImage?: ImageLoader, unboxed?: { opened: ReadonlySet<number>; landed?: ReadonlySet<number> }): Shelf {
+  const base = (item: ShareView['items'][number], slot: number, price: string | null): ShelfItem => ({ key: String(slot), title: item.title, qty: item.qty, price, image: item.imageUrl, lands: unboxed?.landed?.has(slot) });
+  const drawn = <T extends ShareView['items'][number]>(items: readonly T[], price: (item: T) => string | null) => items.flatMap((item, slot) => !unboxed || unboxed.opened.has(slot) ? [base(item, slot, price(item))] : []);
   switch (view.mode) {
-    case 'hidden': return { items: view.items.map((item, slot) => base(item, slot, null)), register: t('{count} items', { count: view.items.length }), loadImage };
-    case 'range': return { items: view.items.map((item, slot) => base(item, slot, item.priceRange ? formatRange(item.priceRange) : NO_PRICE)), register: view.totalRange ? formatRange(view.totalRange) : NO_PRICE, loadImage };
-    case 'exact': return { items: view.items.map((item, slot) => base(item, slot, item.priceTwd === null ? NO_PRICE : formatTwd(item.priceTwd))), register: view.totalTwd === null ? NO_PRICE : formatTwd(view.totalTwd), loadImage };
+    case 'hidden': return { items: drawn(view.items, () => null), register: t('{count} items', { count: view.items.length }), loadImage };
+    case 'range': return { items: drawn(view.items, item => item.priceRange ? formatRange(item.priceRange) : NO_PRICE), register: view.totalRange ? formatRange(view.totalRange) : NO_PRICE, loadImage };
+    case 'exact': return { items: drawn(view.items, item => item.priceTwd === null ? NO_PRICE : formatTwd(item.priceTwd)), register: view.totalTwd === null ? NO_PRICE : formatTwd(view.totalTwd), loadImage };
   }
 }

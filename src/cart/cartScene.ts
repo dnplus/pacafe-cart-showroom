@@ -60,18 +60,19 @@ function paintCard(ctx: CanvasRenderingContext2D, item: ShelfItem, colour: strin
   if (item.qty > 1) { ctx.textAlign = 'right'; ctx.fillStyle = '#2f3d35'; ctx.font = font(900, picture ? 38 : 44); ctx.fillText(`×${item.qty}`, 304, y + 4); }
 }
 
-function product(item: ShelfItem, slot: number, loadImage?: Shelf['loadImage']) {
-  const h = seed(item.title), colour = palette[h % palette.length], space = shelfSlot(slot);
+/** The product box the shelf draws, sized to fit `space`; the unboxing stage draws the very same one, with a finer label (`labelScale`). */
+export function productBox(item: ShelfItem, space: { width: number; height: number; depth: number }, loadImage?: Shelf['loadImage'], labelScale = 1) {
+  const h = seed(item.title), colour = palette[h % palette.length];
   const wanted = { width: .5 + (h >> 4) % 10 * .012, height: .36 + (h >> 8) % 14 * .013, depth: .26 + (h >> 12) % 6 * .01 };
   const fit = Math.min(1, space.width * .9 / wanted.width, space.height * .9 / wanted.height, space.depth * .9 / wanted.depth);
   const width = wanted.width * fit, height = wanted.height * fit, depth = wanted.depth * fit;
   const geometries: THREE.BufferGeometry[] = [], materials: THREE.Material[] = [], textures: THREE.Texture[] = [];
-  const node = new THREE.Group(); node.name = `cart-item:${slot}`;
+  const node = new THREE.Group(); node.name = 'cart-item';
   const body = new THREE.Mesh(new RoundedBoxGeometry(width, height, depth, 2, .025), new THREE.MeshStandardMaterial({ color: colour, roughness: .55 }));
   body.position.y = height / 2; body.castShadow = true; body.receiveShadow = true; node.add(body);
   geometries.push(body.geometry); materials.push(body.material);
-  const canvas = document.createElement('canvas'); canvas.width = CARD_W; canvas.height = CARD_H;
-  const ctx = canvas.getContext('2d')!; paintCard(ctx, item, colour, null);
+  const canvas = document.createElement('canvas'); canvas.width = CARD_W * labelScale; canvas.height = CARD_H * labelScale;
+  const ctx = canvas.getContext('2d')!; ctx.scale(labelScale, labelScale); paintCard(ctx, item, colour, null);
   const label = new THREE.CanvasTexture(canvas); label.colorSpace = THREE.SRGBColorSpace; label.anisotropy = 4;
   const card = new THREE.Mesh(new THREE.PlaneGeometry(width * .9, Math.min(height * .82, width * .9 * .75)), new THREE.MeshBasicMaterial({ map: label, toneMapped: false }));
   card.position.set(0, height / 2, depth / 2 + .003); node.add(card);
@@ -85,6 +86,11 @@ function product(item: ShelfItem, slot: number, loadImage?: Shelf['loadImage']) 
   });
   if (item.image && loadImage) fetchPicture(2);
   return { node, height, dispose() { disposed = true; geometries.forEach(g => g.dispose()); materials.forEach(m => m.dispose()); textures.forEach(t => t.dispose()); } };
+}
+
+function product(item: ShelfItem, slot: number, loadImage?: Shelf['loadImage']) {
+  const built = productBox(item, shelfSlot(slot), loadImage); built.node.name = `cart-item:${slot}`;
+  return built;
 }
 
 const LAND_MS = 560;

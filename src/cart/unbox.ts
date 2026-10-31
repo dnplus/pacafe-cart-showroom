@@ -72,7 +72,7 @@ export function extendSlit(slit: Slit | null, point: TapePoint, reach: number): 
 export const sliceProgress = (slit: Slit | null) => slit ? slit.hi - slit.lo : 0;
 
 /** A single parcel's reveal: flaps open, the product rises and hangs where it can be read, then settles toward the shelf. */
-export const REVEAL_MS = 2400;
+export const REVEAL_MS = 3400;
 /** Several parcels opened together fly out fast and compact, staggered by STAGGER_MS, so a burst reads as a burst. */
 export const QUICK_MS = 700;
 export const STAGGER_MS = 90;

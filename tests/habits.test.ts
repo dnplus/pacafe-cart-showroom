@@ -6,7 +6,7 @@ import { emptyUnbox } from '../shared/unbox';
 const NOW = '2026-11-10T04:00:00.000Z';
 let n = 0;
 const item = (over: Partial<CartItem> = {}): CartItem => ({
-  id: `item-${++n}`, title: `東西 ${n}`, store: null, url: null, priceTwd: null, imageUrl: null, cutoutUrl: null, category: null, qty: 1,
+  id: `item-${++n}`, title: `東西 ${n}`, store: null, url: null, priceTwd: null, imageUrl: null, cutoutUrl: null, category: null, note: null, qty: 1,
   addedAt: '2026-11-09T04:00:00.000Z', shelfSlot: 0, ...over,
 });
 
