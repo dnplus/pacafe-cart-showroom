@@ -2,7 +2,7 @@ import { facingOf, type Facing, type Vec } from './behavior';
 import { sheetCell } from './sprites';
 
 /** Things that happen in the shop which the two figures react to. */
-export type Cue = 'arrival' | 'unboxed' | 'poke';
+export type Cue = 'arrival' | 'unboxed' | 'poke' | 'removed';
 /** A figure on the floor: where it stands, the stops it is walking to, and when it may set off again. */
 export interface Actor { at: Vec; route: readonly Stop[]; restUntil: number; moving: boolean; heading: Vec }
 export interface Stop extends Vec { wait?: number }
@@ -63,8 +63,8 @@ export function actorCell(actor: Actor, view: Vec, now: number) {
 
 export interface Pose { hop: number; stretch: number; mark: string | null; over: boolean }
 const rest: Pose = { hop: 0, stretch: 0, mark: null, over: true };
-const marks: Record<Cue, string> = { arrival: '!', unboxed: '♪', poke: '♥' };
-const hops: Record<Cue, { count: number; height: number; mark: number }> = { arrival: { count: 1, height: .22, mark: 1300 }, unboxed: { count: 2, height: .3, mark: 1700 }, poke: { count: 1, height: .18, mark: 1100 } };
+const marks: Record<Cue, string> = { arrival: '!', unboxed: '♪', poke: '♥', removed: '…' };
+const hops: Record<Cue, { count: number; height: number; mark: number }> = { arrival: { count: 1, height: .22, mark: 1300 }, unboxed: { count: 2, height: .3, mark: 1700 }, poke: { count: 1, height: .18, mark: 1100 }, removed: { count: 1, height: .1, mark: 1200 } };
 const HOP_MS = 360;
 
 /** How high a reacting figure is off the floor and how stretched, and the mark above its head; calm rooms skip the hop and keep the mark. */
@@ -83,10 +83,11 @@ export function beatPose(beat: Beat | undefined, now: number, calm: boolean): Po
 export const fetchesFromShelf: ReadonlySet<Cue> = new Set<Cue>(['unboxed']);
 
 export interface CartSnapshot { items: number; shelved: number }
-/** The cue a change in the cart calls for: a new item arrives, or one is unboxed onto the shelf. The first look at the cart is not news. */
+/** The cue a change in the cart calls for: a new item arrives, one is unboxed onto the shelf, or one is taken out. The first look at the cart is not news. */
 export function cartCue(previous: CartSnapshot | null, next: CartSnapshot): Cue | null {
   if (!previous) return null;
   if (next.shelved > previous.shelved) return 'unboxed';
   if (next.items > previous.items) return 'arrival';
+  if (next.items < previous.items) return 'removed';
   return null;
 }

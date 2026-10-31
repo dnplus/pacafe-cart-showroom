@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { addCartItem, cartItemInputSchema, cartQty, MAX_CART_ITEMS, removeCartItem, type Cart } from '../shared/cart';
 import { habitsReport } from '../shared/habits';
+import { recentRemovals, removedBefore, removedNote, type Removal } from '../shared/removals';
 import type { UnboxState } from '../shared/unbox';
 import { promoJobId, promoRequestSchema, type PromoRecord } from '../shared/promo';
 import { shareUrl, type ShareSettings } from '../shared/share';
@@ -10,6 +11,8 @@ import { queuePromo } from './promo';
 export interface Store {
   cart(): Promise<Cart>;
   saveCart(cart: Cart): Promise<void>;
+  /** What the owner took out of the cart in the room, oldest first. */
+  removals(): Promise<Removal[]>;
   /** Which parcels the owner has opened. */
   unbox(): Promise<UnboxState>;
   /** Made on first ask, so a showroom nobody shares never gets a slug. */
@@ -43,20 +46,22 @@ const saved = async (store: Store, before: Cart, after: Cart) => { if (after !==
 
 export const tools: readonly Tool[] = [
   tool({
-    name: 'cart_add', title: '加入購物車', description: '把買到或看上的東西記進小屋購物車。url 請填商品頁的原始連結，小屋會在房間附上連結；沒給 imageUrl 時，小屋會從商品頁抓圖。category 是商品分類，給購物習慣報表用。同名、同店、同連結的東西會合併數量。只做記錄，不會下單。',
+    name: 'cart_add', title: '加入購物車', description: '把買到或看上的東西記進小屋購物車。url 請填商品頁的原始連結，小屋會在房間附上連結；沒給 imageUrl 時，小屋會從商品頁抓圖。category 是商品分類，給購物習慣報表用。同名、同店、同連結的東西會合併數量。如果屋主之前從房間移除過同連結或同名的東西，回傳會多一個 note 說明，請先問屋主再決定留不留。只做記錄，不會下單。',
     input: cartItemInputSchema, annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     async run(store, args) {
       const cart = await store.cart(), [input] = await withProductImages([args], cart), next = addCartItem(cart, input, now());
       if (next.items.length > MAX_CART_ITEMS) throw new ToolError(`購物車已滿（最多 ${MAX_CART_ITEMS} 項），先用 cart_remove 移除不要的東西。`);
-      return saved(store, cart, next);
+      const removed = removedBefore(await store.removals(), input);
+      await saved(store, cart, next);
+      return removed ? { ...next, note: removedNote(removed) } : next;
     },
   }),
   tool({
-    name: 'cart_list', title: '查看購物車', description: '列出購物車內容、總額，以及分享連結、是否已開啟分享和訪客看到的價格（hidden 隱藏、range 區間、exact 精確）。',
+    name: 'cart_list', title: '查看購物車', description: '列出購物車內容、總額，以及分享連結、是否已開啟分享和訪客看到的價格（hidden 隱藏、range 區間、exact 精確）。removals 是屋主最近從房間移除的東西（新的在前、最多 20 筆，含品名、連結、店、分類、價格、原因和時間）；原因是 not_my_taste 不合口味、too_expensive 太貴、already_have 已經有了、changed_mind 改變主意，或 null 沒說。這些是屋主的口味，別再記回來。',
     input: z.strictObject({}), annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     async run(store, _args, origin) {
-      const [cart, share] = await Promise.all([store.cart(), store.share()]);
-      return { ...cart, share: { url: shareUrl(origin, share.slug), enabled: share.enabled, prices: share.prices } };
+      const [cart, share, removals] = await Promise.all([store.cart(), store.share(), store.removals()]);
+      return { ...cart, share: { url: shareUrl(origin, share.slug), enabled: share.enabled, prices: share.prices }, removals: recentRemovals(removals) };
     },
   }),
   tool({

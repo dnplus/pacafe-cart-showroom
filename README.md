@@ -145,6 +145,12 @@ echo "CART_MCP_TOKEN=$(openssl rand -base64 24)" > .dev.vars
 |---|---|
 | ![桌機截圖：右側分享面板，開放分享、選了價格區間，暱稱小島，下方有分享連結、預覽和下載分享卡；房間收銀機顯示 NT$ 5,000–10,000](docs/screenshots/room-share-settings-1440.png) | ![桌機截圖：小島 的小屋購物車，總額 NT$ 5,000–10,000，清單每件只顯示價格區間和看商品連結](docs/screenshots/share-page-1440.png) |
 
+## 屋主移除東西
+
+屋主在房間的購物車清單，每一列右邊有垃圾桶：按下去選一個原因（不合口味、太貴、已經有了、改變主意，也可以直接移除），列會先藏起來並給 5 秒「復原」，之後才送出 `POST /api/cart/remove`（屋主驗證和 `/api/cart` 一樣），body 是 `{ itemId, reason? }`，回 `{ cart, removal }`。購物車和移除紀錄在同一次寫入裡一起改，紀錄存在 Durable Object，只留最近 50 筆：`{ item: { title, url, store, category, priceTwd }, reason, removedAt, by: 'owner' }`。Muse 用 `cart_remove` 拿掉的不會記在這裡。
+
+Muse 從兩個地方知道：`cart_list` 的 `removals` 列最近 20 筆（新的在前）；`cart_add` 加的東西如果同連結或同名被屋主移除過，回傳多一個 `note`（東西仍會加進去，由 Muse 去問屋主）。
+
 ## 購物習慣：房間裡的「習慣」面板和 `habits_report`
 
 屋主在房間按購物車面板上的「習慣」打開報表（只有屋主看得到，分享頁沒有）。報表從購物車裡目前的東西和拆快遞紀錄算出來，不存任何新資料。算法是 `shared/habits.ts` 的純函式 `habitsReport(items, unbox, now)`，房間畫面和 MCP 的 `habits_report` 用同一個函式，所以 Muse 講的數字和屋主看到的一樣。
@@ -204,8 +210,8 @@ echo "CART_MCP_TOKEN=$(openssl rand -base64 24)" > .dev.vars
 
 | 工具 | 輸入 | 回傳 | 唯讀 |
 |---|---|---|---|
-| `cart_add` | `{ title, store?, url?, priceTwd?, imageUrl?, category?, qty? }`，`qty` 預設 1 | `Cart` | 否 |
-| `cart_list` | `{}` | `Cart`，加上 `share: { url, enabled, prices }` | 是 |
+| `cart_add` | `{ title, store?, url?, priceTwd?, imageUrl?, category?, qty? }`，`qty` 預設 1 | `Cart`；屋主移除過同連結或同名的東西時多一個 `note` | 否 |
+| `cart_list` | `{}` | `Cart`，加上 `share: { url, enabled, prices }` 和 `removals`（屋主最近移除的東西，見下面） | 是 |
 | `cart_remove` | `{ itemId, qty? }`，不給 `qty` 就整件移除 | `Cart` | 否 |
 | `habits_report` | `{}` | `HabitsReport`，見下面「購物習慣」 | 是 |
 | `promo_generate` | `{ durationSec?, style? }`，`durationSec` 介於 15 到 45，預設 30 | `{ jobId, status: 'queued' }` | 否 |

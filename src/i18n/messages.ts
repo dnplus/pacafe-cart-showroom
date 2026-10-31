@@ -200,5 +200,18 @@ export const messages = [
   ['Promo', '影片'],
   ['Switch language', '切換語言'],
   ['Use cart_list from the showroom-cart skill to look at my cart showroom, and tell me how many items there are and the total.', '請用 showroom-cart 的 cart_list 看看我的小屋購物車，回報有幾件、總額多少。'],
+  ['Remove {title}', '移除 {title}'],
+  ['Why take {title} out?', '為什麼要拿掉 {title}？'],
+  ['Why take it out? Muse will see your answer. (optional)', '為什麼拿掉？Muse 會看到你的回答。（可不填）'],
+  ['Not my taste', '不合我的口味'],
+  ['Too expensive', '太貴'],
+  ['Already have it', '我已經有了'],
+  ['Changed my mind', '我改變主意了'],
+  ['Just remove it', '直接移除'],
+  ['Cancel', '取消'],
+  ['Removed {title}', '已移除 {title}'],
+  ['Undo', '復原'],
+  ['Could not remove {title}. It is back on the list.', '沒能移除 {title}，它還在清單裡。'],
+  ['Dismiss', '知道了'],
 ] as const;
 export type TextKey = typeof messages[number][0];

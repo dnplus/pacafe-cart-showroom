@@ -1,6 +1,6 @@
 ---
 name: showroom-cart
-description: 把你替屋主採買或看中的東西記進小屋購物車，或查看、移除購物車裡的東西，也能讀購物習慣報表。用 showroom MCP 的 cart_add、cart_list、cart_remove、habits_report。屋主說「記進小屋」「放進購物車」「小屋裡有什麼」「拿掉那件」「我的購物習慣」「我都買什麼」時使用。
+description: 把你替屋主採買或看中的東西記進小屋購物車，或查看、移除購物車裡的東西，也能讀購物習慣報表，並尊重屋主自己移除過的東西。用 showroom MCP 的 cart_add、cart_list、cart_remove、habits_report。屋主說「記進小屋」「放進購物車」「小屋裡有什麼」「拿掉那件」「我的購物習慣」「我都買什麼」時使用。
 ---
 
 # 小屋購物車
@@ -15,8 +15,8 @@ description: 把你替屋主採買或看中的東西記進小屋購物車，或�
 
 | 工具 | 什麼時候用 | 輸入 | 回傳 |
 |---|---|---|---|
-| `cart_add` | 每記下一件東西就呼叫一次 | `title`（必填）、`url`（商品頁連結）、`store`、`priceTwd`、`imageUrl`、`category`、`qty`（預設 1） | 整個購物車 `Cart` |
-| `cart_list` | 想知道小屋裡現在有什麼、總額多少、分享連結是什麼 | `{}` | `Cart`，另加 `share: { url, enabled, prices }` |
+| `cart_add` | 每記下一件東西就呼叫一次 | `title`（必填）、`url`（商品頁連結）、`store`、`priceTwd`、`imageUrl`、`category`、`qty`（預設 1） | 整個購物車 `Cart`；屋主移除過同連結或同名的東西時多一個 `note` |
+| `cart_list` | 想知道小屋裡現在有什麼、總額多少、分享連結是什麼 | `{}` | `Cart`，另加 `share: { url, enabled, prices }` 和 `removals`（屋主最近移除的東西） |
 | `habits_report` | 屋主問購物習慣、花在哪、什麼時候買、有沒有東西還沒拆 | `{}` | `HabitsReport`（唯讀） |
 | `cart_remove` | 屋主說不要了，或你記錯了 | `itemId`（從 `cart_list` 拿）、`qty`（不填就整件拿掉） | 整個購物車 `Cart` |
 
@@ -32,6 +32,17 @@ description: 把你替屋主採買或看中的東西記進小屋購物車，或�
 6. `category` 從下面挑一個，給購物習慣報表用：`fashion` 服飾配件、`beauty` 美妝保養、`electronics` 3C 家電、`home` 居家生活、`kitchen` 廚房餐具、`food` 食品飲料、`books` 書籍文具、`hobby` 玩具嗜好、`outdoor` 運動戶外、`other` 其他。
 7. 同一件東西（標題、店名、連結都一樣）再記一次，小屋會把數量加上去，不會多一格。
 8. 要移除東西，先用 `cart_list` 找到那件的 `id`，再呼叫 `cart_remove`。
+
+## 屋主移除的東西
+
+屋主可以在房間的購物車清單裡把不喜歡的東西拿掉，也可以選一個原因。這是屋主在告訴你他的口味，不是記錯。
+
+1. 每次開始記東西或整理購物車前，先呼叫 `cart_list`，讀 `removals`（新的在前，最多 20 筆）。每筆有 `item`（`title`、`url`、`store`、`category`、`priceTwd`）、`reason`、`removedAt`、`by`（固定是 `owner`）。
+2. `reason` 是 `not_my_taste` 不合口味、`too_expensive` 太貴、`already_have` 已經有了、`changed_mind` 改變主意，或 `null`（屋主沒說）。
+3. 不要把屋主移除過的東西再記回來。看到同一個商品、同一家店的同類東西，或同一個原因會擋掉的東西（例如 `too_expensive` 之後別再挑更貴的同類），先問屋主。
+4. 從 `removals` 學他的口味：`not_my_taste` 避開那個分類或風格，`too_expensive` 留意價位，`already_have` 別再買同類，`changed_mind` 不要推論成討厭。沒有 `reason` 就別猜。
+5. `cart_add` 的回傳多了 `note` 時，代表你剛記的東西，屋主以前移除過（同連結或同名）。東西已經進購物車了，但請停下來問屋主還要不要；不要就用 `cart_remove` 拿掉，並照 `note` 裡的原因回報，不要自己決定留下。
+6. `removals` 只留最近 50 筆，更早的記錄會消失，所以屋主說過的偏好要自己記住。
 
 ## 回報給屋主
 

@@ -87,6 +87,6 @@ describe('reacting', () => {
     expect(cartCue({ items: 5, shelved: 5 }, { items: 5, shelved: 5 })).toBeNull();
     expect(cartCue({ items: 5, shelved: 5 }, { items: 6, shelved: 5 })).toBe('arrival');
     expect(cartCue({ items: 6, shelved: 5 }, { items: 6, shelved: 6 })).toBe('unboxed');
-    expect(cartCue({ items: 6, shelved: 5 }, { items: 5, shelved: 5 })).toBeNull();
+    expect(cartCue({ items: 6, shelved: 5 }, { items: 5, shelved: 5 })).toBe('removed');
   });
 });
