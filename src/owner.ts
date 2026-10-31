@@ -2,7 +2,6 @@ import { readStored, writeStored } from './browserStorage';
 
 const OWNER_KEY = 'showroom.ownerKey';
 export const hasOwnerKey = () => readStored(OWNER_KEY) !== null;
-/** The saved key, for the Muse settings the connections panel hands out; null where the room opens without one. */
 export const ownerKey = () => readStored(OWNER_KEY);
 export const saveOwnerKey = (key: string) => writeStored(OWNER_KEY, key.trim() || null);
 

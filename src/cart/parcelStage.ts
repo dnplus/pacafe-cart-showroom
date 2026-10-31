@@ -6,14 +6,12 @@ import { productBox } from './cartScene';
 import type { ImageLoader } from './productImage';
 import type { ShelfItem } from './shelf';
 
-/** One parcel on the stage: how it is packed, who shipped it, and the product that comes out (drawn by the shelf's own `productBox`). */
 export interface StageParcel { id: string; packaging: Packaging; store: string | null; product: ShelfItem }
 export interface StageOptions {
   mode: 'single' | 'pull';
   /** Under reduced motion nothing travels, spins or bursts: the flaps are open at once and the product fades in. */
   reduced: boolean;
   loadImage?: ImageLoader;
-  /** Where the product ends up when the reveal is over (the room's shelf, in page pixels). */
   shelf?: () => DOMRect | null;
 }
 export interface ParcelStage { open(index: number): void; shake(index: number | null): void; dispose(): void }
@@ -87,7 +85,6 @@ export function createParcelStage(host: HTMLElement, parcels: readonly StageParc
   const insideMat = own(new THREE.MeshStandardMaterial({ color: 0x2b1d10, roughness: 1 }));
   const shadowMat = own(new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false }));
 
-  // The floor: a round cream turntable for one parcel, a long soft board for a line of them.
   const cols = many ? (parcels.length <= 5 ? parcels.length : Math.ceil(parcels.length / 2)) : 1, rows = many ? Math.ceil(parcels.length / cols) : 1;
   const stepX = 2.05, stepZ = 1.8, scale = many ? Math.min(1, 4.6 / Math.max(4.6, cols * 1.1)) * 1 : 1;
   const floorMat = own(new THREE.MeshStandardMaterial({ color: 0xf4ead2, roughness: .9 })), ringMat = own(new THREE.MeshStandardMaterial({ color: 0xd98b5f, roughness: .8 }));
@@ -116,7 +113,6 @@ export function createParcelStage(host: HTMLElement, parcels: readonly StageParc
     const label = new THREE.Mesh(labelGeo, own(new THREE.MeshStandardMaterial({ map: own(labelTexture(parcel.store)), roughness: .6 }))); label.position.set(W * .2, H * .45, D / 2 + .004); group.add(label);
     const shadow = new THREE.Mesh(shadowGeo, shadowMat); shadow.rotation.x = -Math.PI / 2; shadow.scale.set(W * 1.9, D * 2.2, 1); shadow.position.y = .004; group.add(shadow);
 
-    // Filler: pieces that sit in the open box and puff out when it opens.
     const count = many ? 30 : 56, random = rand(index * 7919 + 13);
     const piece: THREE.BufferGeometry = filler === 'bubble' ? own(new THREE.SphereGeometry(.075, 10, 8)) : filler === 'peanuts' ? own(new THREE.CapsuleGeometry(.03, .09, 3, 6)) : filler === 'tissue' ? own(new THREE.PlaneGeometry(.26, .26)) : filler === 'confetti' ? own(new THREE.PlaneGeometry(.07, .12)) : own(new THREE.BoxGeometry(.2, .012, .035));
     const fillerMat = own(new THREE.MeshStandardMaterial({ color: filler === 'bubble' ? 0xbcdcee : filler === 'peanuts' ? 0xf6ecd0 : filler === 'tissue' ? 0xf7c2d6 : filler === 'confetti' ? 0xffffff : 0xe8d2a4, roughness: .7, side: THREE.DoubleSide, transparent: filler === 'bubble', opacity: filler === 'bubble' ? .75 : 1 }));

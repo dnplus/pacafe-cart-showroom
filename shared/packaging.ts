@@ -9,7 +9,6 @@ export const packagingSchema = z.strictObject({ box: z.enum(BOXES), tape: z.enum
 export type Packaging = z.infer<typeof packagingSchema>;
 export type StickerId = typeof STICKERS[number];
 
-/** One in this many parcels has a sticker inside. */
 export const STICKER_ONE_IN = 4;
 
 /** FNV-1a with a final mix, a stable number per text whose low bits do not follow the last characters. */
@@ -22,19 +21,13 @@ const hash = (text: string) => {
 const SEED = { box: '~box1', tape: '~tape3', sticker: '~sticker4' };
 const pick = <T,>(list: readonly T[], text: string) => list[hash(text) % list.length];
 
-/** Fragile and shiny things get cushioning to match; a category with no rule, or no category, follows the store. */
 const FILLER_BY_CATEGORY: Partial<Record<CartCategory, typeof FILLERS[number]>> = { kitchen: 'bubble', home: 'bubble', electronics: 'peanuts', fashion: 'tissue', beauty: 'tissue', books: 'paper', food: 'confetti' };
 
-/**
- * How a parcel is packed, from its store (box colour and tape) and category (cushioning) alone, so the same shop always ships in the
- * same box. Whether a sticker is inside depends on the item's id alone.
- */
 export function packagingOf(item: { id: string; store: string | null; category: CartCategory | null }): Packaging {
   const shop = item.store?.trim().toLowerCase() || item.category || 'other';
   const sticker = hash(`${item.id}${SEED.sticker}`) % STICKER_ONE_IN === 0 ? pick(STICKERS, `${item.id}~which`) : null;
   return { box: pick(BOXES, `${shop}${SEED.box}`), tape: pick(TAPES, `${shop}${SEED.tape}`), filler: (item.category && FILLER_BY_CATEGORY[item.category]) || pick(FILLERS, `${shop}~filler`), sticker };
 }
 
-/** How a pull feels: a parcel with a sticker is rare, one in washi tape or confetti filler is fine, the rest plain. */
 export type Rarity = 'rare' | 'fine' | 'plain';
 export const rarityOf = (pack: Packaging): Rarity => pack.sticker ? 'rare' : pack.tape === 'washi' || pack.filler === 'confetti' ? 'fine' : 'plain';

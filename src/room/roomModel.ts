@@ -135,7 +135,6 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
     pending.push(model.ready.then(loaded => { if (loaded && live.get(item.id) === piece) modelArrived(piece); }));
     return piece;
   }
-  /** The PA Cafe model replaced the stand-in: tap targets, glow, framing and shadows follow the new meshes. */
   function modelArrived(piece: LivePiece) {
     if (disposed) return;
     piece.model.node.traverse(part => { part.userData.pieceId = piece.item.id; });
@@ -256,7 +255,6 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
     sprite.material.needsUpdate = true;
     const f = frameOf(layout); sprite.center.copy(f.center); size(sprite, f.width, f.height, f.top);
   }
-  /** Lets go of every texture made from `source`: the image itself and each cell cut out of it. */
   function forget(path: string) {
     const source = maps.get(path); if (!source) return;
     for (const [key, frame] of illustrationFrames) if (key.startsWith(`${source.uuid}:`)) { textures.delete(frame); frame.dispose(); illustrationFrames.delete(key); }
@@ -271,7 +269,6 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
   const baristaStand = standCard(-1, bar.barista);
   /** The owner's standee stands on the floor's open middle, between the studio set and the counter, clear of the shelf. */
   const ownerStand = standCard(1, ownerSpot);
-  /** A figure that lives on the floor: where it is, what it is reacting to, and the mark floating over its head. */
   interface Figure { stand: Card; actor: Actor; beat?: Beat; mark: THREE.Sprite; flipTo: number; rest: number; phase: number; shown: string }
   const markTextures = new Map<string, THREE.Texture>();
   function markTexture(text: string) {
@@ -491,7 +488,7 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
       renderer.shadowMap.needsUpdate = true;
     }
   }
-  /** What the figures walk around: each furniture or studio-set mesh that stands on the floor, as its footprint grown by a figure's radius. Rugs lie flat and do not count; `except` leaves out one kind, so the clerk can stand inside the counter. */
+  /** Footprints grown by a figure's radius; rugs do not count. `except` leaves out one kind, so the clerk can stand inside the counter. */
   let walkCache = { key: '', parts: [] as { kind: string; area: Area }[] };
   function blocked(except?: FurnitureKind): Area[] {
     const key = `${layoutKey}|${setGeneration}|${Boolean(setView)}`;
@@ -511,9 +508,7 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
   }
   /** Where the clerk strolls: the strip right behind the countertop, clear of the return on the left and of the register (and its price tag) on the right; any deeper and the counter hides all but her head. */
   const clerkArea = (): Area => ({ minX: bar.counter.x - 1.25, maxX: bar.counter.x + .6, minZ: bar.counter.z - bar.counter.halfZ - .45, maxZ: bar.counter.z - bar.counter.halfZ - .15 });
-  /** Where the owner strolls: the open floor around their spot, clear of the counter and the studio set. */
   const ownerArea: Area = { minX: ownerSpot.x - .6, maxX: ownerSpot.x + 1.9, minZ: ownerSpot.z - .7, maxZ: ownerSpot.z + 1.2 };
-  /** In front of the shelf, on the clerk's side of the counter and in front of its back cabinet. */
   function shelfStop(): Vec {
     const node = shelfPiece()?.node; if (!node) return bar.barista;
     group.updateMatrixWorld(true); const box = new THREE.Box3().setFromObject(node), centre = box.getCenter(new THREE.Vector3());

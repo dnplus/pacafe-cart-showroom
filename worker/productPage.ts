@@ -29,7 +29,6 @@ function ldImage(node: unknown): string | null {
   return ldImage(record['@graph']);
 }
 
-/** The product's picture as the page itself names it: Open Graph or Twitter card first, then a schema.org Product. */
 export function productImageIn(html: string, pageUrl: string): string | null {
   const candidates = [...html.matchAll(META_IMAGE)].map(tag => tag[0].match(CONTENT)?.[1]).filter((value): value is string => !!value);
   for (const [, body] of html.matchAll(LD_JSON)) {
@@ -47,7 +46,6 @@ export function productImageIn(html: string, pageUrl: string): string | null {
 const PAGE_TIMEOUT_MS = 5000;
 const PAGE_MAX_BYTES = 768 * 1024;
 
-/** Reads the head of a product page and returns its picture, or null when the page is slow, not HTML, or names none. */
 export async function fetchProductImage(url: string, http: typeof fetch = fetch): Promise<string | null> {
   try {
     const response = await http(url, { redirect: 'follow', signal: AbortSignal.timeout(PAGE_TIMEOUT_MS), headers: { accept: 'text/html', 'user-agent': 'Mozilla/5.0 (compatible; pacafe-cart-showroom/0.1; +product preview)' } });
@@ -69,10 +67,6 @@ export async function fetchProductImage(url: string, http: typeof fetch = fetch)
   }
 }
 
-/**
- * Inputs as the cart stores them: links without tracking parameters, and a picture taken from the product page for any item
- * that has a link but no image. A link the cart already knows reuses its picture, so a repeated write fetches nothing.
- */
 export async function withProductImages(inputs: readonly CartItemInput[], previous: Cart, http: typeof fetch = fetch): Promise<CartItemInput[]> {
   const known = new Map(previous.items.filter(item => item.url && item.imageUrl).map(item => [item.url!, item.imageUrl!]));
   const pending = new Map<string, Promise<string | null>>();

@@ -26,10 +26,7 @@ export const PROMO_STEPS: Readonly<Record<PromoStatus, readonly PromoStatus[]>> 
 /** A claim lasts this long; every update renews it, and `/runner/next` offers a job again once its runner has gone quiet past it. */
 export const RUNNER_LEASE_MS = 20 * 60 * 1000;
 
-/**
- * The cart as the video may show it: narrowed by the owner's share price choice and nickname, whether or not sharing is on.
- * `voice` is the voice set in the room's connections panel, key included; null leaves the runner to its own TTS_PROVIDER.
- */
+/** `voice` carries its key; null leaves the runner to its own TTS_PROVIDER. */
 export const runnerClaimSchema = z.strictObject({ job: promoJobSchema, view: shareViewSchema, leaseUntil: z.iso.datetime(), voice: voiceConfigSchema.nullable().default(null) });
 export type RunnerClaim = z.infer<typeof runnerClaimSchema>;
 

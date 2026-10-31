@@ -19,7 +19,6 @@ export const NOTE_MAX = 80;
 export const noteText = z.string().trim().min(1).max(NOTE_MAX);
 export const cartQty = z.number().int().min(1).max(MAX_QTY);
 
-/** What kind of thing an item is, as Muse files it when noting it; the habits report groups by these. */
 export const CART_CATEGORIES = ['fashion', 'beauty', 'electronics', 'home', 'kitchen', 'food', 'books', 'hobby', 'outdoor', 'other'] as const;
 export const cartCategory = z.enum(CART_CATEGORIES);
 export type CartCategory = z.infer<typeof cartCategory>;

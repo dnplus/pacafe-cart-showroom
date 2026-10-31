@@ -33,11 +33,9 @@ const FIGURE_METRES = 2.1;
 const ART = { owner: { src: ownerArt, width: 512, height: 1024, body: [55, 972] }, muse: { src: museArt, width: 512, height: 1024, body: [160, 864] } } as const;
 const SHEET = { cell: 256, body: [12, 256], westRow: 1, frames: 8, fps: 10 } as const;
 
-/** A beat of the host: a hop when something lands, a bob while talking. */
 function hop(sec: number, at: number) { const t = (sec - at) / 0.42; return t < 0 || t > 1 ? 0 : Math.sin(t * Math.PI) * 26; }
 const talk = (sec: number) => Math.abs(Math.sin(sec * 7.4)) * 5;
 
-/** A figure standing at the chair, `dx` metres to the side, between the room and the desk. */
 function Figure({ shot, who, dx = 0, lift = 0, lean = 0, opacity = 1 }: { shot: Shot; who: keyof typeof ART; dx?: number; lift?: number; lean?: number; opacity?: number }) {
   const Img = useContext(Picture), plate = PLATES[shot], art = ART[who], scale = FIGURE_METRES * plate.pxPerMetre / (art.body[1] - art.body[0]);
   const width = art.width * scale, height = art.height * scale, bottom = plate.feet.y + (art.height - art.body[1]) * scale;
@@ -46,7 +44,6 @@ function Figure({ shot, who, dx = 0, lift = 0, lean = 0, opacity = 1 }: { shot: 
   );
 }
 
-/** The owner walking in from the right on the sprite sheet's west row, `x` metres from the chair. */
 function Walker({ shot, x, sec }: { shot: Shot; x: number; sec: number }) {
   const Img = useContext(Picture), plate = PLATES[shot], scale = FIGURE_METRES * plate.pxPerMetre / (SHEET.body[1] - SHEET.body[0]), size = SHEET.cell * scale;
   const frame = Math.floor(sec * SHEET.fps) % SHEET.frames;
@@ -57,7 +54,6 @@ function Walker({ shot, x, sec }: { shot: Shot; x: number; sec: number }) {
   );
 }
 
-/** A mark over a figure's head, like the room's: a disc with a symbol that pops in and fades. */
 function Mark({ shot, text, sec, at, dx = 0 }: { shot: Shot; text: string; sec: number; at: number; dx?: number }) {
   const plate = PLATES[shot], t = sec - at;
   if (t < 0 || t > 1.6) return null;
@@ -68,7 +64,6 @@ function Mark({ shot, text, sec, at, dx = 0 }: { shot: Shot; text: string; sec: 
   );
 }
 
-/** The set, with whatever stands at the chair between the room and the desk; `push` slowly closes the camera in. */
 function Stage({ shot, push, children }: { shot: Shot; push: number; children: React.ReactNode }) {
   const Img = useContext(Picture), plate = PLATES[shot];
   return (
@@ -110,7 +105,6 @@ function SceneView({ scene, sec, n, words }: { scene: Scene; sec: number; n: num
   const length = scene.endSec - scene.startSec;
   switch (scene.kind) {
     case 'opening': {
-      // The owner walks in behind the desk, turns to the camera and hops hello.
       const walk = 1.1, x = interpolate(sec, [0, walk], [1.9, 0], clamp);
       return (
         <>
@@ -127,7 +121,6 @@ function SceneView({ scene, sec, n, words }: { scene: Scene; sec: number; n: num
       );
     }
     case 'item': {
-      // Closer on the host, who stands left of centre so the card has the right side; a hop and a mark as it lands.
       return (
         <>
           <Stage shot="close" push={interpolate(sec, [0, length], [1, 1.04])}>
@@ -139,7 +132,6 @@ function SceneView({ scene, sec, n, words }: { scene: Scene; sec: number; n: num
       );
     }
     case 'ending': {
-      // Muse steps in beside the owner; both wave off with a heart over the disclaimer.
       const muse = interpolate(sec, [0.2, 0.8], [0, 1], clamp);
       return (
         <>

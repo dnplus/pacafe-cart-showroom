@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { PRODUCT_POKED } from './cartScene';
 
-/** Which line of the list the last click on a shelf product points at; `n` changes on every click, so clicking the same product again counts. */
+/** `n` changes on every click, so clicking the same product again counts. */
 export interface ProductFocus { key: string; n: number }
 
 export function useProductPoke(): ProductFocus | null {
@@ -17,10 +17,6 @@ export function useProductPoke(): ProductFocus | null {
 
 const FLASH_MS = 2200;
 
-/**
- * Brings the list line named by `focus` into view and flags it for a moment. Returns the flagged key, or null.
- * `ready` is whether the list is on screen; a click that opens the list is answered once it is.
- */
 export function useFlashedLine(focus: ProductFocus | null, ready: boolean, list: () => HTMLElement | null) {
   const [flashed, setFlashed] = useState<string | null>(null);
   useEffect(() => {

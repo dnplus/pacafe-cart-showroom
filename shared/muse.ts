@@ -1,6 +1,5 @@
 import { z } from 'zod';
 
-/** What the showroom knows about the Muse that writes to it over /mcp: when it last called, who it said it was, the last tool it used. */
 export const museActivitySchema = z.strictObject({
   firstSeenAt: z.iso.datetime(),
   lastSeenAt: z.iso.datetime(),
@@ -9,7 +8,6 @@ export const museActivitySchema = z.strictObject({
 });
 export type MuseActivity = z.infer<typeof museActivitySchema>;
 
-/** One MCP call as the showroom notes it: `initialize` names the client, `tools/call` names the tool. */
 export interface McpCall { method: string; client?: { name: string; version: string }; tool?: string }
 
 export function noteCall(previous: MuseActivity | null, call: McpCall, at: string): MuseActivity {
@@ -21,6 +19,5 @@ export function noteCall(previous: MuseActivity | null, call: McpCall, at: strin
   };
 }
 
-/** GET /api/muse: the activity, and whether the server has a token for Muse to send at all. */
 export const museStatusSchema = z.strictObject({ tokenSet: z.boolean(), activity: museActivitySchema.nullable() });
 export type MuseStatus = z.infer<typeof museStatusSchema>;

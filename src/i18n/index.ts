@@ -6,7 +6,6 @@ import { messages, type TextKey } from './messages';
 const browserLanguages = () => typeof navigator === 'undefined' ? ['en'] : navigator.languages?.length ? navigator.languages : [navigator.language];
 const CHOSEN_KEY = 'showroom.locale';
 const isLocale = (value: string | null): value is Locale => (locales as readonly string[]).includes(value ?? '');
-/** `?lang=en` in the address, then the language picked in this browser, then the browser's own languages. */
 function chosenLocale(): Locale | null {
   const asked = typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('lang');
   if (isLocale(asked)) return asked;
@@ -18,13 +17,11 @@ const columns: Record<Locale, number> = { en: 0, 'zh-TW': 1 };
 const catalog = new Map<string, readonly string[]>(messages.map(row => [row[0], row]));
 
 export const getLocale = () => locale;
-/** Remembers the choice in this browser and reloads, so every string (and the room's canvas text) is drawn in it. */
 export function setLocale(next: Locale) {
   writeStored(CHOSEN_KEY, next);
   const url = new URL(location.href); url.searchParams.delete('lang');
   location.replace(url);
 }
-/** English for a count of one; Chinese needs none. */
 const singular: Partial<Record<TextKey, string>> = {
   '{count} more do not fit on the shelf': '{count} more does not fit on the shelf', '{count} items': '{count} item', '{count} things': '{count} thing',
   '{count} lines': '{count} line', '{count} lines have no store.': '{count} line has no store.', 'Shelf: {count} items. Show the list': 'Shelf: {count} item. Show the list',

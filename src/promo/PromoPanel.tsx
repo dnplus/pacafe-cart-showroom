@@ -10,7 +10,6 @@ import './promo.css';
 const statusText: Record<PromoStatus, TextKey> = { queued: 'In line', storyboard: 'Storyboard', voice: 'Voice-over', rendering: 'Rendering', done: 'Done', failed: 'Failed' };
 const stages: readonly PromoStatus[] = ['queued', 'storyboard', 'voice', 'rendering', 'done'];
 
-/** Who wrote the lines, and with the script in hand, what Muse wrote. Scenes Muse left out are the runner's. */
 function Script({ job }: { job: PromoJob }) {
   const { script } = job;
   if (!script) return <p className="promo-author" data-testid="promo-author" data-author="runner">{t('Script by the runner')}</p>;

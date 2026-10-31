@@ -1,4 +1,4 @@
-/** Only the presenter set ships: a desk with a monitor, microphone, mug and plant, PA Cafe's #582 studio set (public/studio/showroom-set.glb). */
+/** PA Cafe's #582 studio set (public/studio/showroom-set.glb). */
 export const STUDIO_SET_PRESETS = ['presenter'] as const;
 export type StudioSetPreset = typeof STUDIO_SET_PRESETS[number];
 /** A studio set standing in the room: the preset and where its origin is. */

@@ -18,5 +18,4 @@ const kinds: Record<CartCategory, { label: TextKey; icon: LucideIcon; hue: numbe
 
 export const categoryLabel = (category: CartCategory) => t(kinds[category].label);
 export const categoryIcon = (category: CartCategory | null): LucideIcon => kinds[category ?? 'other'].icon;
-/** A soft colour per category, so a line with no picture still tells its kind apart at a glance. */
 export const categoryHue = (category: CartCategory | null) => kinds[category ?? 'other'].hue;

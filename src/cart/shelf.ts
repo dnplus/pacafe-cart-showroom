@@ -3,10 +3,7 @@ import type { PriceRange, ShareView } from '../../shared/share';
 import { t } from '../i18n';
 import { ownerImageLoader, type ImageLoader } from './productImage';
 
-/**
- * One product as the room draws it; `price` null draws no price line at all. `key` names the product in a click on it (an owner's item id,
- * a visitor's slot number), and `image` is its picture's address, drawn on the box once `Shelf.loadImage` has brought it in.
- */
+/** `key` names the product in a click on it: an owner's item id, a visitor's slot number. */
 export interface ShelfItem { key: string; title: string; qty: number; price: string | null; image: string | null; /** Just unboxed in this room: the box drops onto its slot instead of standing there already. */ lands?: boolean }
 /** What the room shows: one item per shelf slot in list order (those past SHELF_SLOTS are not drawn) and the register's display. */
 export interface Shelf { items: readonly ShelfItem[]; register: string; loadImage?: ImageLoader }
@@ -22,11 +19,6 @@ export const ownerShelf = (cart: Cart, unboxed: ReadonlySet<string>, landed: Rea
   loadImage: ownerImageLoader,
 });
 
-/**
- * A visitor's room, drawn from the narrowed view alone, so it can show no more price than the owner chose. Without `loadImage`
- * the boxes carry no pictures; products are keyed by slot, the same order the visitor's list shows. With `unboxed` (slots, in view order)
- * only those parcels stand on the shelf, as in the owner's room, and `landed` ones drop onto it.
- */
 export function sharedShelf(view: ShareView, loadImage?: ImageLoader, unboxed?: { opened: ReadonlySet<number>; landed?: ReadonlySet<number> }): Shelf {
   const base = (item: ShareView['items'][number], slot: number, price: string | null): ShelfItem => ({ key: String(slot), title: item.title, qty: item.qty, price, image: item.imageUrl, lands: unboxed?.landed?.has(slot) });
   const drawn = <T extends ShareView['items'][number]>(items: readonly T[], price: (item: T) => string | null) => items.flatMap((item, slot) => !unboxed || unboxed.opened.has(slot) ? [base(item, slot, price(item))] : []);

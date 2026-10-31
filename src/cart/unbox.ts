@@ -71,7 +71,6 @@ export function extendSlit(slit: Slit | null, point: TapePoint, reach: number): 
 /** How much of the tape is cut, 0 to 1. */
 export const sliceProgress = (slit: Slit | null) => slit ? slit.hi - slit.lo : 0;
 
-/** A single parcel's reveal: flaps open, the product rises and hangs where it can be read, then settles toward the shelf. */
 export const REVEAL_MS = 3400;
 /** Several parcels opened together fly out fast and compact, staggered by STAGGER_MS, so a burst reads as a burst. */
 export const QUICK_MS = 700;
@@ -81,7 +80,6 @@ export const STAGGERED = 6;
 export const REDUCED_REVEAL_MS = 1100;
 export const REDUCED_QUICK_MS = 120;
 
-/** How long `count` parcels opened at once take to play out; the write to the server waits for it. */
 export function popDuration(count: number, reduced: boolean) {
   if (count <= 1) return reduced ? REDUCED_REVEAL_MS : REVEAL_MS;
   return reduced ? REDUCED_QUICK_MS : QUICK_MS + Math.min(count - 1, STAGGERED) * STAGGER_MS;

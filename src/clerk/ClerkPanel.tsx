@@ -10,7 +10,6 @@ import './clerk.css';
 const SUGGESTIONS: TextKey[] = ['What is on my shelf?', 'I took some things out. Remember my taste.', 'How do I spend?', 'Make an intro video of my cart.'];
 const usd = (value: number) => `$${value.toFixed(value < 0.1 ? 3 : 2)}`;
 
-/** The conversation with the built-in clerk; `onActed` hears each finished turn so the room can refresh and react. */
 function useClerk(onActed: () => void) {
   const [view, setView] = useState<ClerkView | null>(null);
   const [pending, setPending] = useState<string | null>(null);

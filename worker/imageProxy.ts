@@ -11,12 +11,10 @@ const HIDDEN_SUFFIXES = ['.localhost', '.local', '.internal', '.lan', '.home.arp
 const normalize = (url: string) => { try { return new URL(url).href; } catch { return null; } };
 const setOf = (urls: readonly (string | null)[]) => new Set(urls.map(url => url && normalize(url)).filter((url): url is string => !!url));
 
-/** Every picture the owner's cart names, which is all the owner's room may ask for. */
 export const cartImageUrls = (cart: Cart) => setOf(cart.items.flatMap(item => [item.cutoutUrl, item.imageUrl]));
 /** Only the pictures a visitor's view carries; the view is what the owner chose to share, so nothing else is reachable through a slug. */
 export const shareImageUrls = (view: ShareView) => setOf(view.items.map(item => item.imageUrl));
 
-/** A public web address: http(s) on the usual ports, a named host with a dot, never an IP literal or a name that points inside a network. */
 export function isPublicImageUrl(url: URL) {
   if ((url.protocol !== 'https:' && url.protocol !== 'http:') || url.username || url.password) return false;
   if (url.port && url.port !== '80' && url.port !== '443') return false;
@@ -31,7 +29,7 @@ const deliveryHeaders = (type: string, size: number) => ({
   'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'; sandbox", 'referrer-policy': 'no-referrer',
 });
 
-/** The image at `target` if it is one the caller may see; one 404 for anything else, so the route cannot be used to probe or relay. */
+/** One 404 for anything not allowed, so the route cannot be used to probe or relay. */
 export async function serveImage(target: string | null, allowed: ReadonlySet<string>, http: typeof fetch = fetch): Promise<Response> {
   const listed = target === null ? null : normalize(target);
   if (!listed || !allowed.has(listed)) return refuse('not_found', 404);

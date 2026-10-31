@@ -11,9 +11,7 @@ import { queuePromo, ScriptRefused } from './promo';
 export interface Store {
   cart(): Promise<Cart>;
   saveCart(cart: Cart): Promise<void>;
-  /** What the owner took out of the cart in the room, oldest first. */
   removals(): Promise<Removal[]>;
-  /** Which parcels the owner has opened. */
   unbox(): Promise<UnboxState>;
   /** Made on first ask, so a showroom nobody shares never gets a slug. */
   share(): Promise<ShareSettings>;

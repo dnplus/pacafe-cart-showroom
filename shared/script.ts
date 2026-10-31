@@ -10,11 +10,9 @@ export const FORBIDDEN_WORDING: readonly (readonly [RegExp, string])[] = [
 ];
 export const forbiddenWords = (text: string) => [...new Set(FORBIDDEN_WORDING.flatMap(([pattern]) => text.match(pattern) ?? []))];
 
-/** Anything that reads as an amount of money; a hidden-price storyboard must contain none. */
 export const PRICE_PATTERN = /NT\$|\$\s*\d|\d[\d,]*\s*(元|塊)/;
 
 const OPENING_SEC = 4, ENDING_SEC = 5, MIN_ITEM_SEC = 2;
-/** Up to 8 items get a scene of at least two seconds each; the ending counts the rest. */
 export const itemSceneCount = (items: number, durationSec: number) => Math.min(items, 8, Math.floor((durationSec - OPENING_SEC - ENDING_SEC) / MIN_ITEM_SEC));
 export const OPENING_SECONDS = OPENING_SEC, ENDING_SECONDS = ENDING_SEC;
 
@@ -30,12 +28,7 @@ const lines = (max: number) => z.array(z.string().trim().min(1, '不能是空行
   if (words.length) ctx.addIssue({ code: 'custom', message: `「${text.slice(0, 12)}…」出現「${words.join('、')}」，小屋沒有結帳流程；改說「記下」「收藏」「放進小屋」。` });
 })).min(1, '至少一行').max(max, `這一景最多 ${max} 行，多的併進同一句或留給下一景`);
 
-/**
- * Muse's script for the intro, in the owner's first-person voice. Every scene is optional; one Muse leaves out gets the
- * runner's usual lines. An item is named by `position`, its place on the shelf counted from 1 in cart_list order: titles
- * repeat and Muse tends to shorten them, a position cannot be misread. `title` is only an optional check that the position
- * is the item Muse meant.
- */
+/** Items are named by `position` (from 1, in cart_list order) because titles repeat and Muse shortens them; `title` is an optional check on it. */
 export const promoScriptSchema = z.strictObject({
   opening: lines(SCRIPT_LIMITS.opening).optional(),
   items: z.array(z.strictObject({
@@ -56,11 +49,7 @@ export type PromoScript = z.output<typeof promoScriptSchema>;
 
 const normal = (text: string) => text.replace(/\s+/g, '').toLowerCase();
 
-/**
- * What a valid script still cannot know without the cart: which items get a scene at this length, whether `title` names the
- * item at `position`, and whether the owner hides prices. Runs when Muse queues the video and again when the runner claims
- * it, since the owner can change the price choice in between. Each message says what to change.
- */
+/** Runs when Muse queues the video and again when the runner claims it, since the owner can change the price choice in between. */
 export function scriptProblems(script: PromoScript, view: Pick<ShareView, 'mode' | 'items'>, durationSec: number): string[] {
   const shown = itemSceneCount(view.items.length, durationSec), problems: string[] = [];
   for (const item of script.items ?? []) {
@@ -76,7 +65,6 @@ export function scriptProblems(script: PromoScript, view: Pick<ShareView, 'mode'
   return problems;
 }
 
-/** Scene id to lines, in the ids the storyboard uses: `opening`, `item-<position>`, `ending`. */
 export const scriptScenes = (script: PromoScript): Map<string, string[]> => new Map([
   ...script.opening ? [['opening', script.opening] as const] : [],
   ...(script.items ?? []).map(item => [`item-${item.position}`, item.lines] as const),

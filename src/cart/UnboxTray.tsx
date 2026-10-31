@@ -85,7 +85,6 @@ export function UnboxTray({ boxes, items, ready, saveFailed, slice, release, ope
   </>;
 }
 
-/** Plays one shelved item's unboxing again from a fresh parcel; nothing is read or written, and the tray closes when the reveal is over. */
 export function ReplayTray({ item, done, loadImage }: { item: TrayItem; done: () => void; loadImage?: ImageLoader }) {
   const [boxes, dispatch] = useReducer(unboxReducer, [{ id: item.id, phase: 'atCounter' }] as readonly Box[]);
   const opened = boxes[0]?.phase === 'opened';

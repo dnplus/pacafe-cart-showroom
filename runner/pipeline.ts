@@ -16,9 +16,7 @@ type Env = Readonly<Record<string, string | undefined>>;
 export interface RunnerDeps {
   worker: RunnerWorker;
   storyboarder: Storyboarder;
-  /** The voice from the runner's own environment, for a claim that carries none. */
   tts: Tts;
-  /** The voice for a claim that carries the owner's room settings; defaults to speaking over fetch. */
   voiceFor?: (config: VoiceConfig) => Tts;
   reviewer: Reviewer;
   renderer: Renderer;
@@ -30,7 +28,6 @@ export interface RunnerDeps {
   log: (line: string) => void;
 }
 
-/** Muse's own script first when the job has one; otherwise Spark for the storyboard and the review when both Meta variables are set, the local fallback and mock rules otherwise. */
 export function modelsFromEnv(env: Env, http: typeof fetch, log: (line: string) => void): Pick<RunnerDeps, 'storyboarder' | 'reviewer' | 'tts'> {
   const missing = ['META_API_KEY', 'META_API_BASE_URL'].filter(name => !env[name]);
   const meta = missing.length ? null : { baseUrl: env.META_API_BASE_URL!.replace(/\/+$/, ''), apiKey: env.META_API_KEY!, fetch: http };

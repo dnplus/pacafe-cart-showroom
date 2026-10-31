@@ -64,11 +64,7 @@ export const sparkStoryboarder = (config: MetaConfig, log: (line: string) => voi
   }
 };
 
-/**
- * Muse's script as the storyboard's lines. The screens and timing still come from the view. Scenes the script leaves out
- * take `base`'s lines, so `base` only runs (and only costs) when something is missing. A script the view no longer allows,
- * such as one with prices after the owner hid them, is dropped whole and `base` writes everything.
- */
+/** `base` only runs (and only costs) when the script leaves a scene out; a script the view no longer allows, such as prices after the owner hid them, is dropped whole. */
 export const museStoryboarder = (base: Storyboarder, log: (line: string) => void): Storyboarder => async claim => {
   const { job, view } = claim;
   if (!job.script) return base(claim);

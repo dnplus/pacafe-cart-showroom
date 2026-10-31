@@ -9,7 +9,6 @@ const sets: Record<StudioSetPreset, { asset: string; desk: { x: number; z: numbe
 };
 export const studioSetAsset = (preset: StudioSetPreset) => sets[preset].asset;
 
-/** The presenter set stands left of the counter in the showroom, the owner's and a visitor's alike; its model is PA Cafe's presenter set. */
 export const showroomStudioSet: StudioSet = { preset: 'presenter', x: -2.6, z: -3.3 };
 
 /** The set's desk (or lectern): what a script's `spot` camera frames while the set is up. */

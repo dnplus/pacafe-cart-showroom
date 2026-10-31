@@ -5,10 +5,7 @@ import { SHELF_COLUMNS } from '../../shared/cart';
 import type { FurnitureItem } from './furniture';
 import { pieces } from './pieces';
 
-/**
- * `node` is usable at once: it holds a plain stand-in until the glb from PA Cafe replaces it, and keeps the stand-in
- * when the glb cannot be loaded. `ready` settles with true once the real model is in.
- */
+/** `node` holds a plain stand-in until the glb replaces it, and keeps it when the glb cannot be loaded. `ready` settles with true once the real model is in. */
 export interface FurnitureModel { node: THREE.Group; ready: Promise<boolean>; dispose(): void }
 
 const files = {
@@ -39,7 +36,6 @@ export function source(url: string) {
 }
 
 type Box = readonly [w: number, h: number, d: number, x: number, y: number, z: number];
-/** Puts plain boxes in `node`; the returned function takes them out again and frees them. */
 function standIn(node: THREE.Group, boxes: readonly Box[], color = '#a8704a') {
   const proxy = new THREE.Group(), geometries: THREE.BufferGeometry[] = [], material = new THREE.MeshStandardMaterial({ color, roughness: .8 });
   for (const [w, h, d, x, y, z] of boxes) {
@@ -50,7 +46,6 @@ function standIn(node: THREE.Group, boxes: readonly Box[], color = '#a8704a') {
   return () => { proxy.removeFromParent(); geometries.forEach(geometry => geometry.dispose()); material.dispose(); };
 }
 
-/** Swaps the stand-in in `node` for what `build` makes from the parsed file; a file that fails to load or build leaves the stand-in. */
 function model(node: THREE.Group, url: string, dropStandIn: () => void, build: (original: THREE.Object3D) => THREE.Object3D): FurnitureModel {
   let gone = false;
   const ready = source(url).then(original => {
@@ -61,7 +56,6 @@ function model(node: THREE.Group, url: string, dropStandIn: () => void, build: (
   return { node, ready, dispose() { gone = true; node.removeFromParent(); } };
 }
 
-/** A clone with its origin on the floor: the planks' top face. */
 function standing(original: THREE.Object3D, scale = 1, lift = 0) {
   const clone = original.clone(true); clone.scale.setScalar(scale); clone.position.y = FLOOR + lift; return clone;
 }
@@ -76,7 +70,6 @@ function bar() {
 const unit = {
   width: 1.32, back: -.21,
   innerHalfWidth: .6, backFace: -.15, frontEdge: .19, board: .06,
-  /** Top face of each board and the underside of the board above it, top level first. */
   levels: [{ floor: 1.48, ceiling: 1.91 }, { floor: 1.04, ceiling: 1.42 }, { floor: .6, ceiling: .98 }, { floor: .16, ceiling: .54 }],
   height: 1.97,
   structure: ['oak', 'walnut'],
@@ -89,7 +82,6 @@ export const shelfFrame = { width: units * unit.width * unitScale, height: unit.
 const unitX = (index: number) => (index - (units - 1) / 2) * unit.width * unitScale;
 const unitY = -shelfFrame.height / 2, unitZ = wall - unit.back * unitScale;
 
-/** Where product slot `slot` stands on the shelf, in the shelf's own frame, and the room it has there. Rows fill from the top level down. */
 export function shelfSlot(slot: number) {
   const row = Math.floor(slot / SHELF_COLUMNS), column = slot % SHELF_COLUMNS, { floor, ceiling } = unit.levels[row], cell = 2 * unit.innerHalfWidth * unitScale / unit.columns;
   return {
@@ -99,7 +91,6 @@ export function shelfSlot(slot: number) {
   };
 }
 
-/** The archive bookcase `units` times side by side with its books taken out, so the cart's products take their places. */
 export function bookshelf(original: THREE.Object3D) {
   const shelf = new THREE.Group();
   for (let index = 0; index < units; index++) {

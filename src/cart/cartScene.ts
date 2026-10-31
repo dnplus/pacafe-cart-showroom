@@ -26,13 +26,11 @@ function wrap(ctx: CanvasRenderingContext2D, text: string, width: number, lines:
   return out;
 }
 
-/** Fired on the room's host when a product on the shelf is clicked; `detail.key` is the ShelfItem's key. */
 export const PRODUCT_POKED = 'cart-product';
 
 const PICTURE_RETRY_MS = 10_000;
 const CARD_W = 320, CARD_H = 240, PICTURE_H = 148;
 
-/** Paints a product's label card; with a picture the picture takes the upper part and the title shrinks to one line. */
 function paintCard(ctx: CanvasRenderingContext2D, item: ShelfItem, colour: string, picture: ImageBitmap | null) {
   ctx.clearRect(0, 0, CARD_W, CARD_H);
   ctx.fillStyle = '#fffaf0'; ctx.beginPath(); ctx.roundRect(0, 0, CARD_W, CARD_H, 26); ctx.fill();
@@ -60,7 +58,6 @@ function paintCard(ctx: CanvasRenderingContext2D, item: ShelfItem, colour: strin
   if (item.qty > 1) { ctx.textAlign = 'right'; ctx.fillStyle = '#2f3d35'; ctx.font = font(900, picture ? 38 : 44); ctx.fillText(`×${item.qty}`, 304, y + 4); }
 }
 
-/** The product box the shelf draws, sized to fit `space`; the unboxing stage draws the very same one, with a finer label (`labelScale`). */
 export function productBox(item: ShelfItem, space: { width: number; height: number; depth: number }, loadImage?: Shelf['loadImage'], labelScale = 1) {
   const h = seed(item.title), colour = palette[h % palette.length];
   const wanted = { width: .5 + (h >> 4) % 10 * .012, height: .36 + (h >> 8) % 14 * .013, depth: .26 + (h >> 12) % 6 * .01 };

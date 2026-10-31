@@ -31,7 +31,6 @@ function useOpened(revision: number | undefined) {
 
 interface Bar { label: string; value: number; text: string; detail?: string }
 
-/** Horizontal bars scaled to the largest value; the label and the number are text, so the chart reads without colour. */
 function Bars({ rows, name }: { rows: Bar[]; name: string }) {
   const max = Math.max(1, ...rows.map(row => row.value));
   return <ul className="habits-bars" aria-label={name}>
@@ -45,7 +44,6 @@ function Bars({ rows, name }: { rows: Bar[]; name: string }) {
 
 const COLUMN_W = 300, COLUMN_H = 96, COLUMN_TOP = 16, COLUMN_BASE = COLUMN_H - 20;
 
-/** Vertical columns in a fixed 300-wide box, one per label, with the count above each and the label under it. */
 function Columns({ rows, name }: { rows: { label: string; value: number }[]; name: string }) {
   const max = Math.max(1, ...rows.map(row => row.value)), slot = COLUMN_W / rows.length, width = Math.min(26, slot - 10);
   return <svg className="habits-columns" viewBox={`0 0 ${COLUMN_W} ${COLUMN_H}`} role="img" aria-label={`${name}: ${rows.map(row => `${row.label} ${row.value}`).join(', ')}`}>
@@ -61,7 +59,6 @@ function Columns({ rows, name }: { rows: { label: string; value: number }[]; nam
   </svg>;
 }
 
-/** The owner's shopping habits, drawn from the items in the cart right now (the same report the habits_report MCP tool returns). */
 export function HabitsPanel({ cart, close }: { cart: Cart | null; close: () => void }) {
   const opened = useOpened(cart?.revision);
   const report = useMemo(() => habitsReport(cart?.items ?? [], opened ?? emptyUnbox(), new Date().toISOString(), getLocale()), [cart, opened]);

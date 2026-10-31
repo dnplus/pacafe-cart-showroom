@@ -16,7 +16,6 @@ import './stickers.css';
 
 const reasonLabels: Record<RemovalReason, TextKey> = { not_my_taste: 'Not my taste', too_expensive: 'Too expensive', already_have: 'Already have it', changed_mind: 'Changed my mind' };
 
-/** The chips under a line the owner is taking out: a reason is optional, and Muse is told it. */
 function ReasonPicker({ title, pick, cancel }: { title: string; pick: (reason: RemovalReason | null) => void; cancel: () => void }) {
   return <div className="cart-reasons" role="group" aria-label={t('Why take {title} out?', { title })} data-testid="remove-reasons">
     <p>{t('Why take it out? Muse will see your answer. (optional)')}</p>

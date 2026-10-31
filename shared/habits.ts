@@ -16,7 +16,6 @@ const DAY_MS = 86_400_000;
 export const TIME_OF_DAY = [{ id: 'lateNight', from: 0 }, { id: 'morning', from: 6 }, { id: 'afternoon', from: 12 }, { id: 'evening', from: 18 }] as const;
 export const PRICE_BANDS = [{ id: 'under300', max: 300 }, { id: 'to1000', max: 1000 }, { id: 'to3000', max: 3000 }, { id: 'over3000', max: Infinity }] as const;
 
-/** Every word the report says, per language; the numbers are the same in both. */
 const WORDS = {
   'zh-TW': {
     categories: { fashion: '服飾配件', beauty: '美妝保養', electronics: '3C 家電', home: '居家生活', kitchen: '廚房餐具', food: '食品飲料', books: '書籍文具', hobby: '玩具嗜好', outdoor: '運動戶外', other: '其他', uncategorized: '未分類' },
@@ -72,7 +71,6 @@ const taipei = (iso: string) => new Date(Date.parse(iso) + TAIPEI_OFFSET_MS);
 const percent = (share: number) => `${Math.round(share * 100)}%`;
 const money = (amount: number) => `NT$ ${Math.round(amount).toLocaleString('en-US')}`;
 
-/** Sorts by spend, then line count, then the order the keys were first met, so ties always come out the same way. */
 function rank<T extends { lines: number; spendTwd: number }>(rows: T[]) {
   return rows.map((row, order) => ({ row, order })).sort((a, b) => b.row.spendTwd - a.row.spendTwd || b.row.lines - a.row.lines || a.order - b.order).map(({ row }) => row);
 }
@@ -130,7 +128,6 @@ export function habitsReport(items: readonly CartItem[], unbox: UnboxState, now:
   };
 }
 
-/** Up to three plain sentences, each only when the numbers back it; a cart with nothing to say gets none. */
 function observe({ totals, categories, timeOfDay, weekdays, parcels }: Pick<HabitsReport, 'totals' | 'categories' | 'timeOfDay' | 'weekdays' | 'parcels'>, words: typeof WORDS[Locale]): string[] {
   const out: string[] = [];
   const [first, second] = categories;

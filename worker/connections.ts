@@ -6,12 +6,10 @@ import { invalidBody, json, readJson } from './http';
 
 const MUSE_KEY = 'muse';
 const VOICE_KEY = 'voice';
-/** What the panel's test plays: short, so a test costs next to nothing. */
 const SAMPLE = '歡迎來到我的小屋購物車！';
 
 export const connectionsPath = /^\/api\/(muse|voice|voice\/test)$/;
 
-/** The owner's connections: the Muse writing over /mcp, and the voice the promo speaks with. */
 export function connections(storage: DurableObjectStorage, env: Env, http: typeof fetch = fetch) {
   const activity = async () => { const stored = await storage.get(MUSE_KEY); return stored === undefined ? null : museActivitySchema.parse(stored); };
   const voice = async (): Promise<VoiceSettings> => { const stored = await storage.get(VOICE_KEY); return stored === undefined ? emptyVoiceSettings() : voiceSettingsSchema.parse(stored); };
@@ -51,9 +49,7 @@ export function connections(storage: DurableObjectStorage, env: Env, http: typeo
 
   return {
     handle,
-    /** The voice a runner's claim carries. */
     runnerVoice: async () => voiceConfig(await voice()),
-    /** Notes an /mcp call as Muse's activity. */
     note: async (call: McpCall) => { const next: MuseActivity = noteCall(await activity(), call, new Date().toISOString()); await storage.put(MUSE_KEY, next); },
   };
 }

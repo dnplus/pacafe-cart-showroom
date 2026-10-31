@@ -99,7 +99,7 @@ export function sceneFrames(view: ShareView, job: JobShape): Scene[] {
   return retime(scenes, durations, job.durationSec);
 }
 
-/** The owner hosts, so the lines are theirs: a sentence per line from the view alone. The cards already show prices and the total, so the words stay short; fitting lines to the screen is the QA loop's job. */
+/** The cards already show prices and the total, so the words stay short; fitting lines to the screen is the QA loop's job. */
 export function fallbackSubtitle(scene: Scene, mode: ShareView['mode'], language: PromoLanguage = 'zh-TW'): string[] {
   const words = PROMO_WORDS[language];
   switch (scene.kind) {

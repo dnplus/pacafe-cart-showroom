@@ -3,11 +3,7 @@ import { z } from 'zod';
 import { MINIMAX_REGIONS, speak, type MinimaxRegion, type VoiceConfig } from '../shared/voice.ts';
 import type { Storyboard, VoiceClip } from './storyboard.ts';
 
-/**
- * Bring-your-own-key voices, spoken through shared/voice.ts. A job's claim carries the voice the owner set in the room;
- * without one the runner falls back to its own environment. Charges land on the owner's own account, so they add nothing
- * to the job's costUsd.
- */
+/** Charges land on the owner's own account, so they add nothing to the job's costUsd. */
 type Env = Readonly<Record<string, string | undefined>>;
 
 const NEEDS = { none: [], elevenlabs: ['ELEVENLABS_API_KEY', 'ELEVENLABS_VOICE_ID'], minimax: ['MINIMAX_API_KEY'] } as const;
@@ -16,10 +12,7 @@ export const ttsNameSchema = z.enum(Object.keys(NEEDS) as [TtsName, ...TtsName[]
 
 export interface Tts { name: TtsName; voice(storyboard: Storyboard): Promise<VoiceClip[]> }
 
-/**
- * Speaks with `config`, or stays silent with null. Clips are kept by text, so asking again after a QA fix only speaks the
- * scenes whose words changed.
- */
+/** Clips are kept by text, so asking again after a QA fix only speaks the scenes whose words changed. */
 export function ttsFor(config: VoiceConfig | null, http: typeof fetch): Tts {
   if (!config) return { name: 'none', voice: async () => [] };
   const spoken = new Map<string, Promise<Omit<VoiceClip, 'sceneId'>>>();
@@ -36,10 +29,7 @@ export function ttsFor(config: VoiceConfig | null, http: typeof fetch): Tts {
   };
 }
 
-/**
- * The provider TTS_PROVIDER names (default none). One whose keys are missing runs as none and says so, naming the variables,
- * never their values. MINIMAX_REGION picks MiniMax's platform: global (default) or mainland.
- */
+/** A provider whose keys are missing runs as none and says so, naming the variables, never their values. MINIMAX_REGION picks global (default) or mainland. */
 export function selectTts(env: Env, http: typeof fetch, log: (line: string) => void): Tts {
   const asked = ttsNameSchema.parse(env.TTS_PROVIDER || 'none');
   const missing = NEEDS[asked].filter(name => !env[name]);

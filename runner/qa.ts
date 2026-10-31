@@ -101,13 +101,8 @@ function stretch(storyboard: Storyboard, issues: readonly Pick<Issue, 'sceneId'>
   return { ...storyboard, scenes: retime(scenes, durations, durationSec) };
 }
 
-/** Quiet left after a voice clip before its scene cuts away. */
 export const VOICE_TAIL_SEC = 0.3;
 
-/**
- * Scenes are timed by reading speed, and a voice can take longer: a scene whose clip would be cut off at its end grows to fit
- * it, borrowing from scenes with time to spare as the pacing fix does. Only timing changes, so the reviewed words stand.
- */
 export function fitVoice(storyboard: Storyboard, clips: readonly VoiceClip[]): Storyboard {
   const voiceSec = new Map(clips.map(clip => [clip.sceneId, clip.durationSec]));
   const over = storyboard.scenes.filter(scene => (voiceSec.get(scene.id) ?? 0) + VOICE_TAIL_SEC > duration(scene));

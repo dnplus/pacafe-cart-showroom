@@ -143,7 +143,6 @@ export const messages = [
   ['The shop owner, drawn with an image model. Make your own from a photo if you like.', '預設是一位店主，用 AI 繪圖畫的。想要自己的角色，可以用照片生成。'],
   ['Only you see a figure made from your photo. People who open your share link see the shop owner.', '用你照片生成的角色只有你看得到，打開分享連結的人看到的是店主。'],
   ['Back to the shop owner', '改回店主'],
-  // Product pictures, category labels and the unboxing reveal.
   ['Fashion', '服飾配件'],
   ['Beauty', '美妝保養'],
   ['Electronics', '3C 家電'],

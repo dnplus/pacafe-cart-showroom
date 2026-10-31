@@ -142,7 +142,6 @@ try {
     if (size === '1440') await fetch(`${workerB.origin}/api/cast/owner-sprite`, { method: 'DELETE' });
   }
 
-  // 3. Motion on a fresh worker per size (the parcels start closed): a mid-walk frame, the cheer and the clerk's trip to the shelf after an unbox, and the reaction to a new item.
   for (const shape of viewports) {
     const problems = [], { size } = shape;
     const persistM = fs.mkdtempSync(path.join(root, '.local', 'screenshots-cast-'));

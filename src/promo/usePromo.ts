@@ -14,10 +14,7 @@ export interface PromoState {
   queueFailed: boolean;
 }
 
-/**
- * The latest video job from /api/promo, read every PROMO_POLL_MS. Polling goes on past done or failed, because a resident can
- * queue the next job through MCP while the room is open. `queue` asks the worker for a new job and reads it at once.
- */
+/** Polling goes on past done or failed, because a resident can queue the next job through MCP while the room is open. */
 export function usePromo(intervalMs = PROMO_POLL_MS): PromoState & { queue: () => Promise<void> } {
   const [state, setState] = useState<PromoState>({ job: undefined, offline: false, queueing: false, queueFailed: false });
   const [round, setRound] = useState(0);

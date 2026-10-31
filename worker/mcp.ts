@@ -44,7 +44,6 @@ export const listed = (tool: Tool) => {
   return { name: tool.name, title: tool.title, description: tool.description, inputSchema, annotations: tool.annotations };
 };
 
-/** Stateless JSON-RPC over streamable HTTP: answers every POST with one JSON body and keeps no session. `onCall` hears each valid call. */
 export async function handleMcp(request: Request, tools: readonly Tool[], store: Store, onCall: (call: McpCall) => Promise<void> = async () => {}): Promise<Response> {
   if (request.method !== 'POST') return Response.json({ error: 'method_not_allowed' }, { status: 405, headers: { allow: 'POST', 'cache-control': 'no-store' } });
   const version = request.headers.get('mcp-protocol-version');

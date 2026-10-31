@@ -5,7 +5,6 @@ import { promoScriptSchema } from './script.ts';
 export const PROMO_STATUSES = ['queued', 'storyboard', 'voice', 'rendering', 'done', 'failed'] as const;
 
 const timestamp = z.iso.datetime();
-/** The language the video speaks and shows; the room sends the one its interface is in. */
 export const PROMO_LANGUAGES = ['zh-TW', 'en'] as const;
 export type PromoLanguage = typeof PROMO_LANGUAGES[number];
 const language = z.enum(PROMO_LANGUAGES).default('zh-TW');
@@ -15,7 +14,6 @@ export const promoRequestSchema = z.strictObject({
   durationSec: z.number().int().min(15).max(45).default(30),
   style: z.string().trim().min(1).max(200).optional(),
   language,
-  /** The lines Muse wrote for the owner to say; scenes it leaves out get the runner's usual lines. */
   script: promoScriptSchema.optional(),
 });
 export type PromoRequest = z.output<typeof promoRequestSchema>;
@@ -30,7 +28,7 @@ export const promoJobSchema = z.strictObject({
   durationSec: z.number().int().min(15).max(45),
   style: z.string().nullable(),
   language,
-  /** Muse's script when it wrote one; null means the runner wrote the lines. Jobs queued before scripts existed read as null. */
+  /** Jobs queued before scripts existed read as null. */
   script: promoScriptSchema.nullable().default(null),
   status: z.enum(PROMO_STATUSES),
   progress: z.number().min(0).max(1),

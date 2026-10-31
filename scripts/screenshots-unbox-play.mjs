@@ -16,7 +16,6 @@ const shelfCount = page => page.evaluate(() => Number(document.querySelector('.r
 const waitShelf = (page, count) => page.waitForFunction(count => Number(document.querySelector('.room-canvas')?.getAttribute('data-cart-shelf')) === count, count, { timeout: 30_000 });
 const ready = page => page.waitForSelector('.house-world[data-render-ready="true"][data-renderer="three-webgl"]', { timeout: 120_000 });
 
-/** Opens the front parcel from the keyboard and waits until what came out is on screen. */
 async function openFront(page) {
   // Software rendering is slow, so what the stage showed is recorded as it appears instead of being asked for afterwards.
   await page.evaluate(() => { if (window.__seen) return; window.__seen = { notes: [], cards: [] }; new MutationObserver(() => { for (const node of document.querySelectorAll('[data-testid=unbox-note]')) window.__seen.notes.push(node.textContent); for (const node of document.querySelectorAll('[data-testid=unbox-reveal]')) window.__seen.cards.push(node.textContent); }).observe(document.body, { subtree: true, childList: true }); });
@@ -45,7 +44,6 @@ try {
       assert.ok(new Set(boxes.map(entry => entry.split('/')[0])).size >= 3, `parcels differ by store: ${boxes}`);
       await shoot(owner, '1-parcels');
 
-      // One parcel opens in the big stage: the first is the dripper, and its card carries Muse's note.
       await openFront(owner);
       assert.match((await owner.evaluate(() => window.__seen.notes)).join(), /咖啡/, 'the note card shows Muse\'s sentence');
       await owner.waitForTimeout(reduced ? 300 : 500);
@@ -54,7 +52,6 @@ try {
       await waitShelf(owner, 1);
       await owner.waitForSelector('[data-testid="unbox-stage"]', { state: 'detached', timeout: 30_000 });
 
-      // Open all: a multi-pull of the other four, with two stickers (rare pulls) among them.
       await owner.waitForSelector(`${hit}[data-phase="atCounter"]`, { timeout: 30_000 });
       await owner.locator('[data-testid="unbox-all"]').click();
       await owner.waitForSelector('[data-testid="pull-cascade"]');
@@ -82,7 +79,6 @@ try {
       await owner.waitForTimeout(700); await shoot(owner, '4-sticker-album');
       await owner.locator('[data-testid="album-button"]').click();
 
-      // Replay from the list row, then from a click on the shelf: no write, no change in the record.
       const before = JSON.stringify(await (await fetch(`${worker.origin}/api/unbox`)).json()); posts.length = 0;
       await owner.locator('.cart-toggle').click();
       await owner.locator('[data-testid="cart-replay"]').nth(2).click();
@@ -99,7 +95,6 @@ try {
       assert.equal(JSON.stringify(await (await fetch(`${worker.origin}/api/unbox`)).json()), before, 'a replay leaves the unbox record alone');
       assert.equal(await shelfCount(owner), 5);
 
-      // A visitor on the share page.
       await fetch(`${worker.origin}/api/share`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ enabled: true, prices: 'range', nickname: 'Mina' }) });
       const { url } = await (await fetch(`${worker.origin}/api/share`)).json(), slug = new URL(url).pathname;
       const visitor = await browser.newPage({ viewport, hasTouch, locale: 'en-US' }); watch(visitor);

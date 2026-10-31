@@ -11,11 +11,7 @@ const reducedMotion = () => typeof matchMedia === 'function' && matchMedia('(pre
 const motion = (ms: number) => reducedMotion() ? Math.min(ms, 120) : ms;
 const idsOf = (opened: Record<string, string>): ReadonlySet<string> => new Set(Object.keys(opened));
 
-/**
- * Drives each parcel in `ids` through unboxReducer: parcels not in `recorded` arrive, an opened batch is handed to `commit` once its pop-out
- * has played (retried while it throws), and only then shelved. `recorded` null means nobody has answered yet, so the shelf is never drawn from a guess.
- * The owner commits to the worker, a visitor to their own browser.
- */
+/** `commit` is retried while it throws, and only then is the batch shelved. `recorded` null means nobody has answered yet, so the shelf is never drawn from a guess. */
 export function useUnboxFlow(ids: readonly string[] | null, recorded: ReadonlySet<string> | null, commit: (ids: string[], signal: AbortSignal) => Promise<void>) {
   const [boxes, dispatch] = useReducer(unboxReducer, [] as readonly Box[]);
   const [saveFailed, setSaveFailed] = useState(false);
@@ -83,7 +79,6 @@ export function useUnboxFlow(ids: readonly string[] | null, recorded: ReadonlySe
   };
 }
 
-/** The owner's parcels: every cart item is one until the worker records it as unboxed; an opened batch is written to /api/unbox. */
 export function useUnbox(cart: Cart | null) {
   const [recorded, setRecorded] = useState<ReadonlySet<string> | null>(null);
   const signedIn = cart !== null;

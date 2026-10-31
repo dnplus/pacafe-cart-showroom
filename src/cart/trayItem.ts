@@ -3,7 +3,6 @@ import { packagingOf, type Packaging } from '../../shared/packaging';
 import type { ShareView } from '../../shared/share';
 import { formatRange } from './shelf';
 
-/** What one parcel needs to draw its reveal; the owner's and a visitor's items both reduce to this, a visitor's with only what the owner chose to show. */
 export interface TrayItem { id: string; title: string; store: string | null; qty: number; picture: string | null; category: CartCategory | null; url: string | null; price: string | null; note: string | null; packaging: Packaging }
 
 export const ownerTrayItem = (item: CartItem): TrayItem => ({ id: item.id, title: item.title, store: item.store, qty: item.qty, picture: item.cutoutUrl ?? item.imageUrl, category: item.category, url: item.url,
@@ -16,7 +15,6 @@ export function visitorKeys(view: ShareView): string[] {
 }
 
 const visitorPrice = (item: ShareView['items'][number]) => 'priceRange' in item ? item.priceRange ? formatRange(item.priceRange) : null : 'priceTwd' in item ? item.priceTwd === null ? null : formatTwd(item.priceTwd) : null;
-/** The parcels of a shared view, in shelf order; no store, category or id, because the view has none. */
 export function visitorTrayItems(view: ShareView): TrayItem[] {
   const keys = visitorKeys(view);
   return view.items.map((item, slot) => ({ id: keys[slot], title: item.title, store: null, qty: item.qty, picture: item.imageUrl, category: null, url: item.url, price: visitorPrice(item), note: item.note, packaging: item.packaging }));

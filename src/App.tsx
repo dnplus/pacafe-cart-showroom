@@ -51,12 +51,10 @@ function Showroom() {
   const poked = useProductPoke();
   const trayItems = useMemo(() => cart?.items.map(ownerTrayItem) ?? [], [cart]);
   const book = useStickers(cart?.items ?? [], unbox.shelved);
-  // Unboxing a shelved item again plays the animation alone: nothing is written, and the shelf and the records stay as they are.
   const [replaying, setReplaying] = useState<{ id: string; n: number } | null>(null);
   const replayItem = replaying && trayItems.find(item => item.id === replaying.id);
   const startReplay = useCallback((id: string) => { setPanel(null); setReplaying(previous => ({ id, n: (previous?.n ?? 0) + 1 })); }, []);
   const endReplay = useCallback(() => setReplaying(null), []);
-  // The room reacts to the latest of the cart's news and Muse calling in; each gets a fresh id so it plays once.
   const [roomCue, setRoomCue] = useState<{ id: number; kind: Cue } | null>(null);
   const react = (kind: Cue) => setRoomCue(previous => ({ id: (previous?.id ?? 0) + 1, kind }));
   useEffect(() => { if (cue) react(cue.kind); }, [cue]);

@@ -10,7 +10,6 @@ const HOUSE = 'house-key-0000-1111', OWN = 'own-key-2222-9876';
 const base = 'https://model.test/v1';
 
 type Reply = { content?: string; calls?: { name: string; args: unknown }[]; usage?: { prompt_tokens: number; completion_tokens: number } };
-/** A Model API that answers with `replies` in order and keeps every request it got. */
 function fakeModel(replies: Reply[]) {
   const requests: { url: string; key: string | null; body: any }[] = [];
   const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -54,7 +53,6 @@ describe('built-in clerk', () => {
     const toolMessage = second.body.messages.find((message: any) => message.role === 'tool');
     expect(JSON.parse(toolMessage.content).items).toHaveLength(5);
     expect(reply.body.spentUsd).toBeCloseTo(2 * (1000 / 1e6 * 1.25 + 100 / 1e6 * 4.25));
-    // The next turn carries the conversation, and the room's Muse status names the clerk.
     fakeModel([{ content: 'Sure.' }]);
     expect((await send('/api/muse')).body.activity).toMatchObject({ client: { name: 'Showroom clerk' }, lastTool: { name: 'cart_list' } });
   });

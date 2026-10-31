@@ -9,11 +9,7 @@ const send = (id: string, reason: RemovalReason | null, keepalive = false) => ow
   body: JSON.stringify(removeRequestSchema.parse(reason ? { itemId: id, reason } : { itemId: id })),
 });
 
-/**
- * The owner taking lines out of the cart. `ask` opens the reason chips on a line; `confirm` hides it and starts its undo window;
- * `undo` brings it back; when the window ends the removal goes to /api/cart/remove. A removal still waiting when the page closes is sent then.
- * A line stays hidden until the cart poll no longer lists it, and comes back with a note if the worker refuses.
- */
+/** A removal still waiting when the page closes is sent then. A line stays hidden until the cart poll no longer lists it, and comes back with a note if the worker refuses. */
 export function useRemoval(cart: Cart | null) {
   const [asking, setAsking] = useState<string | null>(null);
   const [pending, setPending] = useState<readonly Pending[]>([]);

@@ -95,10 +95,6 @@ export class Showroom {
     return json(shareView(await this.read(), settings));
   }
 
-  /**
-   * A product picture as a same-origin image: `?u=<picture>` for the owner, `?s=<slug>&u=<picture>` for a visitor. Only a picture the
-   * cart (or, for a slug, the shared view) names is served, so this is not a relay.
-   */
   private async image(request: Request) {
     if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405, { allow: 'GET' });
     const { searchParams } = new URL(request.url), slug = searchParams.get('s'), target = searchParams.get('u');
@@ -141,7 +137,7 @@ export class Showroom {
     return json(next);
   }
 
-  /** The owner takes one line out of the cart in the room; the cart and the removal log change together, so Muse never sees one without the other. */
+  /** The cart and the removal log change together, so Muse never sees one without the other. */
   private async removeItem(request: Request) {
     if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405, { allow: 'POST' });
     if (!isOwner(request, this.env)) return unauthorized();

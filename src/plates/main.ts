@@ -6,13 +6,8 @@ import { buildRoom, type RoomDebugApi } from '../room/roomModel';
 import { Card } from '../room/standee';
 import { hostPlace, showroomStudioSet } from '../room/studioSet';
 
-/**
- * The studio set as the promo's front camera sees it, for scripts/promo-plates.mjs: per shot, the room without its figures
- * and the desk alone on a clear background, so the composition can stand the owner between them. Vite serves this page in
- * development only; the app's build never includes it.
- */
+/** Page for scripts/promo-plates.mjs. Vite serves it in development only; the app's build never includes it. */
 const DESK = ['host_desk', 'host_monitor', 'host_desktop_microphone', 'host_coffee_mug', 'host_desk_plant'];
-/** `side` slides the camera right (metres), so the host stands left of centre and a card can take the right of the frame. */
 export const SHOTS = { wide: { zoom: 1, toward: .35, side: 0 }, close: { zoom: 1.4, toward: 0, side: .75 } } as const;
 
 const host = document.getElementById('room') as HTMLDivElement;
@@ -43,7 +38,6 @@ function shoot(name: keyof typeof SHOTS) {
   const front = frame();
   renderer.setClearAlpha(clear); scene.background = background;
   toggled.forEach(node => { node.visible = true; }); hidden.forEach(node => { node.visible = true; });
-  // Where the owner stands (the chair's spot, feet on the floor) and how many pixels a metre is there.
   const seat = hostPlace(STUDIO_SET_SPOT, showroomStudioSet)!.seat!;
   const px = (y: number) => { const p = new THREE.Vector3(seat.x, y, seat.z).project(camera); return { x: (p.x + 1) / 2 * host.clientWidth, y: (1 - p.y) / 2 * host.clientHeight }; };
   const feet = px(floorTop), metre = px(floorTop + 1);

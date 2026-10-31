@@ -13,16 +13,12 @@ import { ExternalLink } from 'lucide-react';
 import './unbox-stage.css';
 
 const reducedMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
-/** How long each box shakes before it pops, how much longer a rare or fine one holds the room, and the pause before the results. */
 const SHAKE_MS = 460, RARE_MS = 800, FINE_MS = 250, RESULTS_MS = 1000;
 const REDUCED_STEP_MS = 160, REDUCED_RESULTS_MS = 300, REDUCED_PUT_MS = 250, PUT_MS = 800;
 
 const stageParcel = (item: TrayItem): StageParcel => ({ id: item.id, packaging: item.packaging, store: item.store, product: { key: item.id, title: item.title, qty: item.qty, price: item.price, image: item.picture } });
 
-/**
- * The 3D stage: its own three.js canvas (separate from the room's) drawing the parcels, and disposed with the component. `autoOpen` plays the first
- * parcel's opening at once; otherwise the owner of `stageRef` calls `open` and `shake`. Without WebGL the canvas stays empty and the cards still show.
- */
+/** A separate three.js canvas from the room's. Without WebGL the canvas stays empty and the cards still show. */
 function ParcelCanvas({ parcels, mode, loadImage, stageRef, autoOpen = false }: { parcels: readonly StageParcel[]; mode: 'single' | 'pull'; loadImage?: ImageLoader; stageRef?: RefObject<ParcelStage | null>; autoOpen?: boolean }) {
   const host = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -35,7 +31,6 @@ function ParcelCanvas({ parcels, mode, loadImage, stageRef, autoOpen = false }: 
   return <div className="stage-3d" ref={host} data-testid="stage-3d" />;
 }
 
-/** One parcel opening in the middle of the room, in 3D: the box, the burst, the product rising out of it, and Muse's note, price and sticker laid over it. */
 export function SingleStage({ boxes, byId, loadImage }: { boxes: readonly Box[]; byId: ReadonlyMap<string, TrayItem>; loadImage?: ImageLoader }) {
   const item = byId.get(boxes[0].id)!;
   return <div className="stage-scrim" data-testid="unbox-stage" data-kind="single">
@@ -54,16 +49,11 @@ export function SingleStage({ boxes, byId, loadImage }: { boxes: readonly Box[];
   </div>;
 }
 
-/**
- * Parcels opened together, like a multi-pull: they line up, each shakes and pops in turn (a rare one with a sticker gets a golden flash and a longer
- * pause), then the product cards sit in a row to tap and read. "Put them on the shelf" sends them all flying there, and `settle` records them.
- */
 export function PullStage({ boxes, byId, settle, loadImage }: { boxes: readonly Box[]; byId: ReadonlyMap<string, TrayItem>; settle: (ids: readonly string[]) => void; loadImage?: ImageLoader }) {
   const ids = useRef(boxes.map(box => box.id)).current, n = ids.length;
   const [step, setStep] = useState(0), [view, setView] = useState<'cascade' | 'results'>('cascade'), [zoom, setZoom] = useState<string | null>(null), [leaving, setLeaving] = useState(false);
   const results = useRef<HTMLDivElement>(null), stage = useRef<ParcelStage | null>(null), [lucky, setLucky] = useState(0);
   const parcels = useRef(ids.map(id => stageParcel(byId.get(id)!))).current;
-  // The 3D stage shakes the next parcel and pops the one before it; a rare pull (a sticker inside) also lights up the banner.
   useEffect(() => {
     if (view !== 'cascade') return;
     stage.current?.shake(step < n ? step : null);

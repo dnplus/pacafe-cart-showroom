@@ -18,7 +18,6 @@ const replySchema = z.looseObject({
 });
 type ChatMessage = { role: 'system' | 'user' | 'assistant' | 'tool'; content: string | null; tool_calls?: unknown[]; tool_call_id?: string };
 
-/** Chat Completions function tools from the same tool list /mcp serves. */
 const functionTools = (tools: readonly Tool[]) => tools.map(tool => {
   const { name, description, inputSchema } = listed(tool);
   return { type: 'function' as const, function: { name, description, parameters: inputSchema } };
@@ -28,10 +27,7 @@ const resultText = (result: { content: { type: string; text?: string }[] }) => r
 
 interface Turn { text: string; calls: ClerkTurn['calls']; costUsd: number }
 
-/**
- * One owner message: the model reads the conversation, calls tools until it answers, and stops at the per-turn caps. The
- * last allowed step goes out with tool_choice "none", so a turn always ends in words.
- */
+/** The last allowed step goes out with tool_choice "none", so a turn always ends in words. */
 async function runTurn(options: { history: ClerkTurn[]; message: string; language: PromoLanguage; nickname: string; tools: readonly Tool[]; store: Store; origin: string; key: { apiKey: string; baseUrl: string }; http: typeof fetch; onTool: (name: string) => Promise<void> }): Promise<Turn> {
   const { tools, store, origin, key, http } = options;
   const messages: ChatMessage[] = [
@@ -73,10 +69,6 @@ async function runTurn(options: { history: ClerkTurn[]; message: string; languag
   return { text: '', calls, costUsd };
 }
 
-/**
- * `/api/clerk` for the owner's room: GET the conversation, POST a message, DELETE to start over; `/api/clerk/key` PUTs or
- * DELETEs the owner's own Meta key. One turn at a time per showroom.
- */
 export function clerkDesk(storage: DurableObjectStorage, env: Env, deps: { tools: readonly Tool[]; store: () => Store; nickname: () => Promise<string>; note: (call: McpCall) => Promise<void>; http?: typeof fetch; now?: () => Date }) {
   const http = deps.http ?? ((input, init) => fetch(input, init)), now = deps.now ?? (() => new Date());
   const house = { apiKey: env.META_API_KEY, baseUrl: env.META_API_BASE_URL };

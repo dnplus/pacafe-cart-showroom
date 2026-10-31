@@ -7,10 +7,6 @@ import './stickers.css';
 
 const OFFER_MS = 7000;
 
-/**
- * After a click on a product that stands on the shelf, offers to unbox it once more. `idOf` turns the clicked key into a parcel id;
- * a product that is not on the shelf gets no offer. Taking it changes no data, it only plays the animation again.
- */
 export function ReplayOffer({ focus, items, shelved, idOf, start }: { focus: ProductFocus | null; items: readonly TrayItem[]; shelved: ReadonlySet<string>; idOf: (key: string) => string | undefined; start: (id: string) => void }) {
   const [offered, setOffered] = useState<string | null>(null);
   useEffect(() => {

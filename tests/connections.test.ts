@@ -6,7 +6,6 @@ import type { Env } from '../worker/env';
 
 const body = async (response: Response): Promise<any> => response.json();
 
-/** Enough of DurableObjectStorage for the connections routes. */
 function memoryStorage() {
   const map = new Map<string, unknown>();
   return { map, storage: { get: async (key: string) => map.get(key), put: async (key: string, value: unknown) => { map.set(key, structuredClone(value)); } } as unknown as DurableObjectStorage };

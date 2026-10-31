@@ -15,7 +15,6 @@ const META: Record<StickerId, { emoji: string; name: TextKey }> = {
 };
 export const stickerName = (id: StickerId) => t(META[id].name);
 
-/** A die-cut sticker; its size follows the font size around it. */
 export const Sticker = ({ id }: { id: StickerId }) => <span className="sticker" data-sticker={id} role="img" aria-label={stickerName(id)}><span aria-hidden="true">{META[id].emoji}</span></span>;
 
 const KEY = 'showroom.stickers';
@@ -23,10 +22,7 @@ const collectedSchema = z.record(z.string(), z.strictObject({ sticker: z.enum(ST
 type Collected = z.infer<typeof collectedSchema>;
 const readCollected = (): Collected => { const parsed = collectedSchema.safeParse(readStoredJson(KEY)); return parsed.success ? parsed.data : {}; };
 
-/**
- * The stickers the owner has found: one per unboxed parcel that had one inside, remembered in this browser, so a sticker stays in the album
- * after its item leaves the cart. `shelved` is the parcels already unboxed and recorded; the same ones always hold the same stickers.
- */
+/** Remembered in this browser, so a sticker stays in the album after its item leaves the cart. */
 export function useStickers(items: readonly CartItem[], shelved: ReadonlySet<string>) {
   const [collected, setCollected] = useState(readCollected);
   useEffect(() => {
@@ -40,7 +36,6 @@ export function useStickers(items: readonly CartItem[], shelved: ReadonlySet<str
 export type StickerBook = ReturnType<typeof useStickers>;
 export const foundCount = (book: StickerBook) => book.filter(page => page.from.length).length;
 
-/** Every sticker there is, found ones in colour with a count and where they came from, the rest as blank spots. */
 export function StickerAlbum({ book, close }: { book: StickerBook; close: () => void }) {
   const found = foundCount(book);
   return <section className="share-panel album" id="album-panel" aria-labelledby="album-title" data-testid="album-panel">

@@ -6,7 +6,6 @@ import type { Env } from './env';
 import { invalidBody, json, readJson } from './http';
 import type { Store } from './tools';
 
-/** A script that does not fit this cart; `problems` are sentences Muse can act on. */
 export class ScriptRefused extends Error {
   constructor(readonly problems: string[]) { super(problems.join('；')); }
 }

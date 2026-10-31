@@ -2,10 +2,7 @@ import { useState, type CSSProperties } from 'react';
 import type { CartCategory } from '../../shared/cart';
 import { categoryHue, categoryIcon } from './category';
 
-/**
- * A product's picture, or a tile in its category's colour with the category's icon when it has none or fails to load.
- * Cross-origin store images are asked for without a Referer, which is what most hotlink checks look at.
- */
+/** Cross-origin store images are asked for without a Referer, which is what most hotlink checks look at. */
 export function ProductThumb({ src, category = null, className = '', eager = false }: { src: string | null; category?: CartCategory | null; className?: string; /** For a picture about to be seen at once: a lazy one would load only after it is already on screen. */ eager?: boolean }) {
   const [broken, setBroken] = useState<string | null>(null);
   const Icon = categoryIcon(category);

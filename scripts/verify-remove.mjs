@@ -34,7 +34,6 @@ try {
     const rows = page.locator('[data-testid="cart-row"]');
     assert.equal(await rows.count(), before.length);
 
-    // 1. Remove the first item, with a reason.
     const first = before[0];
     await rows.nth(0).locator('[data-testid="cart-remove"]').click();
     await page.waitForSelector('[data-testid="remove-reasons"]');
@@ -54,7 +53,6 @@ try {
     assert.equal(await page.locator('[data-testid="remove-undo"]').count(), 0, 'the undo bar is gone');
     await shoot('3-removed');
 
-    // 2. Remove another, then undo it.
     const second = after[0];
     await rows.nth(0).locator('[data-testid="cart-remove"]').click();
     await page.click('[data-testid="remove-reason-changed_mind"]');
@@ -66,7 +64,6 @@ try {
     assert.equal((await cart()).items.length, after.length, 'an undone removal never reaches the worker');
     assert.equal(await rows.count(), after.length);
 
-    // 3. What Muse sees.
     const listed = await call('cart_list');
     const latest = listed.removals[0];
     assert.equal(latest.item.title, first.title);

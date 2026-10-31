@@ -9,7 +9,6 @@ import '../share/share.css';
 import './connect.css';
 
 const POLL_MS = 3000;
-/** A call within this long reads as "connected now"; older ones say when Muse was last here. */
 const LIVE_MS = 10 * 60 * 1000;
 
 function ago(at: string, now: number) {
@@ -19,7 +18,6 @@ function ago(at: string, now: number) {
   return t('{count} h ago', { count: Math.round(seconds / 3600) });
 }
 
-/** Muse's activity, read every few seconds while the panel is open; `onSeen` hears each new call. */
 function useMuse(onSeen: () => void) {
   const [status, setStatus] = useState<MuseStatus | null>(null);
   const last = useRef<string | null | undefined>(undefined), seen = useRef(onSeen);
@@ -56,7 +54,6 @@ function CopyRow({ id, label, value, shown = value, multiline = false }: { id: s
   </div>;
 }
 
-/** The Muse Code settings for this showroom, with the saved owner key in the copy and dots on screen. */
 function museSettings(origin: string, key: string | null) {
   const settings = (token: string) => JSON.stringify({ mcp_servers: { showroom: { transport: 'streamable_http', url: `${origin}/mcp`, headers: { Authorization: `Bearer ${token}` }, enabled: true, mode: 'required' } } }, null, 2);
   return { value: settings(key ?? '${CART_MCP_TOKEN}'), shown: settings(key ? '••••••••' : '${CART_MCP_TOKEN}') };
@@ -183,7 +180,6 @@ function VoiceSection() {
   </section>;
 }
 
-/** The owner's connections: the Muse that writes to the cart, and the voice the promo speaks with. */
 export function ConnectionsPanel({ close, onMuseSeen }: { close: () => void; onMuseSeen: () => void }) {
   return <section className="share-panel connect-panel" id="connect-panel" aria-labelledby="connect-title" data-testid="connect-panel">
     <header className="share-panel-head">
