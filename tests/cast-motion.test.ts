@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { characters } from '../shared/domain';
 import { DEFAULT_CHARACTER } from '../shared/cast';
 import { sheetFormats } from '../shared/sprites';
-import { actorCell, beatPose, cartCue, FRAME_MS, newActor, sendTo, stepActor, type Actor, type Area } from '../src/room/castMotion';
+import { actorCell, beatPose, cartCue, clearWalk, FRAME_MS, newActor, sendTo, stepActor, type Actor, type Area } from '../src/room/castMotion';
 import { baristaBodies, ownerBodies } from '../src/room/barista';
 import { residentArt } from '../src/room/residentArt';
 
@@ -56,6 +56,19 @@ describe('walking', () => {
       expect(actor.at.z).toBeGreaterThanOrEqual(area.minZ - 1e-9); expect(actor.at.z).toBeLessThanOrEqual(area.maxZ + 1e-9);
     }
     expect(moved).toBe(true);
+  });
+  it('never strolls into or through a piece of furniture standing in its area', () => {
+    const table: Area = { minX: area.minX + (area.maxX - area.minX) * .4, maxX: area.minX + (area.maxX - area.minX) * .6, minZ: area.minZ - 1, maxZ: area.maxZ + 1 };
+    let now = 0, actor = newActor({ x: area.minX + .1, z: (area.minZ + area.maxZ) / 2 }), seed = 7, moved = false;
+    const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    for (let i = 0; i < 2400; i++) {
+      now += 50; actor = stepActor(actor, { now, dt: .05, area, rand, still: false, stroll: 2000, blocked: [table] });
+      moved ||= actor.moving;
+      expect(actor.at.x > table.minX && actor.at.x < table.maxX).toBe(false);
+    }
+    expect(moved).toBe(true);
+    expect(clearWalk({ x: table.minX - .1, z: 0 }, { x: table.maxX + .1, z: 0 }, [table])).toBe(false);
+    expect(clearWalk({ x: table.minX - .5, z: 0 }, { x: table.minX - .1, z: 0 }, [table])).toBe(true);
   });
   it('shows the standing cell when idle and cycles the walk frames (columns 1 to 7) when moving', () => {
     const view = { x: 0, z: 1 };

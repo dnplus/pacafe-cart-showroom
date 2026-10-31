@@ -491,30 +491,48 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
       renderer.shadowMap.needsUpdate = true;
     }
   }
-  /** Where the clerk strolls: along the back of the counter. */
-  const clerkArea = (): Area => ({ minX: bar.counter.x - 1.4, maxX: bar.counter.x + 1.4, minZ: bar.barista.z - .5, maxZ: bar.barista.z + .05 });
+  /** What the figures walk around: each furniture or studio-set mesh that stands on the floor, as its footprint grown by a figure's radius. Rugs lie flat and do not count; `except` leaves out one kind, so the clerk can stand inside the counter. */
+  let walkCache = { key: '', parts: [] as { kind: string; area: Area }[] };
+  function blocked(except?: FurnitureKind): Area[] {
+    const key = `${layoutKey}|${setGeneration}|${Boolean(setView)}`;
+    if (walkCache.key !== key) {
+      group.updateMatrixWorld(true);
+      const box = new THREE.Box3(), parts: { kind: string; area: Area }[] = [], radius = .2;
+      const roots: [string, THREE.Object3D][] = [...[...live.values()].filter(piece => piece.item.kind !== 'rug').map((piece): [string, THREE.Object3D] => [piece.item.kind, piece.node]), ...setView ? [['studioSet', setView.root] as [string, THREE.Object3D]] : []];
+      for (const [kind, root] of roots) root.traverse(part => {
+        if (!(part instanceof THREE.Mesh) || !part.visible) return;
+        box.setFromObject(part);
+        if (box.isEmpty() || box.max.y < .1 || box.min.y > 1.3) return;
+        parts.push({ kind, area: { minX: box.min.x - radius, maxX: box.max.x + radius, minZ: box.min.z - radius, maxZ: box.max.z + radius } });
+      });
+      walkCache = { key, parts };
+    }
+    return walkCache.parts.filter(part => part.kind !== except).map(part => part.area);
+  }
+  /** Where the clerk strolls: the strip right behind the countertop, clear of the return on the left and of the register (and its price tag) on the right; any deeper and the counter hides all but her head. */
+  const clerkArea = (): Area => ({ minX: bar.counter.x - 1.25, maxX: bar.counter.x + .6, minZ: bar.counter.z - bar.counter.halfZ - .45, maxZ: bar.counter.z - bar.counter.halfZ - .15 });
   /** Where the owner strolls: the open floor around their spot, clear of the counter and the studio set. */
   const ownerArea: Area = { minX: ownerSpot.x - .6, maxX: ownerSpot.x + 1.9, minZ: ownerSpot.z - .7, maxZ: ownerSpot.z + 1.2 };
-  /** In front of the shelf, on the clerk's side of the counter. */
+  /** In front of the shelf, on the clerk's side of the counter and in front of its back cabinet. */
   function shelfStop(): Vec {
     const node = shelfPiece()?.node; if (!node) return bar.barista;
     group.updateMatrixWorld(true); const box = new THREE.Box3().setFromObject(node), centre = box.getCenter(new THREE.Vector3());
-    return insideArea({ minX: bar.counter.x - 2, maxX: bar.counter.x + 2, minZ: bar.counter.z - 2.4, maxZ: bar.barista.z }, { x: centre.x, z: box.max.z + .45 });
+    return insideArea({ minX: bar.counter.x - 1.25, maxX: bar.counter.x + 1.2, minZ: bar.counter.z - bar.counter.halfZ - .7, maxZ: bar.barista.z }, { x: centre.x, z: box.max.z + .45 });
   }
   function react(fig: Figure, cue: Cue) {
     fig.beat = { cue, since: performance.now() }; host.dataset.cue = cue; render();
     if (fig === baristaFig && fetchesFromShelf.has(cue) && !presenting && !(reduced.matches || paused)) fig.actor = sendTo(fig.actor, [{ ...shelfStop(), wait: 900 }, { ...fig.actor.at }]);
   }
   let lastAnchored = 0, lastTick = 0;
-  function moveFigure(fig: Figure, time: number, dt: number, view: Vec, pinned: boolean, area: Area, stroll: number) {
+  function moveFigure(fig: Figure, time: number, dt: number, view: Vec, pinned: boolean, area: Area, stroll: number, walls: Area[], step = 0) {
     const { stand } = fig, calm = reduced.matches || paused, sheet = Boolean(stand.userData.sheet);
-    if (!pinned) fig.actor = stepActor(fig.actor, { now: time, dt, area, rand: Math.random, still: calm, stroll });
+    if (!pinned) fig.actor = stepActor(fig.actor, { now: time, dt, area, rand: Math.random, still: calm, stroll, blocked: walls });
     const { actor } = fig, pose = beatPose(fig.beat, time, calm);
     if (fig.beat && pose.over) fig.beat = undefined;
     const gait = actor.moving && !sheet && !calm ? Math.abs(Math.sin(time / 120)) * .05 : 0;
     const stretch = pose.stretch + (calm ? 0 : Math.sin(time / 700 + fig.phase) * .01);
     const base = baseSize(stand);
-    if (!pinned) stand.position.set(actor.at.x, .3 + pose.hop + gait, actor.at.z); else stand.position.y = .3 + pose.hop;
+    if (!pinned) stand.position.set(actor.at.x, .3 + step + pose.hop + gait, actor.at.z); else stand.position.y = .3 + pose.hop;
     stand.scale.set(base.width * (1 - stretch * .6), base.height * (1 + stretch), 1);
     if (sheet) {
       const cell = pinned ? { col: 0, row: 0 } : actorCell(actor, view, time);
@@ -535,8 +553,9 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
   }
   function moveFigures(time: number, view: Vec) {
     const dt = Math.min(.1, Math.max(0, (time - lastTick) / 1000)); lastTick = time;
-    moveFigure(baristaFig, time, dt, view, Boolean(presenting), clerkArea(), 5200);
-    moveFigure(ownerFig, time, dt, view, false, ownerArea, 4200);
+    // Behind the counter the clerk stands on an unseen step, so more of her shows over a countertop half her height.
+    moveFigure(baristaFig, time, dt, view, Boolean(presenting), clerkArea(), 5200, blocked('bar'), .25);
+    moveFigure(ownerFig, time, dt, view, false, ownerArea, 4200, blocked());
     const moved = baristaFig.actor.moving || ownerFig.actor.moving || baristaFig.beat || ownerFig.beat;
     if (moved && time - lastAnchored > 90 || (!moved && lastAnchored)) { lastAnchored = moved ? time : 0; anchors(); }
     host.dataset.castMotion = JSON.stringify({ clerk: { x: +baristaFig.actor.at.x.toFixed(2), z: +baristaFig.actor.at.z.toFixed(2), moving: baristaFig.actor.moving, cell: baristaFig.shown }, owner: { x: +ownerFig.actor.at.x.toFixed(2), z: +ownerFig.actor.at.z.toFixed(2), moving: ownerFig.actor.moving, cell: ownerFig.shown } });

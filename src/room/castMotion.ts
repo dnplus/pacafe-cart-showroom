@@ -20,29 +20,40 @@ export const newActor = (at: Vec): Actor => ({ at: { ...at }, route: [], restUnt
 const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
 export const insideArea = (area: Area, point: Vec): Vec => ({ x: clamp(point.x, area.minX, area.maxX), z: clamp(point.z, area.minZ, area.maxZ) });
 
-/** A place to stroll to: somewhere in `area`, a little way from where the figure is. */
-export function wanderStop(from: Vec, area: Area, rand: () => number): Vec {
-  for (let tries = 0; tries < 6; tries++) {
-    const stop = { x: area.minX + rand() * (area.maxX - area.minX), z: area.minZ + rand() * (area.maxZ - area.minZ) };
-    if (Math.hypot(stop.x - from.x, stop.z - from.z) >= MIN_HOP) return stop;
+const within = (area: Area, point: Vec) => point.x > area.minX && point.x < area.maxX && point.z > area.minZ && point.z < area.maxZ;
+/** True when the straight walk from `from` to `to` keeps out of every blocked footprint (checked every 5 cm). */
+export function clearWalk(from: Vec, to: Vec, blocked: readonly Area[]) {
+  const steps = Math.max(1, Math.ceil(Math.hypot(to.x - from.x, to.z - from.z) / .05));
+  for (let i = 1; i <= steps; i++) {
+    const point = { x: from.x + (to.x - from.x) * i / steps, z: from.z + (to.z - from.z) * i / steps };
+    if (blocked.some(area => within(area, point))) return false;
   }
-  return { x: area.minX + (from.x - area.minX < (area.maxX - area.minX) / 2 ? .8 : .2) * (area.maxX - area.minX), z: from.z };
+  return true;
+}
+
+/** A place to stroll to: somewhere in `area`, a little way from where the figure is, reached without walking through furniture; null when none turns up. */
+export function wanderStop(from: Vec, area: Area, rand: () => number, blocked: readonly Area[] = []): Vec | null {
+  for (let tries = 0; tries < 24; tries++) {
+    const stop = { x: area.minX + rand() * (area.maxX - area.minX), z: area.minZ + rand() * (area.maxZ - area.minZ) };
+    if (Math.hypot(stop.x - from.x, stop.z - from.z) >= MIN_HOP && clearWalk(from, stop, blocked)) return stop;
+  }
+  return null;
 }
 
 /** Sends the figure along `stops`, then lets it rest where it ends. */
 export const sendTo = (actor: Actor, stops: readonly Stop[]): Actor => ({ ...actor, route: stops.map(stop => ({ ...stop })), restUntil: 0 });
 
-export interface StepInput { now: number; dt: number; area: Area; rand: () => number; /** Reduced motion, a paused room, or art that cannot walk: the figure stays put. */ still: boolean; /** Rest this long (ms, from `rand`) between strolls; 0 turns strolling off. */ stroll: number }
+export interface StepInput { now: number; dt: number; area: Area; rand: () => number; /** Reduced motion, a paused room, or art that cannot walk: the figure stays put. */ still: boolean; /** Furniture footprints, grown by the figure's radius, that strolls keep out of. */ blocked?: readonly Area[]; /** Rest this long (ms, from `rand`) between strolls; 0 turns strolling off. */ stroll: number }
 
 /** Moves the figure `dt` seconds along its route, picks a new stroll when it has been resting long enough, and keeps it inside `area`. */
 export function stepActor(actor: Actor, input: StepInput): Actor {
-  const { now, dt, area, rand, still, stroll } = input;
+  const { now, dt, area, rand, still, stroll, blocked = [] } = input;
   if (still) return { ...actor, moving: false, route: [], at: insideArea(area, actor.at) };
   let { route, restUntil } = actor;
   if (now < restUntil) return { ...actor, moving: false };
   if (!route.length && now >= restUntil && stroll > 0) {
     if (restUntil === 0) restUntil = now + stroll * (.4 + rand());
-    else route = [wanderStop(actor.at, area, rand)];
+    else { const stop = wanderStop(actor.at, area, rand, blocked); if (stop) route = [stop]; else restUntil = now + stroll; }
   }
   const target = route[0];
   if (!target) return { ...actor, route, restUntil, moving: false };
