@@ -10,7 +10,6 @@ export const ownerSpriteSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('placeholder') }),
   z.strictObject({ kind: z.literal('generated'), key: z.string().regex(/^owner\/sprite-[0-9a-f-]{36}\.png$/), generatedAt: z.iso.datetime(), model: z.string().min(1) }),
 ]);
-export type OwnerSprite = z.infer<typeof ownerSpriteSchema>;
 
 /** The stored record; the owner has chosen nothing until the first PUT, so every field has a default. */
 /** Picks stored before Muse took the counter named the Kenney figures; they stand as Muse now. */
@@ -30,8 +29,6 @@ export const spriteGenerationSchema = z.discriminatedUnion('available', [
 /** `GET /api/cast`: the cast, the name for the owner's nameplate, and whether the sprite button works. */
 export const castViewSchema = castSchema.extend({ nickname: z.string(), spriteGeneration: spriteGenerationSchema });
 export type CastView = z.output<typeof castViewSchema>;
-
-export const placeholderCast: Cast = { character: DEFAULT_CHARACTER, owner: { kind: 'placeholder' } };
 
 /** The owner's photo: JPEG or PNG, at most this big. It is sent to the model and never stored. */
 export const MAX_PHOTO_BYTES = 2 * 1024 * 1024;

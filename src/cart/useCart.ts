@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { cartSchema, type Cart } from '../../shared/cart';
-import { ownerFetch } from '../owner';
+import { OwnerRefused, ownerJson } from '../owner';
 
 export const CART_POLL_MS = 2000;
 
@@ -17,13 +17,11 @@ export function useCart(intervalMs = CART_POLL_MS): { state: CartState; retry: (
     const controller = new AbortController(); let timer: ReturnType<typeof setTimeout> | undefined;
     const poll = async () => {
       try {
-        const response = await ownerFetch('/api/cart', { signal: controller.signal });
-        if (response.status === 401) { setState({ status: 'locked' }); return; }
-        if (!response.ok) throw new Error(`GET /api/cart answered ${response.status}`);
-        const cart = cartSchema.parse(await response.json());
+        const cart = await ownerJson('/api/cart', cartSchema, { signal: controller.signal });
         setState(previous => previous.status === 'ready' && same(previous.cart, cart) ? previous : { status: 'ready', cart });
       } catch (error) {
         if (controller.signal.aborted) return;
+        if (error instanceof OwnerRefused && error.status === 401) { setState({ status: 'locked' }); return; }
         console.warn(error);
         setState(previous => ({ status: 'offline', cart: previous.status === 'ready' || previous.status === 'offline' ? previous.cart : null }));
       }

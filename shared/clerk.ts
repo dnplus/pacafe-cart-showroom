@@ -1,12 +1,9 @@
 import { z } from 'zod';
+import { SPARK_MODEL } from './meta.ts';
 import { PROMO_LANGUAGES, type PromoLanguage } from './promo.ts';
 
 /** The house key pays up to a daily limit; past that the owner saves their own key, shown by its last four characters only. A share page never reaches the clerk. */
-export const CLERK_MODEL = 'muse-spark-1.3';
 export const CLERK_LIMITS = { messageChars: 500, toolCallsPerTurn: 8, modelStepsPerTurn: 6, keptTurns: 24, dailyUsd: 2 } as const;
-/** https://dev.meta.ai/docs/pricing-rate-limits, the same figures the runner's Spark calls use. */
-export const SPARK_PRICE = { inputPerM: 1.25, outputPerM: 4.25 } as const;
-export const sparkCost = (input: number, output: number) => input / 1e6 * SPARK_PRICE.inputPerM + output / 1e6 * SPARK_PRICE.outputPerM;
 
 const at = z.iso.datetime();
 export const clerkCallSchema = z.strictObject({ name: z.string().max(80), ok: z.boolean() });
@@ -39,7 +36,7 @@ export function chooseKey(state: ClerkState, house: { apiKey?: string; baseUrl?:
 export function clerkView(state: ClerkState, house: { apiKey?: string; baseUrl?: string }, now: Date, limitUsd: number = CLERK_LIMITS.dailyUsd) {
   const choice = chooseKey(state, house, now, limitUsd);
   return {
-    model: CLERK_MODEL,
+    model: SPARK_MODEL,
     turns: state.turns,
     spentUsd: spentToday(state, now), limitUsd,
     ownKey: state.ownKey && { keyEnd: `…${state.ownKey.apiKey.slice(-4)}`, baseUrl: state.ownKey.baseUrl },

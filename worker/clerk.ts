@@ -1,10 +1,11 @@
 import { z } from 'zod';
-import { chooseKey, CLERK_LIMITS, CLERK_MODEL, clerkInstructions, clerkKeySchema, clerkSendSchema, clerkStateSchema, clerkView, emptyClerkState, sparkCost, today, type ClerkState, type ClerkTurn } from '../shared/clerk';
+import { chooseKey, CLERK_LIMITS, clerkInstructions, clerkKeySchema, clerkSendSchema, clerkStateSchema, clerkView, emptyClerkState, today, type ClerkState, type ClerkTurn } from '../shared/clerk';
+import { chatCompletion, redactKey, SPARK_MODEL, sparkCost } from '../shared/meta';
 import type { McpCall } from '../shared/muse';
 import type { PromoLanguage } from '../shared/promo';
 import { isOwner, unauthorized } from './auth';
 import type { Env } from './env';
-import { invalidBody, json, readJson } from './http';
+import { json, notAllowed, parseBody, readOr } from './http';
 import { callTool, listed } from './mcp';
 import type { Store, Tool } from './tools';
 
@@ -39,12 +40,7 @@ async function runTurn(options: { history: ClerkTurn[]; message: string; languag
   let costUsd = 0;
   for (let step = 1; step <= CLERK_LIMITS.modelStepsPerTurn; step++) {
     const last = step === CLERK_LIMITS.modelStepsPerTurn || calls.length >= CLERK_LIMITS.toolCallsPerTurn;
-    const response = await http(`${key.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
-      method: 'POST', headers: { authorization: `Bearer ${key.apiKey}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ model: CLERK_MODEL, messages, tools: offered, tool_choice: last ? 'none' : 'auto', temperature: 0.4 }),
-    });
-    if (!response.ok) throw new Error(`Meta Model API answered ${response.status}: ${(await response.text()).slice(0, 200)}`);
-    const reply = replySchema.parse(await response.json()), message = reply.choices[0].message;
+    const reply = replySchema.parse(await chatCompletion(http, key, { messages, tools: offered, tool_choice: last ? 'none' : 'auto', temperature: 0.4 })), message = reply.choices[0].message;
     const usage = reply.usage ?? { prompt_tokens: Math.ceil(JSON.stringify(messages).length / 3), completion_tokens: 300 };
     costUsd += sparkCost(usage.prompt_tokens, usage.completion_tokens);
     const asked = last ? [] : message.tool_calls ?? [];
@@ -73,20 +69,18 @@ export function clerkDesk(storage: DurableObjectStorage, env: Env, deps: { tools
   const http = deps.http ?? ((input, init) => fetch(input, init)), now = deps.now ?? (() => new Date());
   const house = { apiKey: env.META_API_KEY, baseUrl: env.META_API_BASE_URL };
   const limitUsd = Number(env.CLERK_DAILY_USD) > 0 ? Number(env.CLERK_DAILY_USD) : CLERK_LIMITS.dailyUsd;
-  const state = async (): Promise<ClerkState> => { const stored = await storage.get(CLERK_KEY); return stored === undefined ? emptyClerkState() : clerkStateSchema.parse(stored); };
+  const state = (): Promise<ClerkState> => readOr(storage, CLERK_KEY, clerkStateSchema, emptyClerkState());
   const view = (current: ClerkState) => clerkView(current, house, now(), limitUsd);
   let busy = false;
 
   async function handleKey(request: Request) {
     const current = await state();
     if (request.method === 'DELETE') { const next = { ...current, ownKey: null }; await storage.put(CLERK_KEY, next); return json(view(next)); }
-    if (request.method !== 'PUT') return json({ error: 'method_not_allowed' }, 405, { allow: 'PUT, DELETE' });
-    const sent = await readJson(request);
-    if (!sent) return json({ error: 'invalid_json' }, 400);
-    const parsed = clerkKeySchema.safeParse(sent.body);
-    if (!parsed.success) return invalidBody(parsed.error);
-    if (!parsed.data.baseUrl && !house.baseUrl) return json({ error: 'missing_base_url' }, 400);
-    const next = { ...current, ownKey: { apiKey: parsed.data.apiKey, baseUrl: parsed.data.baseUrl ?? null } };
+    if (request.method !== 'PUT') return notAllowed('PUT', 'DELETE');
+    const body = await parseBody(request, clerkKeySchema);
+    if (body instanceof Response) return body;
+    if (!body.data.baseUrl && !house.baseUrl) return json({ error: 'missing_base_url' }, 400);
+    const next = { ...current, ownKey: { apiKey: body.data.apiKey, baseUrl: body.data.baseUrl ?? null } };
     await storage.put(CLERK_KEY, next);
     return json(view(next));
   }
@@ -96,26 +90,25 @@ export function clerkDesk(storage: DurableObjectStorage, env: Env, deps: { tools
     if (which === 'key') return handleKey(request);
     if (request.method === 'GET') return json(view(await state()));
     if (request.method === 'DELETE') { const next = { ...await state(), turns: [] }; await storage.put(CLERK_KEY, next); return json(view(next)); }
-    if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405, { allow: 'GET, POST, DELETE' });
-    const sent = await readJson(request);
-    if (!sent) return json({ error: 'invalid_json' }, 400);
-    const parsed = clerkSendSchema.safeParse(sent.body);
-    if (!parsed.success) return invalidBody(parsed.error);
+    if (request.method !== 'POST') return notAllowed('GET', 'POST', 'DELETE');
+    const body = await parseBody(request, clerkSendSchema);
+    if (body instanceof Response) return body;
+    const sent = body.data;
     if (busy) return json({ error: 'busy' }, 409);
     const current = await state(), started = now(), key = chooseKey(current, house, started, limitUsd);
     if (key.kind === 'none') return json({ error: key.reason, ...view(current) }, key.reason === 'daily_limit' ? 429 : 409);
     busy = true;
     try {
-      await deps.note({ method: 'initialize', client: { name: 'Showroom clerk', version: CLERK_MODEL } });
-      const turn = await runTurn({ history: current.turns, message: parsed.data.message, language: parsed.data.language, nickname: await deps.nickname(), tools: deps.tools, store: deps.store(), origin, key, http, onTool: name => deps.note({ method: 'tools/call', tool: name }) });
+      await deps.note({ method: 'initialize', client: { name: 'Showroom clerk', version: SPARK_MODEL } });
+      const turn = await runTurn({ history: current.turns, message: sent.message, language: sent.language, nickname: await deps.nickname(), tools: deps.tools, store: deps.store(), origin, key, http, onTool: name => deps.note({ method: 'tools/call', tool: name }) });
       const latest = await state(), day = today(started), at = now().toISOString();
       const spent = key.kind === 'house' ? { day, costUsd: (latest.usage?.day === day ? latest.usage.costUsd : 0) + turn.costUsd, turns: (latest.usage?.day === day ? latest.usage.turns : 0) + 1 } : latest.usage;
-      const turns = [...latest.turns, { role: 'owner' as const, text: parsed.data.message, at: started.toISOString(), calls: [] }, { role: 'clerk' as const, text: turn.text.slice(0, 4000), at, calls: turn.calls }].slice(-CLERK_LIMITS.keptTurns);
+      const turns = [...latest.turns, { role: 'owner' as const, text: sent.message, at: started.toISOString(), calls: [] }, { role: 'clerk' as const, text: turn.text.slice(0, 4000), at, calls: turn.calls }].slice(-CLERK_LIMITS.keptTurns);
       const next: ClerkState = { ...latest, turns, usage: spent };
       await storage.put(CLERK_KEY, next);
       return json({ ...view(next), costUsd: turn.costUsd });
     } catch (error) {
-      const message = (error instanceof Error ? error.message : String(error)).replaceAll(key.apiKey, '[REDACTED]').slice(0, 300);
+      const message = redactKey(error, key.apiKey);
       return json({ error: 'model_failed', message }, 502);
     } finally { busy = false; }
   }

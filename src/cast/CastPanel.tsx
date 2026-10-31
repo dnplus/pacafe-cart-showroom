@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react';
-import { Sparkles, Undo2, X } from 'lucide-react';
+import { Sparkles, Undo2 } from 'lucide-react';
 import { characters } from '../../shared/domain';
 import { t } from '../i18n';
+import { Panel } from '../share/Panel';
 import { residentArt } from '../room/residentArt';
 import { ownerArt } from '../room/residentArt';
 import type { CastController } from './useCast';
@@ -16,11 +17,7 @@ export function CastPanel({ cast, close }: { cast: CastController; close: () => 
   const picker = useRef<HTMLInputElement>(null);
   const generated = view?.owner.kind === 'generated';
   const unavailable = view?.spriteGeneration.available === false;
-  return <section className="share-panel cast-panel" id="cast-panel" aria-labelledby="cast-title" aria-busy={busy} data-testid="cast-panel">
-    <header className="share-panel-head">
-      <h2 id="cast-title">{t('Cast')}</h2>
-      <button type="button" className="share-icon-button" onClick={close} aria-label={t('Close')} title={t('Close')}><X size={18} /></button>
-    </header>
+  return <Panel name="cast" className="cast-panel" title={t('Cast')} busy={busy} close={close}>
     {!view ? <p className="cart-note" role="status">{t('Loading…')}</p> : <>
       <fieldset className="cast-clerks" disabled={busy}>
         <legend>{t('Clerk behind the counter')}</legend>
@@ -60,5 +57,5 @@ export function CastPanel({ cast, close }: { cast: CastController; close: () => 
       </div>
       {problem && <p className="cart-note cart-offline" role="alert">{t(problem)}</p>}
     </>}
-  </section>;
+  </Panel>;
 }

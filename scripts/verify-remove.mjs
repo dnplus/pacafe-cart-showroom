@@ -6,15 +6,13 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { launchBrowser } from './lib/browser.mjs';
+import { mcpClient } from './lib/mcp.mjs';
+import { RENDER_READY } from './lib/room.mjs';
 
 const origin = process.env.ORIGIN, token = process.env.CART_MCP_TOKEN, out = path.resolve(process.env.REMOVE_SCREENSHOTS_DIR ?? '.local/screenshots-remove');
 assert(origin && token, 'set ORIGIN and CART_MCP_TOKEN');
 fs.mkdirSync(out, { recursive: true });
-let id = 0;
-const call = async (name, args = {}) => {
-  const response = await fetch(`${origin}/mcp`, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', authorization: `Bearer ${token}` }, body: JSON.stringify({ jsonrpc: '2.0', id: ++id, method: 'tools/call', params: { name, arguments: args } }) });
-  return (await response.json()).result.structuredContent;
-};
+const { call } = mcpClient(origin, token);
 const cart = async () => (await fetch(`${origin}/api/cart`)).json();
 
 const browser = await launchBrowser();
@@ -26,7 +24,7 @@ try {
     page.on('console', message => { if (message.type() === 'error') problems.push(message.text()); });
     const shoot = name => page.screenshot({ path: path.join(out, `remove-${name}-${size}.png`) });
     await page.goto(origin);
-    await page.waitForSelector('.house-world[data-render-ready="true"][data-renderer="three-webgl"]', { timeout: 60_000 });
+    await page.waitForSelector(RENDER_READY, { timeout: 60_000 });
     const before = (await cart()).items;
     assert(before.length >= 2, 'the cart has items to take out');
     await page.waitForTimeout(1500);

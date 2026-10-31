@@ -4,7 +4,7 @@ import { charCount, retime, SUBTITLE, textWidthEm, type Scene, type Storyboard, 
 
 /** In the order fixes apply: wording changes the text, overflow then re-wraps it, pacing last re-times the result. */
 export const ISSUE_KINDS = ['forbidden_wording', 'subtitle_overflow', 'pacing_too_fast'] as const;
-export type IssueKind = typeof ISSUE_KINDS[number];
+type IssueKind = typeof ISSUE_KINDS[number];
 
 export const issueSchema = z.strictObject({
   atSec: z.number().nonnegative(),
@@ -22,7 +22,7 @@ export interface QaReport { version: 1; storyboard: 'spark' | 'fallback' | 'muse
 /** A subtitle faster than this is hard to read; the pacing fix aims for TARGET_CPS so a stretched scene clears it with room. */
 export const MAX_CPS = 9;
 const TARGET_CPS = 7;
-export const MIN_SCENE_SEC = 1.5;
+const MIN_SCENE_SEC = 1.5;
 
 export { FORBIDDEN_WORDING };
 
@@ -52,7 +52,7 @@ export function mockReview(storyboard: Storyboard): Issue[] {
 }
 
 /** Split after the last punctuation that keeps a line at least half full, else at the width; Latin words stay whole. */
-export function wrapLine(text: string, maxEm = SUBTITLE.maxWidthEm): string[] {
+function wrapLine(text: string, maxEm = SUBTITLE.maxWidthEm): string[] {
   const tokens = text.match(/[A-Za-z0-9$,.'’\-–]+|\s+|./gu) ?? [];
   const lines: string[] = [];
   let current = '';

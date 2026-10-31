@@ -1,4 +1,4 @@
-.promo-panel{margin-top:12px;padding-top:12px;border-top:1px solid #ece4d0;display:grid;gap:10px}
+.promo-panel{gap:10px}
 .promo-panel h2{display:flex;align-items:center;gap:6px;margin:0;font-size:15px;font-weight:900}
 .promo-panel .cart-note{margin:0}
 .promo-state{margin:0;font-size:14px;font-weight:850}

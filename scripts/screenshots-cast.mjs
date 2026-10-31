@@ -13,6 +13,7 @@ import path from 'node:path';
 import { launchBrowser } from './lib/browser.mjs';
 import { root } from './lib/root.mjs';
 import { build, startWorker } from './lib/wrangler.mjs';
+import { RENDER_READY } from './lib/room.mjs';
 
 const viewports = [
   { size: '1440', viewport: { width: 1440, height: 900 } },
@@ -21,7 +22,6 @@ const viewports = [
 const out = path.resolve(root, process.env.CAST_SCREENSHOTS_DIR ?? '.local/screenshots-cast');
 fs.mkdirSync(out, { recursive: true });
 fs.mkdirSync(path.join(root, '.local'), { recursive: true });
-const ready = '.house-world[data-render-ready="true"][data-renderer="three-webgl"]';
 const settled = () => { const room = document.querySelector('.room-canvas'); return room?.getAttribute('data-barista-source') !== 'loading' && room?.getAttribute('data-owner-source') !== 'loading' && room?.hasAttribute('data-character') && (room.hasAttribute('data-studio-set') || room.hasAttribute('data-studio-set-error')); };
 const roomAttr = (page, name) => page.evaluate(attribute => document.querySelector('.room-canvas')?.getAttribute(attribute), name);
 
@@ -64,7 +64,7 @@ const open = async (worker, { viewport, hasTouch }, problems) => {
   page.on('pageerror', error => problems.push(error.message));
   page.on('console', message => { if (message.type() === 'error') problems.push(message.text()); });
   await page.goto(worker.origin);
-  await page.waitForSelector(ready, { timeout: 60_000 });
+  await page.waitForSelector(RENDER_READY, { timeout: 60_000 });
   await page.waitForFunction(settled, undefined, { timeout: 60_000 });
   return page;
 };
@@ -99,7 +99,7 @@ try {
     assert.deepEqual(saved.spriteGeneration, { available: false, reason: 'needs_meta_api_key' });
 
     await page.reload();
-    await page.waitForSelector(ready, { timeout: 60_000 });
+    await page.waitForSelector(RENDER_READY, { timeout: 60_000 });
     await page.waitForFunction(settled, undefined, { timeout: 60_000 });
     await page.waitForFunction(() => document.querySelector('.room-canvas')?.getAttribute('data-character') === 'apron');
     await shoot(page, `room-clerk-changed-${size}.png`);
@@ -130,7 +130,7 @@ try {
     const visitor = await browser.newPage({ viewport: shape.viewport, hasTouch: shape.hasTouch, locale: 'zh-TW' });
     visitor.on('pageerror', error => problems.push(error.message));
     await visitor.goto(share.url);
-    await visitor.waitForSelector(ready, { timeout: 60_000 });
+    await visitor.waitForSelector(RENDER_READY, { timeout: 60_000 });
     await visitor.waitForFunction(() => { const room = document.querySelector('.room-canvas'); return room?.getAttribute('data-owner-source') && room.getAttribute('data-owner-source') !== 'loading' && room.getAttribute('data-barista-source') !== 'loading'; }, undefined, { timeout: 60_000 });
     assert.equal(await roomAttr(visitor, 'data-owner-source'), 'sheet', 'a visitor sees the shop owner, not the owner\'s photo sprite');
     const body = await (await fetch(share.url, { headers: { accept: 'application/json' } })).text();

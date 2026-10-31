@@ -6,7 +6,7 @@ import { newShareSettings, sharePath, shareSettingsSchema, shareUpdateSchema, sh
 import { emptyUnbox, markOpened, openedIn, unboxStateSchema, unboxWriteSchema } from '../shared/unbox';
 import { hasToken, isOwner, sameSecret, unauthorized } from './auth';
 import type { Env } from './env';
-import { invalidBody, json, readJson } from './http';
+import { json, notAllowed, parseBody, readOr } from './http';
 import { handleMcp } from './mcp';
 import { promoApi } from './promo';
 import { runnerApi } from './runner';
@@ -42,15 +42,13 @@ export class Showroom {
     return seeded;
   }
 
-  private async storedRemovals(): Promise<Removal[]> {
-    const stored = await this.ctx.storage.get(REMOVALS_KEY);
-    return stored === undefined ? [] : removalLogSchema.parse(stored);
-  }
+  private storedRemovals(): Promise<Removal[]> { return readOr(this.ctx.storage, REMOVALS_KEY, removalLogSchema, []); }
 
-  private async storedShare() {
-    const stored = await this.ctx.storage.get(SHARE_KEY);
-    return stored === undefined ? undefined : shareSettingsSchema.parse(stored);
-  }
+  private storedShare() { return readOr(this.ctx.storage, SHARE_KEY, shareSettingsSchema, undefined); }
+
+  private storedUnbox() { return readOr(this.ctx.storage, UNBOX_KEY, unboxStateSchema, emptyUnbox()); }
+
+  private async nickname() { return (await this.storedShare())?.nickname ?? DEFAULT_NICKNAME; }
 
   private store(): Store {
     const { storage } = this.ctx;
@@ -58,7 +56,7 @@ export class Showroom {
       cart: () => this.read(),
       saveCart: cart => storage.put(CART_KEY, cart),
       removals: () => this.storedRemovals(),
-      unbox: async () => { const stored = await storage.get(UNBOX_KEY); return stored === undefined ? emptyUnbox() : unboxStateSchema.parse(stored); },
+      unbox: () => this.storedUnbox(),
       share: async () => {
         const stored = await this.storedShare();
         if (stored) return stored;
@@ -89,14 +87,14 @@ export class Showroom {
 
   /** What a visitor gets at `/s/<slug>`: the narrowed cart, or one 404 for a slug that is wrong, malformed, never made or switched off. */
   private async shared(request: Request, pathname: string) {
-    if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405, { allow: 'GET' });
+    if (request.method !== 'GET') return notAllowed('GET');
     const sent = sharePath.exec(pathname)?.[1], settings = sent ? await this.storedShare() : undefined;
     if (!sent || !settings?.enabled || !sameSecret(sent, settings.slug)) return json({ error: 'not_found' }, 404);
     return json(shareView(await this.read(), settings));
   }
 
   private async image(request: Request) {
-    if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405, { allow: 'GET' });
+    if (request.method !== 'GET') return notAllowed('GET');
     const { searchParams } = new URL(request.url), slug = searchParams.get('s'), target = searchParams.get('u');
     if (slug === null) {
       if (!isOwner(request, this.env)) return unauthorized();
@@ -108,47 +106,40 @@ export class Showroom {
   }
 
   private async share(request: Request) {
-    if (request.method !== 'GET' && request.method !== 'PUT') return json({ error: 'method_not_allowed' }, 405, { allow: 'GET, PUT' });
+    if (request.method !== 'GET' && request.method !== 'PUT') return notAllowed('GET', 'PUT');
     if (!isOwner(request, this.env)) return unauthorized();
     const store = this.store(), current = await store.share(), origin = new URL(request.url).origin;
     if (request.method === 'GET') return json({ ...current, url: shareUrl(origin, current.slug) });
-    const sent = await readJson(request);
-    if (!sent) return json({ error: 'invalid_json' }, 400);
-    const parsed = shareUpdateSchema.safeParse(sent.body);
-    if (!parsed.success) return invalidBody(parsed.error);
-    const next: ShareSettings = { slug: current.slug, ...parsed.data };
+    const body = await parseBody(request, shareUpdateSchema);
+    if (body instanceof Response) return body;
+    const next: ShareSettings = { slug: current.slug, ...body.data };
     await store.saveShare(next);
     return json({ ...next, url: shareUrl(origin, next.slug) });
   }
 
   /** Which parcels the owner has opened: GET reads, POST marks more as opened. Only items still in the cart count. */
   private async unbox(request: Request) {
-    if (request.method !== 'GET' && request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405, { allow: 'GET, POST' });
+    if (request.method !== 'GET' && request.method !== 'POST') return notAllowed('GET', 'POST');
     if (!isOwner(request, this.env)) return unauthorized();
-    const [cart, stored] = await Promise.all([this.read(), this.ctx.storage.get(UNBOX_KEY)]);
-    const current = stored === undefined ? emptyUnbox() : unboxStateSchema.parse(stored);
+    const [cart, current] = await Promise.all([this.read(), this.storedUnbox()]);
     if (request.method === 'GET') return json(openedIn(current, cart.items));
-    const sent = await readJson(request);
-    if (!sent) return json({ error: 'invalid_json' }, 400);
-    const parsed = unboxWriteSchema.safeParse(sent.body);
-    if (!parsed.success) return invalidBody(parsed.error);
-    const next = markOpened(current, cart.items, parsed.data.itemIds, new Date().toISOString());
+    const body = await parseBody(request, unboxWriteSchema);
+    if (body instanceof Response) return body;
+    const next = markOpened(current, cart.items, body.data.itemIds, new Date().toISOString());
     if (JSON.stringify(next) !== JSON.stringify(current)) await this.ctx.storage.put(UNBOX_KEY, next);
     return json(next);
   }
 
   /** The cart and the removal log change together, so Muse never sees one without the other. */
   private async removeItem(request: Request) {
-    if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405, { allow: 'POST' });
+    if (request.method !== 'POST') return notAllowed('POST');
     if (!isOwner(request, this.env)) return unauthorized();
-    const sent = await readJson(request);
-    if (!sent) return json({ error: 'invalid_json' }, 400);
-    const parsed = removeRequestSchema.safeParse(sent.body);
-    if (!parsed.success) return invalidBody(parsed.error);
-    const cart = await this.read(), item = cart.items.find(line => line.id === parsed.data.itemId);
+    const body = await parseBody(request, removeRequestSchema);
+    if (body instanceof Response) return body;
+    const cart = await this.read(), item = cart.items.find(line => line.id === body.data.itemId);
     if (!item) return json({ error: 'not_found' }, 404);
     const now = new Date().toISOString(), next = removeCartItem(cart, item.id, undefined, now);
-    const log = recordRemoval(await this.storedRemovals(), removalOf(item, parsed.data.reason ?? null, now));
+    const log = recordRemoval(await this.storedRemovals(), removalOf(item, body.data.reason ?? null, now));
     await this.ctx.storage.put({ [CART_KEY]: next, [REMOVALS_KEY]: log });
     return json({ cart: next, removal: log[log.length - 1] });
   }
@@ -156,7 +147,7 @@ export class Showroom {
   private desk?: ReturnType<typeof clerkDesk>;
   /** One desk per object, so its one-turn-at-a-time flag holds across requests. */
   private clerk(linked: ReturnType<typeof connections>) {
-    return this.desk ??= clerkDesk(this.ctx.storage, this.env, { tools, store: () => this.store(), nickname: async () => (await this.storedShare())?.nickname ?? DEFAULT_NICKNAME, note: call => linked.note(call) });
+    return this.desk ??= clerkDesk(this.ctx.storage, this.env, { tools, store: () => this.store(), nickname: () => this.nickname(), note: call => linked.note(call) });
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -172,17 +163,15 @@ export class Showroom {
     if (pathname === '/api/unbox') return this.unbox(request);
     if (pathname === '/api/cart/remove') return this.removeItem(request);
     if (pathname === '/api/image') return this.image(request);
-    if (castPath.test(pathname)) return handleCast(request, { storage: this.ctx.storage, env: this.env, nickname: async () => (await this.storedShare())?.nickname ?? DEFAULT_NICKNAME });
+    if (castPath.test(pathname)) return handleCast(request, { storage: this.ctx.storage, env: this.env, nickname: () => this.nickname() });
     if (pathname !== '/api/cart') return json({ error: 'not_found' }, 404);
-    if (request.method !== 'GET' && request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405, { allow: 'GET, POST' });
+    if (request.method !== 'GET' && request.method !== 'POST') return notAllowed('GET', 'POST');
     if (!isOwner(request, this.env)) return unauthorized();
     if (request.method === 'GET') return json(await this.read());
-    const sent = await readJson(request);
-    if (!sent) return json({ error: 'invalid_json' }, 400);
-    const parsed = cartWriteSchema.safeParse(sent.body);
-    if (!parsed.success) return invalidBody(parsed.error);
+    const body = await parseBody(request, cartWriteSchema);
+    if (body instanceof Response) return body;
     const stored = await this.stored(), previous = stored ?? emptyCart();
-    const next = replaceCart(previous, await withProductImages(parsed.data.items, previous), new Date().toISOString());
+    const next = replaceCart(previous, await withProductImages(body.data.items, previous), new Date().toISOString());
     // Unchanged items give back the stored cart itself; the first write is always kept, so the fixture never comes back.
     if (next !== stored) await this.ctx.storage.put(CART_KEY, next);
     return json(next);

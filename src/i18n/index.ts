@@ -1,5 +1,5 @@
 import { localeFonts, locales, resolveLocale, type Locale } from '../../shared/locales';
-import { DEFAULT_NICKNAME } from '../../shared/share';
+import { nicknameIn } from '../../shared/share';
 import { readStored, writeStored } from '../browserStorage';
 import { messages, type TextKey } from './messages';
 
@@ -31,8 +31,7 @@ export function translate(language: Locale, key: TextKey, values: Record<string,
   return text.replace(/\{(\w+)\}/g, (placeholder, name: string) => String(values[name] ?? placeholder));
 }
 export const t = (key: TextKey, values?: Record<string, string | number>) => translate(locale, key, values);
-/** The stored default nickname is Chinese; English readers see it as "Owner". A name the owner chose is shown as typed. */
-export const shownNickname = (nickname: string) => nickname === DEFAULT_NICKNAME && locale === 'en' ? 'Owner' : nickname;
+export const shownNickname = (nickname: string) => nicknameIn(nickname, locale);
 
 if (typeof document !== 'undefined') {
   document.documentElement.lang = locale;

@@ -6,6 +6,8 @@ import { packagingOf, packagingSchema } from './packaging.ts';
 export const priceModes = ['hidden', 'range', 'exact'] as const;
 export type PriceMode = typeof priceModes[number];
 export const DEFAULT_NICKNAME = '屋主';
+/** The stored default nickname is Chinese; English readers see it as "Owner". A name the owner chose is shown as typed. */
+export const nicknameIn = (nickname: string, language: 'zh-TW' | 'en') => language === 'en' && nickname === DEFAULT_NICKNAME ? 'Owner' : nickname;
 export const NICKNAME_MAX = 24;
 
 /** `/s/<slug>`: the only path a visitor can open; anything else under /s gets the same 404. */

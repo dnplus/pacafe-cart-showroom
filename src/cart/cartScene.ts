@@ -2,77 +2,13 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { SHELF_SLOTS } from '../../shared/cart';
 import { registerModel, shelfSlot } from '../room/furnitureModels';
+import { canvasTexture, cardFace, font } from './cardFace';
 import { seed, shelfColour, type Shelf, type ShelfItem } from './shelf';
-
-/** A stable number per title, so a product keeps its box and colour across polls, and looks the same to the owner and to visitors. */
-
-function canvasTexture(width: number, height: number, paint: (ctx: CanvasRenderingContext2D) => void) {
-  const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
-  paint(canvas.getContext('2d')!);
-  const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace; texture.anisotropy = 4;
-  return texture;
-}
-const font = (weight: number, size: number) => `${weight} ${size}px "Nunito Sans Variable", "PingFang TC", "Noto Sans TC", sans-serif`;
-function wrap(ctx: CanvasRenderingContext2D, text: string, width: number, lines: number) {
-  const out: string[] = []; let line = '';
-  for (const char of text) {
-    if (ctx.measureText(line + char).width > width && line) { out.push(line); line = ''; if (out.length === lines) break; }
-    line += char;
-  }
-  if (out.length < lines && line) out.push(line);
-  if (out.join('').length < text.length) out[out.length - 1] = `${out[out.length - 1].slice(0, -1)}…`;
-  return out;
-}
+import type { ImageLoader } from './productImage';
 
 export const PRODUCT_POKED = 'cart-product';
 
-const PICTURE_RETRY_MS = 10_000;
-const CARD_W = 320, CARD_H = 240, PICTURE_H = 148;
-
-function paintCard(ctx: CanvasRenderingContext2D, item: ShelfItem, colour: string, picture: ImageBitmap | null) {
-  ctx.clearRect(0, 0, CARD_W, CARD_H);
-  ctx.fillStyle = '#fffaf0'; ctx.beginPath(); ctx.roundRect(0, 0, CARD_W, CARD_H, 26); ctx.fill();
-  ctx.textBaseline = 'top'; ctx.textAlign = 'left';
-  if (picture) {
-    ctx.save(); ctx.beginPath(); ctx.roundRect(0, 0, CARD_W, PICTURE_H, [26, 26, 0, 0]); ctx.clip();
-    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, CARD_W, PICTURE_H);
-    const scale = Math.max(CARD_W / picture.width, PICTURE_H / picture.height), w = picture.width * scale, h = picture.height * scale;
-    ctx.drawImage(picture, (CARD_W - w) / 2, (PICTURE_H - h) / 2, w, h);
-    ctx.restore();
-    ctx.fillStyle = colour; ctx.fillRect(0, PICTURE_H, CARD_W, 5);
-    ctx.fillStyle = '#2f3d35'; ctx.font = font(800, 30);
-    wrap(ctx, item.title, 288, 1).forEach(line => ctx.fillText(line, 16, PICTURE_H + 12));
-  } else {
-    ctx.fillStyle = '#2f3d35'; ctx.font = font(800, 44);
-    wrap(ctx, item.title, 288, 2).forEach((line, k) => ctx.fillText(line, 16, 18 + k * 52));
-    ctx.fillStyle = colour; ctx.fillRect(16, 134, 288, 6);
-  }
-  const y = picture ? PICTURE_H + 46 : 156, room = item.qty > 1 ? 210 : 288, max = picture ? 40 : 50;
-  if (item.price !== null) {
-    let size = max; ctx.fillStyle = '#9a4e2f'; ctx.font = font(900, size);
-    while (size > 28 && ctx.measureText(item.price).width > room) { size -= 4; ctx.font = font(900, size); }
-    ctx.fillText(item.price, 16, y + (max - size) / 2, room);
-  }
-  if (item.qty > 1) { ctx.textAlign = 'right'; ctx.fillStyle = '#2f3d35'; ctx.font = font(900, picture ? 38 : 44); ctx.fillText(`×${item.qty}`, 304, y + 4); }
-}
-
-/** The product's picture card, painted at once and repainted when its picture loads. */
-export function cardFace(item: ShelfItem, loadImage?: Shelf['loadImage'], labelScale = 1) {
-  const colour = shelfColour(item);
-  const canvas = document.createElement('canvas'); canvas.width = CARD_W * labelScale; canvas.height = CARD_H * labelScale;
-  const ctx = canvas.getContext('2d')!; ctx.scale(labelScale, labelScale); paintCard(ctx, item, colour, null);
-  const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace; texture.anisotropy = 4;
-  let disposed = false;
-  const fetchPicture = (retries: number) => void loadImage!(item.image!).then(picture => {
-    if (disposed) return;
-    if (!picture) { if (retries) setTimeout(() => { if (!disposed) fetchPicture(retries - 1); }, PICTURE_RETRY_MS); return; }
-    paintCard(ctx, item, colour, picture); texture.needsUpdate = true;
-  });
-  if (item.image && loadImage) fetchPicture(2);
-  return { texture, aspect: CARD_W / CARD_H, dispose() { disposed = true; texture.dispose(); } };
-}
-
-export function productBox(item: ShelfItem, space: { width: number; height: number; depth: number }, loadImage?: Shelf['loadImage'], labelScale = 1) {
+function productBox(item: ShelfItem, space: { width: number; height: number; depth: number }, loadImage?: ImageLoader, labelScale = 1) {
   const h = seed(item.title), colour = shelfColour(item);
   const wanted = { width: .5 + (h >> 4) % 10 * .012, height: .36 + (h >> 8) % 14 * .013, depth: .26 + (h >> 12) % 6 * .01 };
   const fit = Math.min(1, space.width * .9 / wanted.width, space.height * .9 / wanted.height, space.depth * .9 / wanted.depth);
@@ -90,7 +26,7 @@ export function productBox(item: ShelfItem, space: { width: number; height: numb
   return { node, height, dispose() { face.dispose(); geometries.forEach(g => g.dispose()); materials.forEach(m => m.dispose()); } };
 }
 
-function product(item: ShelfItem, slot: number, loadImage?: Shelf['loadImage']) {
+function product(item: ShelfItem, slot: number, loadImage?: ImageLoader) {
   const built = productBox(item, shelfSlot(slot), loadImage); built.node.name = `cart-item:${slot}`;
   return built;
 }

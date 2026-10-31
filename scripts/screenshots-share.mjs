@@ -9,6 +9,7 @@ import path from 'node:path';
 import { launchBrowser } from './lib/browser.mjs';
 import { root } from './lib/root.mjs';
 import { build, startWorker } from './lib/wrangler.mjs';
+import { RENDER_READY } from './lib/room.mjs';
 
 const viewports = [
   { size: '1440', viewport: { width: 1440, height: 900 } },
@@ -33,7 +34,7 @@ const items = [
 const browser = await launchBrowser();
 const report = [];
 const shoot = async (page, file, ready) => {
-  await page.waitForSelector('.house-world[data-render-ready="true"][data-renderer="three-webgl"]', { timeout: 60_000 });
+  await page.waitForSelector(RENDER_READY, { timeout: 60_000 });
   await page.waitForFunction(ready, items.length, { timeout: 60_000 });
   await page.waitForTimeout(1500);
   await page.screenshot({ path: path.join(out, file) });

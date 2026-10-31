@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, Copy, Play, X } from 'lucide-react';
+import { Check, Copy, Play } from 'lucide-react';
+import { z } from 'zod';
 import { museStatusSchema, type MuseStatus } from '../../shared/muse';
-import { VOICE_PROVIDERS, type MinimaxRegion, type VoiceProvider, type VoiceView } from '../../shared/voice';
+import { MINIMAX_REGIONS, VOICE_PROVIDERS, type MinimaxRegion, type VoiceProvider, type VoiceView } from '../../shared/voice';
 import { t } from '../i18n';
+import { Panel } from '../share/Panel';
 import type { TextKey } from '../i18n/messages';
-import { ownerFetch, ownerKey } from '../owner';
+import { failureSchema, ownerFetch, ownerKey } from '../owner';
 import '../share/share.css';
 import './connect.css';
 
@@ -95,6 +97,13 @@ const providerText: Record<VoiceProvider, { name: TextKey; hint: TextKey }> = {
   elevenlabs: { name: 'ElevenLabs', hint: 'eleven_multilingual_v2; needs a voice ID.' },
 };
 
+const voiceViewSchema = z.object({
+  provider: z.enum(VOICE_PROVIDERS),
+  minimax: z.object({ keyEnd: z.string(), voiceId: z.string(), region: z.enum(Object.keys(MINIMAX_REGIONS) as [MinimaxRegion, ...MinimaxRegion[]]) }).nullable(),
+  elevenlabs: z.object({ keyEnd: z.string(), voiceId: z.string() }).nullable(),
+  check: z.object({ at: z.string(), ok: z.boolean(), message: z.string() }).nullable(),
+}) satisfies z.ZodType<VoiceView>;
+
 function VoiceSection() {
   const [view, setView] = useState<VoiceView | null>(null);
   const [provider, setProvider] = useState<VoiceProvider>('none');
@@ -109,7 +118,7 @@ function VoiceSection() {
     setRegion(next.minimax?.region ?? 'global');
   };
   useEffect(() => {
-    void ownerFetch('/api/voice').then(async response => { if (response.ok) show(await response.json() as VoiceView); }, () => setProblem(t('Could not load. Try again.')));
+    void ownerFetch('/api/voice').then(async response => { if (response.ok) show(voiceViewSchema.parse(await response.json())); }, () => setProblem(t('Could not load. Try again.')));
   }, []);
   const save = async () => {
     setBusy(true); setProblem(null); setSaved(false);
@@ -120,8 +129,8 @@ function VoiceSection() {
     };
     try {
       const response = await ownerFetch('/api/voice', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-      if (response.ok) { show(await response.json() as VoiceView); setSaved(true); return; }
-      const answer = await response.json().catch(() => ({})) as { error?: string };
+      if (response.ok) { show(voiceViewSchema.parse(await response.json())); setSaved(true); return; }
+      const answer = failureSchema.safeParse(await response.json().catch(() => null)).data ?? {};
       setProblem(t(answer.error === 'missing_key' ? 'Paste the API key first.' : 'Check the key and voice, then save again.'));
     } catch { setProblem(t('Could not save. Try again.')); } finally { setBusy(false); }
   };
@@ -132,9 +141,9 @@ function VoiceSection() {
       if (response.ok) {
         audio.current?.pause();
         audio.current = new Audio(URL.createObjectURL(await response.blob())); void audio.current.play().catch(() => {});
-      } else setProblem((await response.json().catch(() => ({})) as { message?: string }).message ?? t('The test did not go through.'));
+      } else setProblem(failureSchema.safeParse(await response.json().catch(() => null)).data?.message ?? t('The test did not go through.'));
       // The refreshed view carries the outcome as its last check, so the failure is said once, there.
-      const fresh = await ownerFetch('/api/voice'); if (fresh.ok) { setView(await fresh.json() as VoiceView); setProblem(null); }
+      const fresh = await ownerFetch('/api/voice'); if (fresh.ok) { setView(voiceViewSchema.parse(await fresh.json())); setProblem(null); }
     } catch { setProblem(t('The test did not go through.')); } finally { setBusy(false); }
   };
   const stored = view && provider !== 'none' ? view[provider] : null, dirty = !view || provider !== view.provider || keys.minimax || keys.elevenlabs
@@ -181,12 +190,8 @@ function VoiceSection() {
 }
 
 export function ConnectionsPanel({ close, onMuseSeen }: { close: () => void; onMuseSeen: () => void }) {
-  return <section className="share-panel connect-panel" id="connect-panel" aria-labelledby="connect-title" data-testid="connect-panel">
-    <header className="share-panel-head">
-      <h2 id="connect-title">{t('Connections')}</h2>
-      <button type="button" className="share-icon-button" onClick={close} aria-label={t('Close')} title={t('Close')}><X size={18} /></button>
-    </header>
+  return <Panel name="connect" className="connect-panel" title={t('Connections')} close={close}>
     <MuseSection onSeen={onMuseSeen} />
     <VoiceSection />
-  </section>;
+  </Panel>;
 }

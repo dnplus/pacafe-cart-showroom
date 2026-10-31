@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { readStored, writeStored } from './browserStorage';
 
 const OWNER_KEY = 'showroom.ownerKey';
@@ -11,3 +12,15 @@ export function ownerFetch(path: string, init: RequestInit = {}) {
   if (key) headers.set('authorization', `Bearer ${key}`);
   return fetch(path, { cache: 'no-store', ...init, headers });
 }
+
+export class OwnerRefused extends Error { constructor(readonly status: number, method: string, path: string) { super(`${method} ${path} answered ${status}`); } }
+
+/** ownerFetch that throws OwnerRefused unless the answer is ok, then returns the body parsed by `schema`. */
+export async function ownerJson<S extends z.ZodType>(path: string, schema: S, init: RequestInit = {}): Promise<z.output<S>> {
+  const response = await ownerFetch(path, init);
+  if (!response.ok) throw new OwnerRefused(response.status, init.method ?? 'GET', path);
+  return schema.parse(await response.json());
+}
+
+/** What the worker's error answers carry: a code, and for some a message. */
+export const failureSchema = z.object({ error: z.string().optional(), message: z.string().optional() });
