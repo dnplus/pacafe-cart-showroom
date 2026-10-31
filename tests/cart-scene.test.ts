@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { emptyCart, replaceCart, SHELF_COLUMNS, SHELF_SLOTS, type Cart, type CartItemInput } from '../shared/cart';
 import { fixtureCartItems } from '../shared/fixtures/cart';
 import { DEFAULT_NICKNAME, shareView, type PriceMode } from '../shared/share';
-import { shelfSlotPosition } from '../src/cart/cartScene';
+import { landing, shelfSlotPosition } from '../src/cart/cartScene';
 import { ownerShelf, sharedShelf } from '../src/cart/shelf';
 import { t } from '../src/i18n';
 import { shelfFrame } from '../src/room/furnitureModels';
@@ -21,7 +21,7 @@ describe('the owner\'s shelf', () => {
     expect(ownerShelf(emptyCart(), new Set()).register).toBe('NT$ 0');
   });
   it('labels every product with its price, or a dash when it has none', () => {
-    expect(ownerShelf(mixed, everything(mixed)).items).toEqual([{ title: 'mug', qty: 2, price: 'NT$ 420' }, { title: 'sample', qty: 1, price: '—' }, { title: 'chair', qty: 1, price: 'NT$ 125,000' }]);
+    expect(ownerShelf(mixed, everything(mixed)).items.map(({ title, qty, price }) => ({ title, qty, price }))).toEqual([{ title: 'mug', qty: 2, price: 'NT$ 420' }, { title: 'sample', qty: 1, price: '—' }, { title: 'chair', qty: 1, price: 'NT$ 125,000' }]);
   });
 });
 
@@ -39,7 +39,8 @@ describe('a visitor\'s shelf', () => {
     expect(visitorShelf('range', cartOf([{ title: 'sample', qty: 1 }])).register).toBe('—');
   });
   it('draws what the owner sees when prices are exact', () => {
-    expect(visitorShelf('exact')).toEqual(ownerShelf(mixed, everything(mixed)));
+    const shown = (shelf: ReturnType<typeof ownerShelf>) => ({ register: shelf.register, items: shelf.items.map(({ title, qty, price }) => ({ title, qty, price })) });
+    expect(shown(visitorShelf('exact'))).toEqual(shown(ownerShelf(mixed, everything(mixed))));
     expect(visitorShelf('exact', cartOf([{ title: 'sample', qty: 1 }])).register).toBe('—');
   });
 });
@@ -58,5 +59,38 @@ describe('shelf slots', () => {
       expect(Math.abs(at.x)).toBeLessThan(shelfFrame.width / 2);
       expect(Math.abs(at.y)).toBeLessThan(shelfFrame.height / 2);
     }
+  });
+});
+
+describe('product pictures and clicks on the shelf', () => {
+  const pictured = cartOf([{ title: 'mug', imageUrl: 'https://img.example/mug.jpg', qty: 1 }, { title: 'bare', qty: 1 }]);
+  const loader = async () => null;
+  it('names each product by its item id for the owner and by its slot for a visitor, so a click finds its line in the list', () => {
+    expect(ownerShelf(pictured, everything(pictured)).items.map(item => item.key)).toEqual(pictured.items.map(item => item.id));
+    expect(visitorShelf('hidden', pictured).items.map(item => item.key)).toEqual(['0', '1']);
+  });
+  it('carries the picture the list shows, cutout first, and nothing for an item without one', () => {
+    expect(ownerShelf(pictured, everything(pictured)).items.map(item => item.image)).toEqual(['https://img.example/mug.jpg', null]);
+    const cut = { ...pictured, items: pictured.items.map((item, at) => at ? item : { ...item, cutoutUrl: 'https://img.example/mug-cut.png' }) };
+    expect(ownerShelf(cut, everything(cut)).items[0].image).toBe('https://img.example/mug-cut.png');
+    expect(visitorShelf('hidden', pictured).items.map(item => item.image)).toEqual(['https://img.example/mug.jpg', null]);
+  });
+  it('gives a visitor pictures only when a loader for their share is passed in', () => {
+    const view = shareView(pictured, { slug: 'A'.repeat(22), enabled: true, prices: 'hidden', nickname: DEFAULT_NICKNAME });
+    expect(sharedShelf(view).loadImage).toBeUndefined();
+    expect(sharedShelf(view, loader).loadImage).toBe(loader);
+  });
+  it('marks only the boxes unboxed in this room as ones that land', () => {
+    const landed = new Set([pictured.items[1].id]);
+    expect(ownerShelf(pictured, everything(pictured), landed).items.map(item => item.lands)).toEqual([false, true]);
+  });
+});
+
+describe('a box landing on its board', () => {
+  it('starts at the top of its drop, ends exactly on the board, and overshoots a little on the way', () => {
+    expect(landing(0)).toBe(0);
+    expect(landing(1)).toBeCloseTo(1, 10);
+    expect(Math.max(...Array.from({ length: 100 }, (_, i) => landing(i / 99)))).toBeGreaterThan(1.03);
+    expect(landing(2)).toBeCloseTo(1, 10);
   });
 });

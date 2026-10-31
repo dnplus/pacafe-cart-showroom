@@ -122,5 +122,16 @@ export const messages = [
   ['That photo is over 2 MB.', '這張照片超過 2 MB。'],
   ['Use a JPEG or PNG photo and tick the box.', '請用 JPEG 或 PNG 照片，並勾選同意。'],
   ['Muse could not draw a sprite this time. Try again.', '這次沒有生成成功，再試一次。'],
+  // Product pictures, category labels and the unboxing reveal.
+  ['Fashion', '服飾配件'],
+  ['Beauty', '美妝保養'],
+  ['Electronics', '3C 家電'],
+  ['Home', '居家生活'],
+  ['Kitchen', '廚房餐具'],
+  ['Food and drink', '食品飲料'],
+  ['Books and stationery', '書籍文具'],
+  ['Toys and hobbies', '玩具嗜好'],
+  ['Sports and outdoor', '運動戶外'],
+  ['Other', '其他'],
 ] as const;
 export type TextKey = typeof messages[number][0];

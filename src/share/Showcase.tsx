@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronUp, ExternalLink, Package, ShoppingBasket } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronDown, ChevronUp, ExternalLink, ShoppingBasket } from 'lucide-react';
 import { formatTwd } from '../../shared/cart';
 import { shareViewSchema, type ShareView } from '../../shared/share';
+import { ProductThumb } from '../cart/ProductThumb';
+import { visitorImageLoader } from '../cart/productImage';
 import { formatRange, sharedShelf } from '../cart/shelf';
+import { useFlashedLine, useProductPoke, type ProductFocus } from '../cart/useProductPoke';
 import { RoomZones } from '../components/RoomZones';
 import { t } from '../i18n';
 import { RoomScene } from '../room/RoomScene';
@@ -16,13 +19,8 @@ const priceOf = (item: ShareView['items'][number]) => 'priceRange' in item ? ite
   : 'priceTwd' in item ? item.priceTwd === null ? t('No price') : formatTwd(item.priceTwd) : null;
 const totalOf = (view: ShareView) => view.mode === 'range' ? view.totalRange ? formatRange(view.totalRange) : '—' : view.mode === 'exact' ? view.totalTwd === null ? '—' : formatTwd(view.totalTwd) : null;
 
-function Thumb({ src }: { src: string | null }) {
-  const [broken, setBroken] = useState(false);
-  return <span className="share-thumb" aria-hidden="true">{src && !broken ? <img src={src} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setBroken(true)} /> : <Package size={18} />}</span>;
-}
-
-function SharePanel({ view, open, onToggle }: { view: ShareView; open: boolean; onToggle: () => void }) {
-  const total = totalOf(view);
+function SharePanel({ view, open, onToggle, focus }: { view: ShareView; open: boolean; onToggle: () => void; focus: ProductFocus | null }) {
+  const total = totalOf(view), list = useRef<HTMLOListElement>(null), flashed = useFlashedLine(focus, open, () => list.current);
   return <aside className="cart-hud share-hud" aria-label={t("{nickname}'s cart showroom", { nickname: view.nickname })} data-testid="share-hud" data-mode={view.mode}>
     <header className="cart-hud-head">
       <span className="cart-hud-mark" aria-hidden="true"><ShoppingBasket size={18} /></span>
@@ -33,10 +31,14 @@ function SharePanel({ view, open, onToggle }: { view: ShareView; open: boolean; 
       {total !== null && <div><dt>{t('Total')}</dt><dd data-testid="share-total">{total}</dd></div>}
     </dl>
     {view.items.length > 0 && <button type="button" className="cart-toggle" aria-expanded={open} aria-controls="share-list" onClick={onToggle}>{open ? t('Hide the list') : t('Show the list')}{open ? <ChevronUp size={16} aria-hidden="true" /> : <ChevronDown size={16} aria-hidden="true" />}</button>}
-    {open && view.items.length > 0 && <ol className="cart-list share-list" id="share-list" aria-label={t('On the shelf')}>
-      {view.items.map((item, slot) => { const price = priceOf(item); return <li key={slot}>
-        <Thumb src={item.imageUrl} />
-        <span className="cart-line-title">{item.title}{item.url && <a href={item.url} target="_blank" rel="noreferrer noopener">{t('View item')}<ExternalLink size={12} aria-hidden="true" /></a>}</span>
+    {open && view.items.length > 0 && <ol className="cart-list share-list" id="share-list" ref={list} aria-label={t('On the shelf')}>
+      {view.items.map((item, slot) => { const price = priceOf(item); return <li key={slot} data-key={String(slot)} data-testid="share-row" className={flashed === String(slot) ? 'is-flashed' : undefined}>
+        <ProductThumb src={item.imageUrl} />
+        <span className="cart-line-main">
+          {item.url
+            ? <a className="cart-line-title cart-line-link" href={item.url} target="_blank" rel="noreferrer noopener" data-testid="share-row-link">{item.title}<ExternalLink size={12} aria-hidden="true" /></a>
+            : <span className="cart-line-title">{item.title}</span>}
+        </span>
         {(price !== null || item.qty > 1) && <span className="cart-line-price">{price}{item.qty > 1 && <small>×{item.qty}</small>}</span>}
       </li>; })}
     </ol>}
@@ -55,7 +57,8 @@ export function Showcase({ slug }: { slug: string }) {
       .catch(error => { if (!controller.signal.aborted) { console.warn(error); setLoad({ status: 'failed' }); } });
     return () => controller.abort();
   }, [slug]);
-  const shelf = useMemo(() => load.status === 'ready' ? sharedShelf(load.view) : null, [load]);
+  const shelf = useMemo(() => load.status === 'ready' ? sharedShelf(load.view, visitorImageLoader(slug)) : null, [load, slug]);
+  const poked = useProductPoke();
   useEffect(() => { if (load.status === 'ready') document.title = t("{nickname}'s cart showroom", { nickname: load.view.nickname }); }, [load]);
 
   if (load.status === 'missing' || load.status === 'failed') return <main className="agent-house-app share-missing-page">
@@ -65,7 +68,7 @@ export function Showcase({ slug }: { slug: string }) {
     </section>
   </main>;
   return <main className="agent-house-app showroom share-page">
-    {load.status === 'ready' ? <SharePanel view={load.view} open={listOpen} onToggle={() => setListOpen(open => !open)} />
+    {load.status === 'ready' ? <SharePanel view={load.view} open={listOpen} onToggle={() => setListOpen(open => !open)} focus={poked} />
       : <aside className="cart-hud share-hud"><p className="cart-note" role="status">{t('Loading the shared cart…')}</p></aside>}
     <section className="world-stage game-stage" aria-label={t('Cart showroom')}>
       <RoomZones>

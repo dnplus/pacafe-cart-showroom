@@ -13,7 +13,7 @@ import { clampRoomAngle, clampRoomZoom, frameRoom, roomFov } from './roomCamera'
 import type { SceneryId } from '../../shared/scenery';
 import { barSpots, defaultFurniture, interactionsOf, pieces as catalog, type FurnitureItem, type FurnitureKind } from './furniture';
 import { furnitureModel, type FurnitureModel } from './furnitureModels';
-import { cartScene } from '../cart/cartScene';
+import { cartScene, PRODUCT_POKED } from '../cart/cartScene';
 import type { Shelf } from '../cart/shelf';
 import { hangOnWall } from './pieces';
 import { cameraView, Card, dress, frameOf, illustrationFrame, measureImage, orientCard, releaseCardPlane, singleLayout, standeeMaterial, type Layout, type StandeeUniforms } from './standee';
@@ -550,6 +550,7 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
       const piece = touched && live.get(touched.object.userData.pieceId);
       if (touched && piece) hits.push({ kind: piece.item.kind, at: touched.distance + .05, act: () => {
         piece.poked = time;
+        if (touched.object.userData.cartKey !== undefined) host.dispatchEvent(new CustomEvent(PRODUCT_POKED, { bubbles: true, detail: { key: touched.object.userData.cartKey } }));
         for (const interaction of catalog[piece.item.kind].interactions(piece.item)) if (interaction.type === 'open' && interaction.panel === 'counter') onOpen('counter');
       } });
       // The barista stands behind the bar, so a click on their body counts as the counter. The card is a wide quad; only its middle strip is the body.
