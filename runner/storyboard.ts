@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { formatTwd, webUrl } from '../shared/cart.ts';
 import type { PromoJob } from '../shared/promo.ts';
+import { ENDING_SECONDS, itemSceneCount, OPENING_SECONDS, PRICE_PATTERN } from '../shared/script.ts';
 import { priceModes, type PriceRange, type ShareView } from '../shared/share.ts';
 
 /** 720p and two render tabs: the runner works on a laptop next to wrangler dev. */
@@ -17,9 +18,8 @@ export const SUBTITLE = { fontSize: 44, maxWidthEm: 24, linesPerPage: 2 } as con
 export const textWidthEm = (text: string) => [...text].reduce((sum, char) => sum + (/[\u2e80-\u9fff\u3000-\u303f\uf900-\ufaff\uff00-\uffef]/.test(char) ? 1 : 0.6), 0);
 export const charCount = (lines: readonly string[]) => lines.reduce((sum, line) => sum + [...line.replace(/\s/g, '')].length, 0);
 
-const OPENING_SEC = 4, ENDING_SEC = 5, MIN_ITEM_SEC = 2;
-/** Up to 8 items get a scene of at least two seconds each; the ending counts the rest. */
-export const itemSceneCount = (items: number, durationSec: number) => Math.min(items, 8, Math.floor((durationSec - OPENING_SEC - ENDING_SEC) / MIN_ITEM_SEC));
+const OPENING_SEC = OPENING_SECONDS, ENDING_SEC = ENDING_SECONDS;
+export { itemSceneCount, PRICE_PATTERN };
 
 const line = z.string().trim().min(1).max(200);
 const timing = { id: z.string().min(1), startSec: z.number().nonnegative(), endSec: z.number().positive(), subtitle: z.array(line).min(1) };
@@ -89,6 +89,3 @@ export const withSubtitles = (view: ShareView, scenes: Scene[], subtitles: (scen
 
 export const fallbackStoryboard = (view: ShareView, job: Pick<PromoJob, 'durationSec'>): Storyboard =>
   withSubtitles(view, sceneFrames(view, job), scene => fallbackSubtitle(scene, view.mode));
-
-/** Anything that reads as an amount of money; a hidden-price storyboard must contain none. */
-export const PRICE_PATTERN = /NT\$|\$\s*\d|\d[\d,]*\s*(元|塊)/;

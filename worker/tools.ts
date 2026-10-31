@@ -5,7 +5,7 @@ import type { UnboxState } from '../shared/unbox';
 import { promoJobId, promoRequestSchema, type PromoRecord } from '../shared/promo';
 import { shareUrl, type ShareSettings } from '../shared/share';
 import { withProductImages } from './productPage';
-import { queuePromo } from './promo';
+import { queuePromo, ScriptRefused } from './promo';
 
 export interface Store {
   cart(): Promise<Cart>;
@@ -77,10 +77,14 @@ export const tools: readonly Tool[] = [
     },
   }),
   tool({
-    name: 'promo_generate', title: '排程介紹影片', description: '為目前的購物車排一支介紹影片，回傳 jobId，再用 promo_status 查進度。購物車沒變、參數相同時重複呼叫會回傳同一個 jobId。',
+    name: 'promo_generate', title: '排程介紹影片', description: '為目前的購物車排一支介紹影片，回傳 jobId，再用 promo_status 查進度。購物車沒變、參數相同時重複呼叫會回傳同一個 jobId。可以用 script 自己寫口白：影片由屋主本人主持，口白是屋主的第一人稱；opening 是開場，items 每項用 position（貨架順序，從 1 算起，和 cart_list 一樣）對應一件東西，ending 是結尾。每景 1 到 3 行、一行最多 30 字，不要出現結帳、下單、購買這類字眼，屋主隱藏價格時不要提金額。沒寫的景由 runner 補上預設口白。',
     input: promoRequestSchema, annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     async run(store, args) {
-      const job = await queuePromo(store, args);
+      let job;
+      try { job = await queuePromo(store, args); } catch (error) {
+        if (error instanceof ScriptRefused) throw new ToolError(`腳本沒有收下，請修改後再呼叫 promo_generate：${error.problems.join('；')}`);
+        throw error;
+      }
       if (!job) throw new ToolError('購物車是空的，先用 cart_add 記下東西再排介紹片。');
       return { jobId: job.id, status: job.status };
     },

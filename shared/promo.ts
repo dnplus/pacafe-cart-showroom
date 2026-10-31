@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { webUrl, type Cart } from './cart.ts';
+import { promoScriptSchema } from './script.ts';
 
 export const PROMO_STATUSES = ['queued', 'storyboard', 'voice', 'rendering', 'done', 'failed'] as const;
 
@@ -9,6 +10,8 @@ const timestamp = z.iso.datetime();
 export const promoRequestSchema = z.strictObject({
   durationSec: z.number().int().min(15).max(45).default(30),
   style: z.string().trim().min(1).max(200).optional(),
+  /** The lines Muse wrote for the owner to say; scenes it leaves out get the runner's usual lines. */
+  script: promoScriptSchema.optional(),
 });
 export type PromoRequest = z.output<typeof promoRequestSchema>;
 
@@ -21,6 +24,8 @@ export const promoJobSchema = z.strictObject({
   cartRevision: z.number().int().nonnegative(),
   durationSec: z.number().int().min(15).max(45),
   style: z.string().nullable(),
+  /** Muse's script when it wrote one; null means the runner wrote the lines. Jobs queued before scripts existed read as null. */
+  script: promoScriptSchema.nullable().default(null),
   status: z.enum(PROMO_STATUSES),
   progress: z.number().min(0).max(1),
   output: z.strictObject({ videoUrl: webUrl, thumbnailUrl: webUrl, sha256: z.string().regex(/^[0-9a-f]{64}$/), durationSec: z.number().positive() }).nullable(),
@@ -41,5 +46,5 @@ export interface PromoRecord { job: PromoJob; cart: Cart; lease?: { claimedAt: s
 export const isFinished = (job: Pick<PromoJob, 'status'>) => job.status === 'done' || job.status === 'failed';
 
 export const queuedPromoJob = (id: string, cart: Cart, request: PromoRequest, now: string): PromoJob => ({
-  id, cartRevision: cart.revision, durationSec: request.durationSec, style: request.style ?? null, status: 'queued', progress: 0, output: null, error: null, costUsd: 0, createdAt: now, updatedAt: now,
+  id, cartRevision: cart.revision, durationSec: request.durationSec, style: request.style ?? null, script: request.script ?? null, status: 'queued', progress: 0, output: null, error: null, costUsd: 0, createdAt: now, updatedAt: now,
 });

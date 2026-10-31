@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { RunnerClaim } from '../shared/runner.ts';
 import { PRICING } from '../tools/meta-hackathon/probe/common.ts';
 import { issueSchema, ISSUE_KINDS, MAX_CPS, mockReview, sceneAt, type Issue } from './qa.ts';
+import { scriptProblems, scriptScenes } from '../shared/script.ts';
 import { fallbackStoryboard, PRICE_PATTERN, sceneFrames, SUBTITLE, withSubtitles, type Storyboard } from './storyboard.ts';
 
 export const SPARK_MODEL = 'muse-spark-1.3';
@@ -37,7 +38,7 @@ const STORYBOARD_RULES = [
 ].join('\n');
 const sparkStoryboardSchema = z.object({ scenes: z.array(z.object({ id: z.string(), subtitle: z.array(z.string().trim().min(1).max(120)).min(1).max(3) })) });
 
-export interface Storyboarded { storyboard: Storyboard; source: 'spark' | 'fallback'; costUsd: number }
+export interface Storyboarded { storyboard: Storyboard; source: 'spark' | 'fallback' | 'muse'; costUsd: number }
 export type Storyboarder = (claim: RunnerClaim) => Promise<Storyboarded>;
 
 export const fallbackStoryboarder: Storyboarder = async ({ job, view }) => ({ storyboard: fallbackStoryboard(view, job), source: 'fallback', costUsd: 0 });
@@ -61,6 +62,25 @@ export const sparkStoryboarder = (config: MetaConfig, log: (line: string) => voi
     log(`Spark 分鏡失敗，改用本地分鏡：${error instanceof Error ? error.message : String(error)}`);
     return { storyboard: fallbackStoryboard(view, job), source: 'fallback', costUsd };
   }
+};
+
+/**
+ * Muse's script as the storyboard's lines. The screens and timing still come from the view. Scenes the script leaves out
+ * take `base`'s lines, so `base` only runs (and only costs) when something is missing. A script the view no longer allows,
+ * such as one with prices after the owner hid them, is dropped whole and `base` writes everything.
+ */
+export const museStoryboarder = (base: Storyboarder, log: (line: string) => void): Storyboarder => async claim => {
+  const { job, view } = claim;
+  if (!job.script) return base(claim);
+  const problems = scriptProblems(job.script, view, job.durationSec);
+  if (problems.length) {
+    log(`Muse 的腳本不能用，改由 runner 寫口白：${problems.join('；')}`);
+    return base(claim);
+  }
+  const frames = sceneFrames(view, job), given = scriptScenes(job.script);
+  const rest = frames.every(scene => given.has(scene.id)) ? null : await base(claim);
+  const storyboard = withSubtitles(view, frames, scene => given.get(scene.id) ?? rest!.storyboard.scenes.find(other => other.id === scene.id)!.subtitle);
+  return { storyboard, source: 'muse', costUsd: rest?.costUsd ?? 0 };
 };
 
 export interface Frame { atSec: number; sceneId: string; file: string }

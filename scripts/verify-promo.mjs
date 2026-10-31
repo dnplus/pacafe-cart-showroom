@@ -1,6 +1,7 @@
 // Runs the real promo runner (mock models, no voice, a real Remotion render) on one job and checks the video it uploads.
 // npm run verify:promo: a real `wrangler dev`, with the job queued through /mcp promo_generate.
 // node scripts/verify-promo.mjs --fake-worker: tests/fake-runner-worker.ts stands in for the worker's /runner/* routes.
+// --script: the job carries a script Muse wrote (opening, six items, ending); qa.json must say muse wrote the storyboard.
 // PROMO_VERIFY_COPY_TO=<dir> copies the video, thumbnail, qa.json and every QA frame there.
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
@@ -8,11 +9,25 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fixtureCartItems } from '../shared/fixtures/cart.ts';
+import { promoScriptSchema } from '../shared/script.ts';
 import { claimFor, fakeRunnerWorker } from '../tests/fake-runner-worker.ts';
 import { root } from './lib/root.mjs';
 import { build, startWorker } from './lib/wrangler.mjs';
 
 const fake = process.argv.includes('--fake-worker');
+const withScript = process.argv.includes('--script');
+const museScript = {
+  opening: ['嗨，我是小島，歡迎來到我的小屋。', '這陣子 Muse 幫我採買，我們一件一件看。'],
+  items: [
+    { position: 1, title: '手沖咖啡濾杯', lines: ['週末的第一杯咖啡，全靠這個濾杯。'] },
+    { position: 2, title: '降噪耳機', lines: ['通勤戴上它，整個世界就安靜了。'] },
+    { position: 3, lines: ['這個托特包，我天天背著出門。'] },
+    { position: 4, lines: ['鑄鐵鍋煎牛排，Muse 說一定要有。'] },
+    { position: 5, lines: ['睡前翻翻《月亮上的貓》，很療癒。'] },
+    { position: 6, title: '手沖壺', lines: ['配上這支細口壺，咖啡香整間屋子都聞得到，真的好喜歡。'] },
+  ],
+  ending: ['謝謝你來逛，慢慢看，喜歡的話就記下來。', '我們下次見！'],
+};
 const token = crypto.randomBytes(24).toString('base64url');
 // Shop titles run long; this one is wider than a subtitle line, so the first QA round has something real to find.
 const items = [...fixtureCartItems, { title: '【現貨】日本製琺瑯細口手沖壺 1.2L 附溫度計 霧面白', store: '山嵐咖啡器材', priceTwd: 2480, qty: 1 }];
@@ -32,7 +47,7 @@ async function queueOnWorker() {
     assert.equal(result.isError, false, `${name}: ${result.content?.[0]?.text}`);
     return result.structuredContent;
   };
-  const { jobId } = await mcp('promo_generate', { durationSec: 30 });
+  const { jobId } = await mcp('promo_generate', { durationSec: 30, ...withScript ? { script: museScript } : {} });
   return {
     origin: worker.origin, jobId, stop: worker.stop,
     job: () => mcp('promo_status', { jobId }),
@@ -41,7 +56,7 @@ async function queueOnWorker() {
 }
 
 async function queueOnFake() {
-  const claim = claimFor(items, 'range', 30);
+  const claim = claimFor(items, 'range', 30, withScript ? promoScriptSchema.parse(museScript) : undefined);
   const worker = await fakeRunnerWorker(token, [claim]);
   return { origin: worker.origin, jobId: claim.job.id, stop: worker.close, job: async () => worker.jobs.get(claim.job.id), media: async name => worker.uploads.get(`${claim.job.id}/${name}`) };
 }
@@ -81,9 +96,9 @@ try {
   assert.equal(job.output.durationSec, 30);
 
   const qa = JSON.parse(fs.readFileSync(path.join(out, 'qa.json'), 'utf8'));
-  assert.equal(qa.storyboard, 'fallback');
+  assert.equal(qa.storyboard, withScript ? 'muse' : 'fallback');
   assert.ok(qa.rounds.every(round => round.mode === 'mock'), 'every round ran the mock reviewer');
-  assert.ok(qa.rounds[0].issues.some(issue => issue.kind === 'subtitle_overflow' && issue.sceneId === 'item-6'), 'round one caught the long title');
+  assert.ok(qa.rounds[0].issues.some(issue => issue.kind === 'subtitle_overflow' && issue.sceneId === 'item-6'), withScript ? 'round one caught the long line' : 'round one caught the long title');
   assert.deepEqual(qa.rounds.at(-1).issues, [], 'the last round passed');
 
   // The ending as the video shows it, from the mp4 rather than the QA stills.

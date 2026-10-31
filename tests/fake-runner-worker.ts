@@ -1,14 +1,15 @@
 import http from 'node:http';
 import { emptyCart, replaceCart, type CartItemInput } from '../shared/cart.ts';
 import { queuedPromoJob, type PromoJob } from '../shared/promo.ts';
+import type { PromoScript } from '../shared/script.ts';
 import { PROMO_STEPS, RUNNER_LEASE_MS, RUNNER_MEDIA, runnerUpdateSchema, type RunnerClaim, type RunnerMedia, type RunnerUpdate } from '../shared/runner.ts';
 import { shareView, type PriceMode } from '../shared/share.ts';
 
 /** A queued job and its view, as `/runner/next` would hand them out for this cart. */
-export function claimFor(items: readonly CartItemInput[], prices: PriceMode, durationSec = 30): RunnerClaim {
+export function claimFor(items: readonly CartItemInput[], prices: PriceMode, durationSec = 30, script?: PromoScript): RunnerClaim {
   const now = new Date().toISOString(), cart = replaceCart(emptyCart(), items, now);
   return {
-    job: queuedPromoJob(`promo-${crypto.randomUUID()}`, cart, { durationSec }, now),
+    job: queuedPromoJob(`promo-${crypto.randomUUID()}`, cart, { durationSec, script }, now),
     view: shareView(cart, { slug: 'a'.repeat(22), enabled: false, prices, nickname: '小島' }),
     leaseUntil: new Date(Date.now() + RUNNER_LEASE_MS).toISOString(),
     voice: null,

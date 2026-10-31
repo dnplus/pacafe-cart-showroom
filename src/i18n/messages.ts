@@ -198,5 +198,11 @@ export const messages = [
   ['Last test failed: {message}', '上次試聽失敗：{message}'],
   ['The key is kept with this showroom and only handed to your runner; this page shows its last four characters.', '金鑰存在這個小屋，只交給你的 runner；這頁只顯示最後四碼。'],
   ['Promo', '影片'],
+  ['Script by Muse', '腳本由 Muse 寫'],
+  ['Script by the runner', '腳本由 runner 寫'],
+  ['Show the script', '看腳本'],
+  ['Opening', '開場'],
+  ['Item {n}', '第 {n} 件'],
+  ['Ending', '結尾'],
 ] as const;
 export type TextKey = typeof messages[number][0];
