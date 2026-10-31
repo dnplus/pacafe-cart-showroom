@@ -147,14 +147,21 @@ export function createParcelStage(host: HTMLElement, parcels: readonly StageParc
     return { parcel, index, group, body: bodyMat, flaps, tape: tapes, tapeMat, filler: fl, rare: rarity === 'rare', fine: rarity === 'fine', opened: null, shaking: false, origin, scale } satisfies Slot;
   });
 
+  // The parcels are framed in the host box, but the canvas covers the window so bursts and the outer parcels spill past it.
   const fit = () => {
-    const w = host.clientWidth || 1, h = host.clientHeight || 1; renderer.setSize(w, h, false); camera.aspect = w / h;
+    const frame = host.getBoundingClientRect(), w = frame.width || 1, h = frame.height || 1, W = innerWidth, H = innerHeight;
+    renderer.setSize(W, H, false);
+    Object.assign(renderer.domElement.style, { left: `${-frame.left}px`, top: `${-frame.top}px`, width: `${W}px`, height: `${H}px` });
+    camera.aspect = w / h;
     const halfW = many ? (cols * stepX + .6) / 2 * scale : 2.15, halfH = many ? (rows * stepZ + 2.4) / 2 : 2.0, t = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
     const dist = Math.max(halfW / (t * camera.aspect), halfH / t) * 1.08, target = many ? new THREE.Vector3(0, .9, 0) : new THREE.Vector3(0, 1.25, 0);
     camera.position.set(0, target.y + dist * .36, dist * .93); camera.lookAt(target); camera.updateProjectionMatrix();
+    const px = 2 * camera.near * t / h, cx = frame.left + w / 2, cy = frame.top + h / 2;
+    camera.projectionMatrix.makePerspective(-cx * px, (W - cx) * px, cy * px, (cy - H) * px, camera.near, camera.far);
+    camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
   };
   fit();
-  const observer = new ResizeObserver(fit); observer.observe(host);
+  const observer = new ResizeObserver(fit); observer.observe(host); addEventListener('resize', fit);
 
   const sparkCount = 46;
   const startBurst = (slot: Slot) => {
@@ -259,7 +266,7 @@ export function createParcelStage(host: HTMLElement, parcels: readonly StageParc
     },
     shake(index) { slots.forEach(slot => { slot.shaking = slot.index === index; }); },
     dispose() {
-      disposed = true; cancelAnimationFrame(frame); observer.disconnect();
+      disposed = true; cancelAnimationFrame(frame); observer.disconnect(); removeEventListener('resize', fit);
       for (const slot of slots) slot.product?.built.dispose();
       disposables.forEach(item => item.dispose());
       renderer.dispose(); try { renderer.forceContextLoss(); } catch {}
