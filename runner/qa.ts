@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { FORBIDDEN_WORDING } from '../shared/script.ts';
 import { charCount, retime, SUBTITLE, textWidthEm, type Scene, type Storyboard, type VoiceClip } from './storyboard.ts';
 
 /** In the order fixes apply: wording changes the text, overflow then re-wraps it, pacing last re-times the result. */
@@ -16,20 +17,14 @@ export type Issue = z.infer<typeof issueSchema>;
 
 export interface QaRound { round: number; mode: 'mock' | 'spark'; frames: { atSec: number; sceneId: string }[]; issues: Issue[] }
 /** qa.json: what each round looked at and found, uploaded with the video so the owner can see why it looks the way it does. */
-export interface QaReport { version: 1; storyboard: 'spark' | 'fallback'; maxRounds: number; passed: boolean; rounds: QaRound[] }
+export interface QaReport { version: 1; storyboard: 'spark' | 'fallback' | 'muse'; maxRounds: number; passed: boolean; rounds: QaRound[] }
 
 /** A subtitle faster than this is hard to read; the pacing fix aims for TARGET_CPS so a stretched scene clears it with room. */
 export const MAX_CPS = 9;
 const TARGET_CPS = 7;
 export const MIN_SCENE_SEC = 1.5;
 
-/** The showroom has no checkout, so the video must never sound like a shop asking you to pay. */
-export const FORBIDDEN_WORDING: readonly (readonly [RegExp, string])[] = [
-  [/立即購買|馬上購買|立即下單/g, '先記下來'],
-  [/結帳|結賬|付款|下單/g, '記下'],
-  [/購買/g, '收藏'],
-  [/check\s?out|buy now|order now|add to cart/gi, 'noted'],
-];
+export { FORBIDDEN_WORDING };
 
 const midpoint = (scene: Scene) => (scene.startSec + scene.endSec) / 2;
 const duration = (scene: Scene) => scene.endSec - scene.startSec;

@@ -53,7 +53,7 @@ CI（`.github/workflows/ci.yml`）在每次 push 和 pull request 跑這三項�
 | `npm run verify:persist` | 用真的 `wrangler dev` 寫入購物車，關掉再重開同一個 `--persist-to` 目錄，確認讀回來的購物車一樣。 |
 | `npm run verify:mcp` | 用真的 `wrangler dev` 走一遍住民的流程：`initialize`、`tools/list`、記兩件、`cart_list`、移除一件、排介紹片、查進度，再確認 `/api/cart` 讀到同一個購物車，以及沒有 token 和 token 錯誤都回 401。token 每次隨機產生，不會印出來。 |
 | `npm run verify:runner` | 用真的 `wrangler dev` 扮演 runner：排隊、`/runner/next` 認領、回報 `storyboard`、`voice`、`rendering`、上傳假的 mp4 和 jpg、`done`，再確認 `promo_status`、`/api/promo` 和 `/media/promo/...` 看到同一支片、讀到上傳的位元組；也檢查沒 token 回 401、沒有 job 回 204、沒上傳就 `done` 回 409。token 隨機產生，不會印出來。 |
-| `npm run verify:promo` | 用真的 `wrangler dev` 透過 `/mcp` 的 `promo_generate` 排一支 30 秒的片，再跑真的 runner（`--once`、mock 看片、不配音、真的 Remotion 算圖），確認 job 到 `done`、上傳的 mp4 是 1280×720 h264 30 秒且 sha256 和回報的一樣、QA 第一輪抓到太長的商品名稱而最後一輪沒有問題、log 沒有印出 token。`--fake-worker` 改用 `tests/fake-runner-worker.ts` 代替 worker。設 `PROMO_VERIFY_COPY_TO` 會把影片、縮圖、`qa.json` 和每輪 QA 畫面複製到那個目錄。需要 `ffmpeg`／`ffprobe`。 |
+| `npm run verify:promo` | 用真的 `wrangler dev` 透過 `/mcp` 的 `promo_generate` 排一支 30 秒的片，再跑真的 runner（`--once`、mock 看片、不配音、真的 Remotion 算圖），確認 job 到 `done`、上傳的 mp4 是 1280×720 h264 30 秒且 sha256 和回報的一樣、QA 第一輪抓到太長的商品名稱而最後一輪沒有問題、log 沒有印出 token。`--fake-worker` 改用 `tests/fake-runner-worker.ts` 代替 worker。`--script` 讓 job 帶一份 Muse 寫的腳本，並確認 `qa.json` 的 `storyboard` 是 `muse`。設 `PROMO_VERIFY_COPY_TO` 會把影片、縮圖、`qa.json` 和每輪 QA 畫面複製到那個目錄。需要 `ffmpeg`／`ffprobe`。 |
 | `npm run verify:adapter` | 對真的 `wrangler dev` 跑 `adapter/cli.ts --dry-run`，再用本機的假 Model API 跑一輪，確認東西進了購物車。見 [adapter 說明](adapter/README.md)。 |
 | `npm run verify:share` | 用真的 `wrangler dev`（有 token、`OPEN_OWNER_ACCESS=false`，跟正式環境一樣）走分享流程：`/api/cart` 沒 token 回 401；開分享後依序切 hidden、range、exact 檢查 `/s/<slug>` 的 JSON；關分享後回 404。 |
 | `node scripts/screenshots.mjs` | 建置、啟動 `wrangler dev --env local`，先把 5 個快遞箱都記成拆過，等貨架擺上 5 件商品後存 `docs/screenshots/desktop.png` 和 `mobile-390.png`。 |
@@ -214,7 +214,7 @@ Muse 從兩個地方知道：`cart_list` 的 `removals` 列最近 20 筆（新�
 | `cart_list` | `{}` | `Cart`，加上 `share: { url, enabled, prices }` 和 `removals`（屋主最近移除的東西，見下面） | 是 |
 | `cart_remove` | `{ itemId, qty? }`，不給 `qty` 就整件移除 | `Cart` | 否 |
 | `habits_report` | `{}` | `HabitsReport`，見下面「購物習慣」 | 是 |
-| `promo_generate` | `{ durationSec?, style? }`，`durationSec` 介於 15 到 45，預設 30 | `{ jobId, status: 'queued' }` | 否 |
+| `promo_generate` | `{ durationSec?, style?, script? }`，`durationSec` 介於 15 到 45，預設 30；`script` 見下 | `{ jobId, status: 'queued' }` | 否 |
 | `promo_status` | `{ jobId }` | `PromoJob` | 是 |
 
 - `cart_add` 遇到標題、店名、連結都相同的東西，會把數量加上去，不會多佔一格。購物車最多 50 件。
@@ -224,7 +224,7 @@ Muse 從兩個地方知道：`cart_list` 的 `removals` 列最近 20 筆（新�
 
 ### 介紹片：排隊、runner 和房間的一鍵生片
 
-`promo_generate` 會建立並保存一筆真的 job。job 記下當下的 `cartRevision`、片長、風格和整個購物車快照，狀態是 `queued`、`progress` 0。同一份購物車、同樣的參數在 job 還在排隊時重送，回來的是同一個 `jobId`，避免重試時排兩支要付費的片。工具和房間的按鈕共用同一個 `queuePromo()`（`worker/promo.ts`），所以兩邊排的是同一種 job。
+`promo_generate` 會建立並保存一筆真的 job。job 記下當下的 `cartRevision`、片長、風格和整個購物車快照，狀態是 `queued`、`progress` 0。同一份購物車、同樣的參數在 job 還在排隊時重送，回來的是同一個 `jobId`，避免重試時排兩支要付費的片。**Muse 寫腳本。** `script` 選填：`{ opening?: string[], items?: { position, title?, lines }[], ending?: string[] }`，是屋主第一人稱的口白（`shared/script.ts`）。`opening`、`ending` 各 1 到 3 行，每項 1 到 2 行，一行最多 30 字；每景都可以不寫，沒寫的景由 runner 補預設口白。商品用 `position` 對應，也就是貨架順序、從 1 算起、和 `cart_list` 一樣：商品名稱會重複、Muse 也常縮寫，位置不會讀錯；`title` 選填，只用來核對 position 指的是不是 Muse 心裡那件。腳本出現結帳、下單、購買這類字眼、屋主隱藏價格時提到金額、`position` 超出這個片長有場景的件數、`title` 和該位置的商品對不上，都會被拒絕，訊息寫明哪一行、怎麼改，job 不會建立。腳本存在 job 上（`promo_status` 看得到），隨 claim 交給 runner，runner 在認領時再檢查一次（屋主可能在排隊後才把價格改成隱藏），不能用就整份丟掉、由 runner 自己寫，並記進 log。腳本不同的請求不會被當成同一個排隊中的 job。工具和房間的按鈕共用同一個 `queuePromo()`（`worker/promo.ts`），所以兩邊排的是同一種 job。
 
 片不是 worker 做的。worker 只管排隊、發工作和收成品；算圖在屋主自己的電腦上由 runner（`npm run runner`）做，它用 token 來 pull。沒開 runner 時 job 會一直停在 `queued`，住民只能用 `promo_status` 輪詢，小屋不寫 webhook，也不推播。worker 和 runner 之間的合約寫在 `shared/runner.ts`，worker 這邊在 `worker/runner.ts`。
 
@@ -249,7 +249,7 @@ Muse 從兩個地方知道：`cart_list` 的 `removals` 列最近 20 筆（新�
 
 | 路由 | 做什麼 |
 |---|---|
-| `POST /api/promo` | body 是 `{ durationSec?, style? }`（跟 `promo_generate` 一樣），回 `{ jobId, status }`。購物車是空的回 409 `empty_cart`。 |
+| `POST /api/promo` | body 是 `{ durationSec?, style?, script? }`（跟 `promo_generate` 一樣），回 `{ jobId, status }`。購物車是空的回 409 `empty_cart`；腳本和購物車對不上回 400 `invalid_script` 和 `problems`。 |
 | `GET /api/promo` | 最新一筆 `PromoJob`，沒排過就是 `null`。 |
 
 面板每 3 秒讀一次 `GET /api/promo`，到 `done` 或 `failed` 也不停，所以住民用 MCP 排的片會自己出現。按下「一鍵生片」排隊並立刻讀一次。面板顯示排隊中、分鏡、配音、算圖、完成或失敗，加進度條；完成時顯示縮圖當封面的影片（可播放）和下載連結；失敗時顯示錯誤和「重試」。購物車是空的時按鈕停用並說明原因。面板上有一句說明：影片在屋主自己的電腦上由 runner 製作，沒開 runner 時會停在排隊中。
@@ -273,7 +273,7 @@ npm run runner -- --once       # 做完一個 job（或沒有 job）就結束
 
 一個 job 依序經過這幾步，每一步都回報給 worker：
 
-1. **分鏡**（`runner/storyboard.ts`、`runner/spark.ts`）。畫面、時間和價格都從 claim 的 `view` 來：開場、最多 8 件商品各一景、結尾。寫字幕的只負責文字，所以 Spark 拿不到也秀不出屋主藏起來的價格。字幕是屋主主持的口白，用第一人稱。結尾的免責聲明固定畫在畫面上，不在分鏡裡。
+1. **分鏡**（`runner/storyboard.ts`、`runner/spark.ts`）。畫面、時間和價格都從 claim 的 `view` 來：開場、最多 8 件商品各一景、結尾。寫字幕的只負責文字，所以 Spark 拿不到也秀不出屋主藏起來的價格。job 帶著 Muse 的腳本時，字幕就用 Muse 寫的（`qa.json` 的 `storyboard` 是 `muse`），只有腳本沒寫的景才問 Spark 或用本地 fallback；腳本涵蓋每一景時完全不呼叫 Spark。字幕是屋主主持的口白，用第一人稱。結尾的免責聲明固定畫在畫面上，不在分鏡裡。
 2. **配音**（`runner/tts.ts`）。每一景的字幕各念一段，依文字快取，QA 改過字的景才會重念。每段都量出實際長度。
 3. **QA**（`runner/qa.ts`）。每輪在每一景的中點，加上前一輪抓到問題的時間點各算一張 still，交給看片的人（Spark 或 mock 規則）找三種問題：`forbidden_wording`（結帳、下單這類字，error）、`subtitle_overflow`（一行比 24 個全形字寬，error）、`pacing_too_fast`（每秒超過 9 個字，warning）。每種問題各有一個修法：換字、斷行、從沒問題的景借時間；下一輪看修過的版本。最後一輪還有 error 時 job 就 `failed`；只剩 warning 照樣出片。`qa.json` 不論成敗都會上傳。
 4. **算圖**（`runner/render.ts`、`runner/composition/`）。景的長度原本照閱讀速度估，配音可能念得比較慢。算圖前，配音比那一景長的景會加長到念得完再多 0.3 秒，時間從有餘裕的景借，結尾和總片長不變（`fitVoice`）。然後 Remotion 算出 1280×720、30 fps 的 h264，再用開場那一景的中點算縮圖，上傳後回報 `done`。
@@ -296,7 +296,7 @@ npm run runner -- --once       # 做完一個 job（或沒有 job）就結束
 |---|---|
 | `showroom-cart` | 用 `cart_add`、`cart_list`、`cart_remove` 記下、查看、移除東西 |
 | `showroom-cart` 的「購物習慣」一節 | 用 `habits_report` 讀報表，照數字回答屋主 |
-| `showroom-promo` | `promo_generate` 之後每 15 秒 `promo_status`，直到 `done` 或 `failed`，回報成片和分享連結 |
+| `showroom-promo` | 教 Muse 用屋主的第一人稱寫腳本；`promo_generate` 之後每 15 秒 `promo_status`，直到 `done` 或 `failed`，回報成片和分享連結 |
 
 Demo 任務在 `muse/demo-task.txt`：
 

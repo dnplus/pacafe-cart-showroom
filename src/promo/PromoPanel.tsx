@@ -10,6 +10,21 @@ import './promo.css';
 const statusText: Record<PromoStatus, TextKey> = { queued: 'In line', storyboard: 'Storyboard', voice: 'Voice-over', rendering: 'Rendering', done: 'Done', failed: 'Failed' };
 const stages: readonly PromoStatus[] = ['queued', 'storyboard', 'voice', 'rendering', 'done'];
 
+/** Who wrote the lines, and with the script in hand, what Muse wrote. Scenes Muse left out are the runner's. */
+function Script({ job }: { job: PromoJob }) {
+  const { script } = job;
+  if (!script) return <p className="promo-author" data-testid="promo-author" data-author="runner">{t('Script by the runner')}</p>;
+  const scenes = [
+    ...script.opening ? [{ key: 'opening', label: t('Opening'), lines: script.opening }] : [],
+    ...(script.items ?? []).map(item => ({ key: `item-${item.position}`, label: item.title ? `${t('Item {n}', { n: item.position })} · ${item.title}` : t('Item {n}', { n: item.position }), lines: item.lines })),
+    ...script.ending ? [{ key: 'ending', label: t('Ending'), lines: script.ending }] : [],
+  ];
+  return <details className="promo-script" data-testid="promo-script" data-author="muse">
+    <summary data-testid="promo-author">{t('Script by Muse')}<small>{t('Show the script')}</small></summary>
+    <dl>{scenes.map(scene => <div key={scene.key}><dt>{scene.label}</dt>{scene.lines.map((line, i) => <dd key={i}>{line}</dd>)}</div>)}</dl>
+  </details>;
+}
+
 function Progress({ job }: { job: PromoJob }) {
   const percent = Math.round(job.progress * 100);
   return <div className="promo-progress" data-testid="promo-progress">
@@ -31,6 +46,7 @@ export function PromoPanel({ count, close }: { count: number; close?: () => void
     </header>
     {job && <p className="promo-state" data-testid="promo-status" data-status={job.status} role="status">{t(statusText[job.status])}{!isFinished(job) && job.status !== 'queued' && <small>{Math.round(job.progress * 100)}%</small>}</p>}
     {job && !isFinished(job) && <Progress job={job} />}
+    {job && <Script job={job} />}
     {job?.status === 'done' && job.output && <div className="promo-result">
       <video controls preload="metadata" playsInline poster={job.output.thumbnailUrl} src={job.output.videoUrl} data-testid="promo-video" />
       <a className="promo-download" href={job.output.videoUrl} download="intro.mp4" data-testid="promo-download"><Download size={15} aria-hidden="true" />{t('Download the video')}</a>

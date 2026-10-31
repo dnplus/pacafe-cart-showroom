@@ -4,7 +4,7 @@ import path from 'node:path';
 import type { RunnerClaim, RunnerUpdate } from '../shared/runner.ts';
 import { applyFixes, fitVoice, keyframes, type Issue, type QaReport, type QaRound } from './qa.ts';
 import type { Renderer } from './render.ts';
-import { fallbackStoryboarder, mockReviewer, sparkOrMockReviewer, sparkReviewer, sparkStoryboarder, type Reviewer, type Storyboarder } from './spark.ts';
+import { fallbackStoryboarder, mockReviewer, museStoryboarder, sparkOrMockReviewer, sparkReviewer, sparkStoryboarder, type Reviewer, type Storyboarder } from './spark.ts';
 import type { Storyboard } from './storyboard.ts';
 import type { VoiceConfig } from '../shared/voice.ts';
 import { selectTts, ttsFor, type Tts } from './tts.ts';
@@ -30,13 +30,13 @@ export interface RunnerDeps {
   log: (line: string) => void;
 }
 
-/** Spark for the storyboard and the review when both Meta variables are set, the local fallback and mock rules otherwise. */
+/** Muse's own script first when the job has one; otherwise Spark for the storyboard and the review when both Meta variables are set, the local fallback and mock rules otherwise. */
 export function modelsFromEnv(env: Env, http: typeof fetch, log: (line: string) => void): Pick<RunnerDeps, 'storyboarder' | 'reviewer' | 'tts'> {
   const missing = ['META_API_KEY', 'META_API_BASE_URL'].filter(name => !env[name]);
   const meta = missing.length ? null : { baseUrl: env.META_API_BASE_URL!.replace(/\/+$/, ''), apiKey: env.META_API_KEY!, fetch: http };
   log(meta ? `分鏡和看片用 Spark（${meta.baseUrl}）。` : `沒有設定 ${missing.join('、')}：分鏡用本地 fallback，看片用 mock 規則，不花錢。`);
   return {
-    storyboarder: meta ? sparkStoryboarder(meta, log) : fallbackStoryboarder,
+    storyboarder: museStoryboarder(meta ? sparkStoryboarder(meta, log) : fallbackStoryboarder, log),
     reviewer: meta ? sparkOrMockReviewer(sparkReviewer(meta), log) : mockReviewer,
     tts: selectTts(env, http, log),
   };

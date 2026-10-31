@@ -213,5 +213,11 @@ export const messages = [
   ['Undo', '復原'],
   ['Could not remove {title}. It is back on the list.', '沒能移除 {title}，它還在清單裡。'],
   ['Dismiss', '知道了'],
+  ['Script by Muse', '腳本由 Muse 寫'],
+  ['Script by the runner', '腳本由 runner 寫'],
+  ['Show the script', '看腳本'],
+  ['Opening', '開場'],
+  ['Item {n}', '第 {n} 件'],
+  ['Ending', '結尾'],
 ] as const;
 export type TextKey = typeof messages[number][0];
