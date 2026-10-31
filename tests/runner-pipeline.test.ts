@@ -83,7 +83,7 @@ describe('runner, mock models', () => {
   it('with a voice provider and its keys, speaks each scene and hands the clips to the render', async () => {
     const calls: { url: string; headers: Headers }[] = [];
     const http = (async (url: string | URL | Request, init?: RequestInit) => {
-      if (String(url).startsWith('https://api.elevenlabs.io/')) { calls.push({ url: String(url), headers: new Headers(init?.headers) }); return new Response(new Uint8Array([0xff, 0xf3, 1, 2])); }
+      if (String(url).startsWith('https://api.elevenlabs.io/')) { calls.push({ url: String(url), headers: new Headers(init?.headers) }); return new Response(fs.readFileSync(path.join(import.meta.dirname, 'fixtures/silence-1s.mp3'))); }
       return fetch(url, init);
     }) as typeof fetch;
     const { run, videos } = await setup(undefined, { env: { TTS_PROVIDER: 'elevenlabs', ELEVENLABS_API_KEY: 'el-test-key', ELEVENLABS_VOICE_ID: 'voice-1' }, http });
@@ -91,7 +91,7 @@ describe('runner, mock models', () => {
     expect(calls.length).toBeGreaterThan(0);
     expect(calls.every(call => call.url.includes('/v1/text-to-speech/voice-1') && call.headers.get('xi-api-key') === 'el-test-key')).toBe(true);
     expect(videos[0].voice.map(clip => clip.sceneId)).toEqual(videos[0].storyboard.scenes.map(scene => scene.id));
-    expect(videos[0].voice.every(clip => clip.src.startsWith('data:audio/mpeg;base64,'))).toBe(true);
+    expect(videos[0].voice.every(clip => clip.src.startsWith('data:audio/mpeg;base64,') && Math.abs(clip.durationSec - 1) < 0.1)).toBe(true);
   });
 
   it('wraps an overflowing subtitle in round one and passes in round two', async () => {

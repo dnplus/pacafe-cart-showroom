@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { fixtureCartItems } from '../shared/fixtures/cart';
-import { FIXES, mockReview } from '../runner/qa';
+import { fitVoice, FIXES, mockReview, VOICE_TAIL_SEC } from '../runner/qa';
 import { fallbackStoryboard, storyboardSchema, SUBTITLE, textWidthEm, type Storyboard } from '../runner/storyboard';
 import { claimFor } from './fake-runner-worker';
 
@@ -9,6 +9,23 @@ const opening = (endSec: number, subtitle: string[]) => ({ kind: 'opening' as co
 const item = (startSec: number, endSec: number, subtitle: string[], id = 'item-1') => ({ kind: 'item' as const, id, startSec, endSec, subtitle, title: '帆布托特包', qty: 1, price: null });
 const seconds = (scene: Storyboard['scenes'][number]) => scene.endSec - scene.startSec;
 const ending = (startSec: number, endSec: number) => ({ kind: 'ending' as const, id: 'ending', startSec, endSec, subtitle: ['都擺在小屋的貨架上。'], more: 0 });
+
+describe('fitVoice', () => {
+  it('grows a scene whose voice runs past its end, borrowing from scenes with time to spare', () => {
+    const before = board([opening(4, ['這是小島的小屋購物車。']), item(4, 9, ['帆布托特包。']), ending(9, 14)]);
+    const voice = [{ sceneId: 'opening', durationSec: 5.03 }, { sceneId: 'item-1', durationSec: 1.4 }, { sceneId: 'ending', durationSec: 4.3 }].map(clip => ({ ...clip, src: '' }));
+    const after = fitVoice(before, voice);
+    after.scenes.forEach((scene, i) => expect(seconds(scene)).toBeGreaterThanOrEqual(voice[i].durationSec + VOICE_TAIL_SEC - 1 / 30));
+    expect(seconds(after.scenes[2])).toBe(5);
+    expect(after.durationSec).toBe(14);
+    expect(mockReview(after)).toEqual([]);
+  });
+
+  it('leaves the storyboard alone when every clip fits', () => {
+    const before = board([opening(4, ['這是小島的小屋購物車。']), ending(4, 9)]);
+    expect(fitVoice(before, [{ sceneId: 'opening', src: '', durationSec: 2 }])).toBe(before);
+  });
+});
 
 describe('Fix registry', () => {
   it('forbidden_wording replaces checkout words so the scene passes', () => {

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { charCount, retime, SUBTITLE, textWidthEm, type Scene, type Storyboard } from './storyboard.ts';
+import { charCount, retime, SUBTITLE, textWidthEm, type Scene, type Storyboard, type VoiceClip } from './storyboard.ts';
 
 /** In the order fixes apply: wording changes the text, overflow then re-wraps it, pacing last re-times the result. */
 export const ISSUE_KINDS = ['forbidden_wording', 'subtitle_overflow', 'pacing_too_fast'] as const;
@@ -77,7 +77,7 @@ function hardWrap(line: string, maxEm: number) {
   return out;
 }
 
-const flagged = (issues: readonly Issue[]) => new Set(issues.map(issue => issue.sceneId));
+const flagged = (issues: readonly Pick<Issue, 'sceneId'>[]) => new Set(issues.map(issue => issue.sceneId));
 const onScenes = (storyboard: Storyboard, issues: readonly Issue[], fix: (scene: Scene) => Scene): Storyboard => {
   const ids = flagged(issues);
   return { ...storyboard, scenes: storyboard.scenes.map(scene => ids.has(scene.id) ? fix(scene) : scene) };
@@ -87,12 +87,15 @@ const onScenes = (storyboard: Storyboard, issues: readonly Issue[], fix: (scene:
  * Flagged scenes get the time they need to read at TARGET_CPS. The others before the ending give up their spare time in
  * proportion, never going under what they need to pass themselves, so a fix never makes a scene that passed fail. When there is
  * not enough spare time the flagged scenes share what there is. The ending keeps its length since it carries the disclaimer.
+ * With `voiceSec`, no scene gets less than its voice clip and a short tail.
  */
-function stretch(storyboard: Storyboard, issues: readonly Issue[]): Storyboard {
+function stretch(storyboard: Storyboard, issues: readonly Pick<Issue, 'sceneId'>[], voiceSec: ReadonlyMap<string, number> = new Map()): Storyboard {
   const ids = flagged(issues), { scenes, durationSec } = storyboard;
   const roles = scenes.map(scene => ids.has(scene.id) ? 'grow' : scene.kind === 'ending' ? 'keep' : 'squeeze');
   const total = (role: string, sec: (scene: Scene) => number) => scenes.reduce((sum, scene, i) => roles[i] === role ? sum + sec(scene) : sum, 0);
-  const wantSec = (scene: Scene) => Math.max(duration(scene), needSec(scene)), floorSec = (scene: Scene) => Math.min(duration(scene), passSec(scene));
+  const spokenSec = (scene: Scene) => voiceSec.has(scene.id) ? voiceSec.get(scene.id)! + VOICE_TAIL_SEC : 0;
+  const wantSec = (scene: Scene) => Math.max(duration(scene), needSec(scene), spokenSec(scene));
+  const floorSec = (scene: Scene) => Math.max(Math.min(duration(scene), passSec(scene)), spokenSec(scene));
   const squeezed = roles.filter(role => role === 'squeeze').length, kept = total('keep', duration), floor = total('squeeze', floorSec);
   const room = durationSec - kept - floor, wanted = total('grow', wantSec);
   // With nothing left to squeeze the flagged scenes take all the room, so the scenes still tile the whole video.
@@ -101,6 +104,19 @@ function stretch(storyboard: Storyboard, issues: readonly Issue[]): Storyboard {
   const durations = scenes.map((scene, i) => roles[i] === 'grow' ? wantSec(scene) * growBy : roles[i] === 'keep' ? duration(scene)
     : floorSec(scene) + spare * (slack > 0 ? (duration(scene) - floorSec(scene)) / slack : 1 / squeezed));
   return { ...storyboard, scenes: retime(scenes, durations, durationSec) };
+}
+
+/** Quiet left after a voice clip before its scene cuts away. */
+export const VOICE_TAIL_SEC = 0.3;
+
+/**
+ * Scenes are timed by reading speed, and a voice can take longer: a scene whose clip would be cut off at its end grows to fit
+ * it, borrowing from scenes with time to spare as the pacing fix does. Only timing changes, so the reviewed words stand.
+ */
+export function fitVoice(storyboard: Storyboard, clips: readonly VoiceClip[]): Storyboard {
+  const voiceSec = new Map(clips.map(clip => [clip.sceneId, clip.durationSec]));
+  const over = storyboard.scenes.filter(scene => (voiceSec.get(scene.id) ?? 0) + VOICE_TAIL_SEC > duration(scene));
+  return over.length ? stretch(storyboard, over.map(scene => ({ sceneId: scene.id })), voiceSec) : storyboard;
 }
 
 /** One repair per kind: each takes the storyboard and the issues of its kind and returns a storyboard without them. */

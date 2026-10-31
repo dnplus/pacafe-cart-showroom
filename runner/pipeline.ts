@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { RunnerClaim, RunnerUpdate } from '../shared/runner.ts';
-import { applyFixes, keyframes, type Issue, type QaReport, type QaRound } from './qa.ts';
+import { applyFixes, fitVoice, keyframes, type Issue, type QaReport, type QaRound } from './qa.ts';
 import type { Renderer } from './render.ts';
 import { fallbackStoryboarder, mockReviewer, sparkOrMockReviewer, sparkReviewer, sparkStoryboarder, type Reviewer, type Storyboarder } from './spark.ts';
 import type { Storyboard } from './storyboard.ts';
@@ -110,7 +110,10 @@ export async function runJob(claim: RunnerClaim, deps: RunnerDeps): Promise<'don
     if (errors.length) throw new Error(`QA ${qa.rounds.length} 輪後仍有 ${errors.length} 個 error：${describe(errors)}`);
 
     // A wording fix changes what is said, so the final storyboard is voiced again; unchanged scenes come from the cache.
-    const input = { storyboard: qa.storyboard, voice: await deps.tts.voice(qa.storyboard) };
+    const voice = await deps.tts.voice(qa.storyboard);
+    const input = { storyboard: fitVoice(qa.storyboard, voice), voice };
+    const cut = voice.filter(clip => { const scene = input.storyboard.scenes.find(s => s.id === clip.sceneId)!; return clip.durationSec > scene.endSec - scene.startSec; });
+    if (cut.length) deps.log(`${job.id}：配音比片長多，${cut.map(clip => clip.sceneId).join('、')} 的尾巴會被切掉`);
     const videoFile = path.join(dir, 'video.mp4'), thumbnailFile = path.join(dir, 'thumbnail.jpg');
     // Progress reports go out one at a time and in order; the first one the worker refuses fails the job after the render.
     let reported = 0, reports = Promise.resolve(), refused: unknown;
@@ -121,7 +124,7 @@ export async function runJob(claim: RunnerClaim, deps: RunnerDeps): Promise<'don
     });
     await reports;
     if (refused) throw refused;
-    const opening = qa.storyboard.scenes[0];
+    const opening = input.storyboard.scenes[0];
     await deps.renderer.still(input, (opening.startSec + opening.endSec) / 2, thumbnailFile);
     await deps.worker.upload(job.id, 'video.mp4', fs.readFileSync(videoFile));
     await deps.worker.upload(job.id, 'thumbnail.jpg', fs.readFileSync(thumbnailFile));

@@ -227,9 +227,9 @@ npm run runner -- --once       # 做完一個 job（或沒有 job）就結束
 一個 job 依序經過這幾步，每一步都回報給 worker：
 
 1. **分鏡**（`runner/storyboard.ts`、`runner/spark.ts`）。畫面、時間和價格都從 claim 的 `view` 來：開場、最多 8 件商品各一景、結尾。寫字幕的只負責文字，所以 Spark 拿不到也秀不出屋主藏起來的價格。結尾的免責聲明固定畫在畫面上，不在分鏡裡。
-2. **配音**（`runner/tts.ts`）。每一景的字幕各念一段，依文字快取，QA 改過字的景才會重念。
+2. **配音**（`runner/tts.ts`）。每一景的字幕各念一段，依文字快取，QA 改過字的景才會重念。每段都量出實際長度。
 3. **QA**（`runner/qa.ts`）。每輪在每一景的中點，加上前一輪抓到問題的時間點各算一張 still，交給看片的人（Spark 或 mock 規則）找三種問題：`forbidden_wording`（結帳、下單這類字，error）、`subtitle_overflow`（一行比 24 個全形字寬，error）、`pacing_too_fast`（每秒超過 9 個字，warning）。每種問題各有一個修法：換字、斷行、從沒問題的景借時間；下一輪看修過的版本。最後一輪還有 error 時 job 就 `failed`；只剩 warning 照樣出片。`qa.json` 不論成敗都會上傳。
-4. **算圖**（`runner/render.ts`、`runner/composition/`）。Remotion 算出 1280×720、30 fps 的 h264，再用開場那一景的中點算縮圖，上傳後回報 `done`。
+4. **算圖**（`runner/render.ts`、`runner/composition/`）。景的長度原本照閱讀速度估，配音可能念得比較慢。算圖前，配音比那一景長的景會加長到念得完再多 0.3 秒，時間從有餘裕的景借，結尾和總片長不變（`fitVoice`）。然後 Remotion 算出 1280×720、30 fps 的 h264，再用開場那一景的中點算縮圖，上傳後回報 `done`。
 
 錯誤訊息回報給 worker 和印到 log 之前，會先把 `META_API_KEY`、`ELEVENLABS_API_KEY`、`MINIMAX_API_KEY`、`CART_MCP_TOKEN` 的值換成 `[REDACTED]`。
 

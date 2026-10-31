@@ -1,3 +1,4 @@
+import { parseMedia } from '@remotion/media-parser';
 import { z } from 'zod';
 import type { Storyboard, VoiceClip } from './storyboard.ts';
 
@@ -10,7 +11,7 @@ export const MINIMAX = { url: 'https://api.minimax.io/v1/t2a_v2', model: 'speech
 
 type Env = Readonly<Record<string, string | undefined>>;
 /** Speaks one scene's words; returns mp3 bytes. */
-type Speak = (text: string) => Promise<Uint8Array>;
+type Speak = (text: string) => Promise<Uint8Array<ArrayBuffer>>;
 
 async function audioOrThrow(response: Response, provider: string) {
   if (!response.ok) throw new Error(`${provider} answered ${response.status}: ${(await response.text()).slice(0, 200)}`);
@@ -60,13 +61,16 @@ export function selectTts(env: Env, http: typeof fetch, log: (line: string) => v
   const name: TtsName = missing.length ? 'none' : asked;
   const speak = TTS_PROVIDERS[name].speak(env, http);
   if (!speak) return { name, voice: async () => [] };
-  const spoken = new Map<string, Promise<string>>();
+  const spoken = new Map<string, Promise<Omit<VoiceClip, 'sceneId'>>>();
   return {
     name,
     voice: storyboard => Promise.all(storyboard.scenes.map(async scene => {
       const text = scene.subtitle.join(' ');
-      if (!spoken.has(text)) spoken.set(text, speak(text).then(bytes => `data:audio/mpeg;base64,${Buffer.from(bytes).toString('base64')}`));
-      return { sceneId: scene.id, src: await spoken.get(text)! };
+      if (!spoken.has(text)) spoken.set(text, speak(text).then(async bytes => ({
+        src: `data:audio/mpeg;base64,${Buffer.from(bytes).toString('base64')}`,
+        durationSec: (await parseMedia({ src: new Blob([bytes]), fields: { slowDurationInSeconds: true }, acknowledgeRemotionLicense: true, logLevel: 'error' })).slowDurationInSeconds,
+      })));
+      return { sceneId: scene.id, ...await spoken.get(text)! };
     })),
   };
 }
