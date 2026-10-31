@@ -241,11 +241,34 @@ muse exec --prompt-file muse/demo-task.txt --disable-approval --max-model-steps 
 | skills、Muse Code 設定範例、demo 任務 | `.agents/skills/`、`muse/` | 無 | 賽中新寫 |
 | Model API function calling 轉 MCP 的備援 | `adapter/` | 無 | 賽中新寫 |
 | 貨架商品、收銀機、HUD、輪詢、拆快遞 | `src/cart/`、`src/App.tsx`、`shared/unbox.ts` | 無 | 賽中新寫 |
-| 櫃台、貨架、植物、地毯的模型 | `src/room/furnitureModels.ts` | 無 | 賽中新寫 |
+| 櫃台、貨架、植物、地毯、收銀機的 3D 模型 | `public/furniture/*.glb`（7 個，共 543,340 bytes），內容與 pa-cafe 的檔案逐位元組相同 | pa-cafe `public/furniture/` 的 `terra__bar`、`atelier__item_01_archive_bookshelf`、`terra__plant`、`terra__plant_cactus`、`terra__rug_round`、`terra__rug_star`、`terra__counter_classic_cash_register`（commit 7d7b8364，sha256 見下面的「搬來的家具模型」） | 賽前搬來，沒有改動 |
+| 載入這些模型、把書櫃拼成貨架、算出 12 個商品格的位置、收銀機螢幕位置 | `src/room/furnitureModels.ts`、`tests/furniture-models.test.ts` | 無 | 賽中新寫 |
 | 角色算圖、棚景產生、截圖、持久化驗證、MCP 驗證 | `scripts/` | 無 | 賽中新寫 |
 | 測試 | `tests/` | 無 | 賽中新寫 |
 
-pa-cafe 房間的 import 閉包有 214 檔、約 3.6 萬行。住民、任務、額度、書櫃、多樓層、窗戶實驗和經濟機制都刪掉了，家具的 GLB 也沒有搬，櫃台、貨架和裝飾都改用程式畫。
+pa-cafe 房間的 import 閉包有 214 檔、約 3.6 萬行。住民、任務、額度、書櫃、多樓層、窗戶實驗和經濟機制都刪掉了，家具只搬了上面那 7 個 GLB，其餘的都沒有搬。
+
+## 搬來的家具模型
+
+房間裡的櫃台、貨架、植物、地毯和收銀機是 pa-cafe 已經做好的 GLB，不是這個專案畫的。`public/furniture/` 裡的檔案跟 pa-cafe 的原檔逐位元組相同，`tests/furniture-models.test.ts` 用 sha256 比對。
+
+| 檔案 | bytes | pa-cafe 的檔案 | sha256 | 用在哪裡 |
+|---|---|---|---|---|
+| `terra-counter.glb` | 79,864 | `terra__bar` | `228374296d47…` | L 形櫃台，跟原本的尺寸一樣：前檯、左邊的回轉、後面的櫃子 |
+| `atelier-archive-bookshelf.glb` | 251,868 | `atelier__item_01_archive_bookshelf` | `9b11a579fc2a…` | 貨架：兩座並排放大 1.2 倍，載入時拿掉書和盆栽，四層裡上面三層是 12 個商品格 |
+| `terra-plant.glb` | 27,692 | `terra__plant` | `f2bbae54a061…` | 櫃台旁的植物，`size` 照舊縮放 |
+| `terra-plant-cactus.glb` | 51,100 | `terra__plant_cactus` | `7df23ed39e82…` | 植物的 `cactus` 款 |
+| `terra-rug-round.glb` | 13,984 | `terra__rug_round` | `419967e1dbce…` | 地毯 |
+| `terra-rug-star.glb` | 8,604 | `terra__rug_star` | `194fb6967b17…` | 地毯的 `star` 款 |
+| `terra-cash-register.glb` | 110,228 | `terra__counter_classic_cash_register` | `1dabc59dd3d0…` | 櫃台上的收銀機，螢幕上貼總額 |
+
+- 三個系列混用：櫃台、植物、地毯、收銀機是 PA Cafe 預設的 terra 系列，書櫃是 atelier 系列。terra 的 `bookcase` 有固定的隔板，`beanShelf` 只有一排罐子，放不下 12 格；atelier 的書櫃拿掉書之後四層都是空的、沒有隔板。
+- 商品格的位置從書櫃自己的層板量出來（`furnitureModels.ts` 的 `unit`），不是散在各處的數字。`tests/furniture-models.test.ts` 對 12 格各射光線：腳下是層板、頭上和左右都有空間、後面是背板。
+- 貨架第四層（最下面一層）沒有商品格，保持空著。購物車最多 12 格，見上面的「`/api/cart`」。
+- 模型下載需要一點時間：房間在模型到齊（或 4 秒）之後才顯示，載入失敗的那件留著單色方塊的替身，商品格仍然在原位。
+- 櫃台的 `walnut`、`oak` 兩款現在用同一個 terra 櫃台，看不出差別。
+
+pa-cafe 記錄這些檔案的方式：`assets/furniture/README.md` 和 `sources.json` 記錄身分與 sha256，`collection-provenance.json` 記錄書櫃來自 `PA_Cafe_Atelier_Objects_V04`；收銀機的 `assets/furniture/countertop/README.md` 寫「十個為 PA Cafe 做的原創 Blender GLB，原稿是原創，沒有複製第三方素材」。pa-cafe 沒有為這些模型另外寫授權條款。它們是同一位作者的原創作品，這個專案在 Apache-2.0 下一併發布它們，見 [THIRD_PARTY.md](THIRD_PARTY.md)。
 
 ## 開源素材
 

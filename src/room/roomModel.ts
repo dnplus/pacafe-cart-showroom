@@ -105,6 +105,7 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
   let furniture: FurnitureItem[] = [...defaultFurniture];
   type LivePiece = { item: FurnitureItem; node: THREE.Group; model: FurnitureModel; key: string; poked: number };
   const live = new Map<string, LivePiece>();
+  const pending: Promise<unknown>[] = [];
   let lightingDirty = true;
   const glow = glowLayer(); let hovered: string | null = null;
   const targetLit: Record<GlowTarget, Set<'hover' | 'focus'>> = { counter: new Set(), shelf: new Set() };
@@ -127,12 +128,22 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
     const model = furnitureModel(item);
     model.node.traverse(part => { part.userData.pieceId = item.id; });
     furnitureRoot.add(model.node); placePiece(item, model.node);
-    return { item, node: model.node, model, key: pieceKey(item), poked: -Infinity };
+    const piece = { item, node: model.node, model, key: pieceKey(item), poked: -Infinity };
+    pending.push(model.ready.then(loaded => { if (loaded && live.get(item.id) === piece) modelArrived(piece); }));
+    return piece;
+  }
+  /** The PA Cafe model replaced the stand-in: tap targets, glow, framing and shadows follow the new meshes. */
+  function modelArrived(piece: LivePiece) {
+    if (disposed) return;
+    piece.model.node.traverse(part => { part.userData.pieceId = piece.item.id; });
+    glow.invalidate(piece.node); lightingDirty = true; seatCart(); placeGlow();
+    renderer.shadowMap.needsUpdate = true; frameCamera(); anchors(); render();
   }
   function dropPiece(piece: LivePiece) { glow.invalidate(piece.node); piece.model.dispose(); live.delete(piece.item.id); }
   let bar = barSpots(furniture);
   let counter = { ...bar.counter };
   const cart = cartScene(); group.add(cart.register);
+  pending.push(cart.ready.then(() => { if (!disposed) { seatCart(); renderer.shadowMap.needsUpdate = true; anchors(); render(); } }));
   const shelfPiece = () => [...live.values()].find(piece => piece.item.kind === 'beanShelf');
   /** The products ride on the shelf and the register on the bar, so a tap on either counts as that piece. */
   function seatCart() {
@@ -474,7 +485,7 @@ export function buildRoom(host: HTMLDivElement, onAnchors: (anchors: RoomAnchors
   layFurniture(options.furniture ?? defaultFurniture);
   const observer = new ResizeObserver(() => resize()); observer.observe(host); resize();
   options.debug?.({ scene, camera, renderer, render, actor: baristaStand });
-  onReady();
+  void Promise.race([Promise.all(pending), new Promise(resolve => setTimeout(resolve, 4000))]).then(() => { if (!disposed) onReady(); });
   return {
     update(scenery) {
       currentScenery = scenery;

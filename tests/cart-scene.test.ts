@@ -2,10 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { emptyCart, replaceCart, SHELF_COLUMNS, SHELF_SLOTS, type Cart, type CartItemInput } from '../shared/cart';
 import { fixtureCartItems } from '../shared/fixtures/cart';
 import { DEFAULT_NICKNAME, shareView, type PriceMode } from '../shared/share';
-import { shelfSlotPosition } from '../src/cart/cartScene';
 import { ownerShelf, sharedShelf } from '../src/cart/shelf';
 import { t } from '../src/i18n';
-import { shelfFrame } from '../src/room/furnitureModels';
+import { shelfFrame, shelfSlot } from '../src/room/furnitureModels';
 
 const cartOf = (items: readonly CartItemInput[]) => replaceCart(emptyCart(), items, '2026-10-30T03:00:00.000Z');
 const mixed = cartOf([{ title: 'mug', priceTwd: 420, qty: 2 }, { title: 'sample', qty: 1 }, { title: 'chair', priceTwd: 125_000, qty: 1 }]);
@@ -45,7 +44,7 @@ describe('a visitor\'s shelf', () => {
 });
 
 describe('shelf slots', () => {
-  const slots = Array.from({ length: SHELF_SLOTS }, (_, slot) => shelfSlotPosition(slot));
+  const slots = Array.from({ length: SHELF_SLOTS }, (_, slot) => shelfSlot(slot));
   it('fill the top board left to right before the next board down', () => {
     expect(slots[1].x).toBeGreaterThan(slots[0].x);
     expect(slots[1].y).toBe(slots[0].y);
