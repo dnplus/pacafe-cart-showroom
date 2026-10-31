@@ -248,22 +248,22 @@ Muse 從兩個地方知道：`cart_list` 的 `removals` 列最近 20 筆（新�
 
 片不是 worker 做的。worker 只管排隊、發工作和收成品；算圖在屋主自己的電腦上由 runner（`npm run runner`）做，它用 token 來 pull。沒開 runner 時 job 會一直停在 `queued`，住民只能用 `promo_status` 輪詢，小屋不寫 webhook，也不推播。worker 和 runner 之間的合約寫在 `shared/runner.ts`，worker 這邊在 `worker/runner.ts`。
 
-**排隊和租約。** 還沒做完的 job 依排入順序存在 `promo:queue`（id 陣列），做完（`done` 或 `failed`）就移出。`POST /runner/next` 取出最早一個「還在排隊」或「租約已過期」的 job，設成 `storyboard`、`progress` 0，記下租約，回傳 `RunnerClaim`。租約每次認領和每次更新都延長 `RUNNER_LEASE_MS`（20 分鐘），租約和認領時間放在 `PromoRecord`，不會出現在 `promo_status`。runner 掛掉安靜超過租約後，下一次 `/runner/next` 會把那個 job 從 `storyboard` 重做一次，所以認領是 idempotent 的：沒過期時再叫一次拿不到同一個 job。這一輪重做時 `progress` 會回到 0，`costUsd` 保留上一輪的值，直到新的 runner 回報。
+**排隊和租約。** 還沒做完的 job 依排入順序存在 `promo:queue`（id 陣列），做完（`done` 或 `failed`）就移出。`POST /runner/next` 取出最早一個「還在排隊」或「租約已過期」的 job，設成 `storyboard`、`progress` 0，記下租約，回傳 `RunnerClaim`。租約每次認領和每次更新都延長 `RUNNER_LEASE_MS`（20 分鐘），租約和認領時間放在 `PromoRecord`，不會出現在 `promo_status`。runner 掛掉安靜超過租約後，下一次 `/runner/next` 會把那個 job 從 `storyboard` 重做一次，所以認領是 idempotent 的：沒過期時再叫一次拿不到同一個 job。每次認領都有新的 `claimId`，runner 回報和上傳都要放在 `x-runner-claim` header；job 被重新認領後，舊 runner 的回報和上傳一律回 409 `stale_claim`，它推不動、弄不壞、也完成不了接手的那一輪。這一輪重做時 `progress` 會回到 0，`costUsd` 保留上一輪的值，直到新的 runner 回報。
 
 **runner 看到的購物車。** claim 裡的 `view` 是 `shareView(job 排入時的購物車, 屋主現在的分享設定)`：只有屋主選的價格模式和暱稱，不管分享有沒有打開。價格選隱藏時，claim 裡沒有任何價格欄位，影片就拿不到價格。
 
 | 路由 | 做什麼 |
 |---|---|
-| `POST /runner/next` | 200 `RunnerClaim`，沒有 job 時 204。 |
-| `POST /runner/jobs/<id>` | body 是 `RunnerUpdate`，回 200 `PromoJob`。照 `PROMO_STEPS` 檢查，不能這樣走回 409，job 不存在回 404，body 不對回 400。 |
-| `PUT /runner/jobs/<id>/media/<name>` | 原始檔案，`name` 是 `video.mp4`、`thumbnail.jpg` 或 `qa.json`，大小上限 50 MB，只在 job 正在做（不是 `queued`、也還沒到終點）時收，回 `{ key, url }`。檔案存在 R2 的 `promo/<id>/<name>`。 |
+| `POST /runner/next` | 200 `RunnerClaim`（含 `claimId`），沒有 job 時 204。 |
+| `POST /runner/jobs/<id>` | body 是 `RunnerUpdate`，回 200 `PromoJob`。要帶 `x-runner-claim`。不是目前的認領回 409 `stale_claim`，照 `PROMO_STEPS` 不能這樣走回 409，job 不存在回 404，body 不對回 400。 |
+| `PUT /runner/jobs/<id>/media/<name>` | 原始檔案，`name` 是 `video.mp4`、`thumbnail.jpg` 或 `qa.json`，大小上限 50 MB，要帶 `x-runner-claim`，只在 job 正在做（不是 `queued`、也還沒到終點）且是目前的認領時收，回 `{ key, url }`。檔案按認領分開存在 R2 的 `promo/<id>/<claimId>/<name>`，重新認領時刪掉上一輪的。 |
 
 三條路由都要 `Authorization: Bearer <CART_MCP_TOKEN>`，`env.local` 也一樣。更新規則：
 
 - 同一個狀態內 `progress` 只會前進。回報的值比已存的小，worker 保留已存的值、仍回 200，因為 runner 分不出重送和錯誤，回 409 只會讓它誤以為整個 job 壞了。換到新狀態時 `progress` 從回報的值開始。
-- `done` 不帶網址。worker 先確認 `promo/<id>/video.mp4` 和 `thumbnail.jpg` 都已在 R2，缺任何一個就回 409，再用請求的 origin 組出 `output.videoUrl` 和 `thumbnailUrl`，加上 runner 給的 `sha256`、`durationSec`。所以不會有沒有影片的 done job。
+- `done` 不帶網址。worker 先確認這一輪的 `video.mp4` 和 `thumbnail.jpg` 都已在 R2，缺任何一個就回 409，再用請求的 origin 組出 `output.videoUrl` 和 `thumbnailUrl`，加上 runner 給的 `sha256`、`durationSec`。所以不會有沒有影片的 done job。
 - `failed` 存 runner 給的 `error`。`costUsd` 每次都存 runner 回報的累計值。
-- 影片檔走 `/media/promo/<id>/video.mp4`，知道 job id 的人都能讀，支援 byte range，所以可以拖進度。
+- 影片檔走 `/media/promo/<id>/<claimId>/video.mp4`，知道 job id 的人都能讀，支援 byte range，所以可以拖進度。
 
 **房間的一鍵生片。** HUD 的「介紹影片」面板（`src/promo/PromoPanel.tsx`）只給屋主：
 

@@ -90,7 +90,7 @@ export async function runJob(claim: RunnerClaim, deps: RunnerDeps): Promise<'don
   const redact = claim.voice ? (text: string) => deps.redact(text).replaceAll(claim.voice!.apiKey, '[REDACTED]') : deps.redact;
   const tts = claim.voice ? (deps.voiceFor ?? (config => ttsFor(config, fetch)))(claim.voice) : deps.tts;
   let costUsd = 0;
-  const report = (update: Exclude<RunnerUpdate, { status: 'done' | 'failed' }>['status'], progress: number) => deps.worker.update(job.id, { status: update, progress, costUsd });
+  const report = (update: Exclude<RunnerUpdate, { status: 'done' | 'failed' }>['status'], progress: number) => deps.worker.update(claim, { status: update, progress, costUsd });
   try {
     fs.rmSync(dir, { recursive: true, force: true });
     fs.mkdirSync(dir, { recursive: true });
@@ -111,7 +111,7 @@ export async function runJob(claim: RunnerClaim, deps: RunnerDeps): Promise<'don
     const qaReport: QaReport = { version: 1, storyboard: drafted.source, maxRounds: deps.maxRounds, passed: !errors.length, rounds: qa.rounds };
     const qaFile = path.join(dir, 'qa.json');
     fs.writeFileSync(qaFile, JSON.stringify(qaReport, null, 2));
-    await deps.worker.upload(job.id, 'qa.json', fs.readFileSync(qaFile));
+    await deps.worker.upload(claim, 'qa.json', fs.readFileSync(qaFile));
     if (errors.length) throw new Error(`QA ${qa.rounds.length} 輪後仍有 ${errors.length} 個 error：${describe(errors)}`);
 
     // A wording fix changes what is said, so the final storyboard is voiced again; unchanged scenes come from the cache.
@@ -131,15 +131,15 @@ export async function runJob(claim: RunnerClaim, deps: RunnerDeps): Promise<'don
     if (refused) throw refused;
     const opening = input.storyboard.scenes[0];
     await deps.renderer.still(input, (opening.startSec + opening.endSec) / 2, thumbnailFile);
-    await deps.worker.upload(job.id, 'video.mp4', fs.readFileSync(videoFile));
-    await deps.worker.upload(job.id, 'thumbnail.jpg', fs.readFileSync(thumbnailFile));
-    await deps.worker.update(job.id, { status: 'done', costUsd, video: { sha256: sha256(videoFile), durationSec } });
+    await deps.worker.upload(claim, 'video.mp4', fs.readFileSync(videoFile));
+    await deps.worker.upload(claim, 'thumbnail.jpg', fs.readFileSync(thumbnailFile));
+    await deps.worker.update(claim, { status: 'done', costUsd, video: { sha256: sha256(videoFile), durationSec } });
     deps.log(`${job.id}：done，${durationSec} 秒，估計花費 $${costUsd.toFixed(4)}`);
     return 'done';
   } catch (error) {
     const message = redact(error instanceof Error ? error.message : String(error)).trim().slice(0, 500) || 'runner failed';
     deps.log(`${job.id}：failed：${message}`);
-    try { await deps.worker.update(job.id, { status: 'failed', costUsd, error: message }); } catch (reportError) {
+    try { await deps.worker.update(claim, { status: 'failed', costUsd, error: message }); } catch (reportError) {
       deps.log(`${job.id}：回報 failed 也失敗：${redact(reportError instanceof Error ? reportError.message : String(reportError))}`);
     }
     return 'failed';

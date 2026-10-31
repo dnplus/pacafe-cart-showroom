@@ -42,9 +42,10 @@ export type PromoJob = z.infer<typeof promoJobSchema>;
 
 /**
  * A job with the cart as it was when queued, which is what the runner renders. `lease` is bookkeeping that stays off the job
- * (promo_status shows the job only): set when a runner claims it, pushed forward by each of its updates.
+ * (promo_status shows the job only): set when a runner claims it, pushed forward by each of its updates. `id` is that claim's
+ * claimId; only reports and uploads that carry it are taken.
  */
-export interface PromoRecord { job: PromoJob; cart: Cart; lease?: { claimedAt: string; until: string } }
+export interface PromoRecord { job: PromoJob; cart: Cart; lease?: { id: string; claimedAt: string; until: string } }
 
 /** Done and failed jobs never change again. */
 export const isFinished = (job: Pick<PromoJob, 'status'>) => job.status === 'done' || job.status === 'failed';

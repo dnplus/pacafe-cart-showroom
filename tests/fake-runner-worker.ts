@@ -2,7 +2,7 @@ import http from 'node:http';
 import { emptyCart, replaceCart, type CartItemInput } from '../shared/cart.ts';
 import { queuedPromoJob, type PromoJob, type PromoLanguage } from '../shared/promo.ts';
 import type { PromoScript } from '../shared/script.ts';
-import { PROMO_STEPS, RUNNER_LEASE_MS, RUNNER_MEDIA, runnerUpdateSchema, type RunnerClaim, type RunnerMedia, type RunnerUpdate } from '../shared/runner.ts';
+import { PROMO_STEPS, RUNNER_CLAIM_HEADER, RUNNER_LEASE_MS, RUNNER_MEDIA, runnerUpdateSchema, type RunnerClaim, type RunnerMedia, type RunnerUpdate } from '../shared/runner.ts';
 import { shareView, type PriceMode } from '../shared/share.ts';
 
 /** A queued job and its view, as `/runner/next` would hand them out for this cart. */
@@ -12,16 +12,17 @@ export function claimFor(items: readonly CartItemInput[], prices: PriceMode, dur
     job: queuedPromoJob(`promo-${crypto.randomUUID()}`, cart, { durationSec, language, script }, now),
     view: shareView(cart, { slug: 'a'.repeat(22), enabled: false, prices, nickname: '小島' }),
     leaseUntil: new Date(Date.now() + RUNNER_LEASE_MS).toISOString(),
+    claimId: crypto.randomUUID(),
     voice: null,
   };
 }
 
 /**
- * The worker's half of shared/runner.ts over real HTTP, holding the rules the contract states: Bearer token, PROMO_STEPS,
- * uploads only while a job runs, done only after the video and thumbnail are in. Not the worker's code; a stand-in for it.
+ * The worker's half of shared/runner.ts over real HTTP, holding the rules the contract states: Bearer token, the claim's id on
+ * every job route, PROMO_STEPS, uploads only while a job runs, done only after the video and thumbnail are in. Not the worker's code; a stand-in for it.
  */
 export async function fakeRunnerWorker(token: string, claims: readonly RunnerClaim[]) {
-  const queue = [...claims], jobs = new Map<string, PromoJob>();
+  const queue = [...claims], jobs = new Map<string, PromoJob>(), claimIds = new Map<string, string>();
   const updates: { jobId: string; update: RunnerUpdate }[] = [];
   const uploads = new Map<string, Buffer>();
   const running = (job: PromoJob) => job.status !== 'done' && job.status !== 'failed';
@@ -37,8 +38,11 @@ export async function fakeRunnerWorker(token: string, claims: readonly RunnerCla
       if (!claim) return send(204);
       const job = { ...claim.job, status: 'storyboard' as const };
       jobs.set(job.id, job);
+      claimIds.set(job.id, claim.claimId);
       return send(200, { ...claim, job });
     }
+    const jobId = /^\/runner\/jobs\/([^/]+)/.exec(url.pathname)?.[1];
+    if (jobId && jobs.has(jobId) && request.headers[RUNNER_CLAIM_HEADER] !== claimIds.get(jobId)) return send(409, { error: 'stale_claim' });
     const media = /^\/runner\/jobs\/([^/]+)\/media\/([^/]+)$/.exec(url.pathname);
     if (request.method === 'PUT' && media) {
       const job = jobs.get(media[1]);

@@ -51,7 +51,13 @@ async function queueOnWorker() {
   return {
     origin: worker.origin, jobId, stop: worker.stop,
     job: () => mcp('promo_status', { jobId }),
-    media: async name => Buffer.from(await (await fetch(`${worker.origin}/media/promo/${jobId}/${name}`)).arrayBuffer()),
+    // Files live under the claim that made them; the done job's video URL names that folder.
+    media: async name => {
+      const folder = (await mcp('promo_status', { jobId })).output.videoUrl.replace(/[^/]+$/, '');
+      const response = await fetch(`${folder}${name}`);
+      assert.equal(response.status, 200, `${name} is served`);
+      return Buffer.from(await response.arrayBuffer());
+    },
   };
 }
 

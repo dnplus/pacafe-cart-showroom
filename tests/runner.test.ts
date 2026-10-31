@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { promoJobSchema, type PromoJob } from '../shared/promo';
-import { RUNNER_LEASE_MS, runnerClaimSchema, type RunnerUpdate } from '../shared/runner';
+import { RUNNER_CLAIM_HEADER, RUNNER_LEASE_MS, runnerClaimSchema, type RunnerUpdate } from '../shared/runner';
 import type { Env } from '../worker/env';
 import worker from '../worker/index';
 import { MAX_MEDIA_BYTES } from '../worker/runner';
@@ -26,16 +26,39 @@ function world(vars: Partial<Env> = { CART_MCP_TOKEN: token }) {
     const response = await send('/mcp', { method: 'POST', ...json({ jsonrpc: '2.0', id: rpcId++, method: 'tools/call', params: { name, arguments: args } }) });
     return (await response.json() as any).result;
   };
-  const next = () => send('/runner/next', { method: 'POST', headers: auth });
+  // Reports and uploads go out under the latest claim unless a test names an older one, as a runner that lost the job would.
+  let latest = '';
+  const next = async () => {
+    const response = await send('/runner/next', { method: 'POST', headers: auth });
+    if (response.status === 200) latest = runnerClaimSchema.parse(await response.clone().json()).claimId;
+    return response;
+  };
   const claim = async () => runnerClaimSchema.parse(await (await next()).json());
-  const report = (id: string, update: RunnerUpdate | object) => send(`/runner/jobs/${id}`, { method: 'POST', ...json(update) });
-  const upload = (id: string, name: string, bytes: Uint8Array) => send(`/runner/jobs/${id}/media/${name}`, { method: 'PUT', headers: auth, body: bytes as BodyInit });
+  const report = (id: string, update: RunnerUpdate | object, claimId = latest) => send(`/runner/jobs/${id}`, { method: 'POST', body: JSON.stringify(update), headers: { ...auth, 'content-type': 'application/json', [RUNNER_CLAIM_HEADER]: claimId } });
+  const upload = (id: string, name: string, bytes: Uint8Array, claimId = latest) => send(`/runner/jobs/${id}/media/${name}`, { method: 'PUT', headers: { ...auth, [RUNNER_CLAIM_HEADER]: claimId }, body: bytes as BodyInit });
   const progress = (status: 'storyboard' | 'voice' | 'rendering', value: number): RunnerUpdate => ({ status, progress: value, costUsd: 0.12 });
   const done: RunnerUpdate = { status: 'done', costUsd: 0.4, video: { sha256, durationSec: 29.5 } };
   const room = (path: string, init: RequestInit = {}) => send(path, { ...init, headers: { ...auth, ...init.headers as Record<string, string> } });
   const status = async (jobId: string) => promoJobSchema.parse((await call('promo_status', { jobId })).structuredContent);
   const queue = async (args: object = {}) => (await call('promo_generate', args)).structuredContent.jobId as string;
   return { send, next, claim, report, upload, progress, done, cartAdd, call, room, status, queue, MEDIA, json };
+}
+
+/**
+ * Holds the bucket's next `method` call until released. A Durable Object lets other requests run while one waits on R2, so this
+ * is how two runners' requests interleave in production.
+ */
+function hold(bucket: ReturnType<typeof memoryBucket>, method: 'head' | 'delete' | 'put') {
+  const methods = bucket as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>, real = methods[method].bind(bucket);
+  let release!: () => void, reached!: () => void;
+  const released = new Promise<void>(resolve => { release = resolve; }), arrived = new Promise<void>(resolve => { reached = resolve; });
+  methods[method] = async (...args: unknown[]) => {
+    methods[method] = real;
+    reached();
+    await released;
+    return real(...args);
+  };
+  return { arrived, release };
 }
 
 const priceKeys = ['priceTwd', 'totalTwd', 'priceRange', 'totalRange'];
@@ -110,7 +133,7 @@ describe('/runner', () => {
     const { cartAdd, queue, claim, report, upload, progress, done, status, MEDIA, send, call } = world();
     await cartAdd({ title: 'pen' });
     const id = await queue();
-    await claim();
+    const { claimId } = await claim();
     expect((await report(id, progress('storyboard', 0.5))).status).toBe(200);
     expect((await report(id, progress('voice', 0.25))).status).toBe(200);
     const rendering = promoJobSchema.parse(await (await report(id, progress('rendering', 0.6))).json());
@@ -118,11 +141,11 @@ describe('/runner', () => {
 
     expect((await upload(id, 'video.mp4', video)).status).toBe(200);
     const thumb = await (await upload(id, 'thumbnail.jpg', thumbnail)).json() as { key: string; url: string };
-    expect(thumb).toEqual({ key: `promo/${id}/thumbnail.jpg`, url: `${origin}/media/promo/${id}/thumbnail.jpg` });
-    expect((await MEDIA.head(`promo/${id}/video.mp4`)) && (await MEDIA.get(`promo/${id}/video.mp4`).then(object => object?.httpMetadata?.contentType))).toBe('video/mp4');
+    expect(thumb).toEqual({ key: `promo/${id}/${claimId}/thumbnail.jpg`, url: `${origin}/media/promo/${id}/${claimId}/thumbnail.jpg` });
+    expect((await MEDIA.head(`promo/${id}/${claimId}/video.mp4`)) && (await MEDIA.get(`promo/${id}/${claimId}/video.mp4`).then(object => object?.httpMetadata?.contentType))).toBe('video/mp4');
 
     const finished = promoJobSchema.parse(await (await report(id, done)).json());
-    expect(finished).toMatchObject({ status: 'done', progress: 1, costUsd: 0.4, error: null, output: { videoUrl: `${origin}/media/promo/${id}/video.mp4`, thumbnailUrl: `${origin}/media/promo/${id}/thumbnail.jpg`, sha256, durationSec: 29.5 } });
+    expect(finished).toMatchObject({ status: 'done', progress: 1, costUsd: 0.4, error: null, output: { videoUrl: `${origin}/media/promo/${id}/${claimId}/video.mp4`, thumbnailUrl: `${origin}/media/promo/${id}/${claimId}/thumbnail.jpg`, sha256, durationSec: 29.5 } });
     expect(await status(id)).toEqual(finished);
     const served = await send(new URL(finished.output!.videoUrl).pathname);
     expect([...new Uint8Array(await served.arrayBuffer())]).toEqual([...video]);
@@ -133,10 +156,10 @@ describe('/runner', () => {
     const { cartAdd, queue, claim, report, upload, progress, done, status } = world();
     await cartAdd({ title: 'pen' });
     const id = await queue();
-    await claim(); await report(id, progress('voice', 1)); await report(id, progress('rendering', 0.9));
+    const { claimId } = await claim(); await report(id, progress('voice', 1)); await report(id, progress('rendering', 0.9));
     const none = await report(id, done);
     expect(none.status).toBe(409);
-    expect(await none.json()).toMatchObject({ error: 'missing_media', missing: [`promo/${id}/video.mp4`, `promo/${id}/thumbnail.jpg`] });
+    expect(await none.json()).toMatchObject({ error: 'missing_media', missing: [`promo/${id}/${claimId}/video.mp4`, `promo/${id}/${claimId}/thumbnail.jpg`] });
     await upload(id, 'video.mp4', video);
     expect((await report(id, done)).status).toBe(409);
     expect((await status(id)).status).toBe('rendering');
@@ -228,6 +251,96 @@ describe('/runner', () => {
     expect((await next()).status).toBe(204);
   });
 
+  it('refuses reports from a runner whose job was claimed again', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const { cartAdd, queue, claim, report, progress, status } = world();
+    await cartAdd({ title: 'pen' });
+    const id = await queue();
+    const a = await claim();
+    vi.advanceTimersByTime(RUNNER_LEASE_MS + 1000);
+    await claim();
+    for (const late of [progress('voice', 0.5), { status: 'failed', costUsd: 0, error: 'A gave up' }]) {
+      const refused = await report(id, late, a.claimId);
+      expect(refused.status).toBe(409);
+      expect(await refused.json()).toEqual({ error: 'stale_claim' });
+    }
+    expect((await status(id)).status).toBe('storyboard');
+    expect((await report(id, progress('voice', 0.5))).status).toBe(200);
+  });
+
+  it('finishes a reclaimed job only with its own run\'s done and files', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const { cartAdd, queue, claim, report, upload, progress, done, send } = world();
+    await cartAdd({ title: 'pen' });
+    const id = await queue();
+    const a = await claim(); await report(id, progress('voice', 1)); await report(id, progress('rendering', 0.9));
+    vi.advanceTimersByTime(RUNNER_LEASE_MS + 1000);
+    await claim(); await report(id, progress('voice', 1)); await report(id, progress('rendering', 0.9));
+    const ours = new Uint8Array([0, 0, 0, 24, 102, 116, 121, 112, 9]);
+    await upload(id, 'video.mp4', ours); await upload(id, 'thumbnail.jpg', thumbnail);
+    expect((await upload(id, 'video.mp4', video, a.claimId)).status).toBe(409);
+    const theirs = await report(id, done, a.claimId);
+    expect(theirs.status).toBe(409);
+    expect(await theirs.json()).toEqual({ error: 'stale_claim' });
+    const finished = promoJobSchema.parse(await (await report(id, done)).json());
+    expect([...new Uint8Array(await (await send(new URL(finished.output!.videoUrl).pathname)).arrayBuffer())]).toEqual([...ours]);
+  });
+
+  it('refuses a done that was waiting on the bucket while the job was claimed again', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const { cartAdd, queue, claim, report, upload, progress, done, status, MEDIA } = world();
+    await cartAdd({ title: 'pen' });
+    const id = await queue();
+    await claim(); await report(id, progress('voice', 1)); await report(id, progress('rendering', 0.9));
+    await upload(id, 'video.mp4', video); await upload(id, 'thumbnail.jpg', thumbnail);
+    const head = hold(MEDIA, 'head');
+    const late = report(id, done);
+    await head.arrived;
+    vi.advanceTimersByTime(RUNNER_LEASE_MS + 1000);
+    const b = await claim();
+    head.release();
+    const refused = await late;
+    expect(refused.status).toBe(409);
+    expect(await refused.json()).toEqual({ error: 'stale_claim' });
+    expect(await status(id)).toMatchObject({ status: 'storyboard', output: null });
+    expect((await report(id, progress('voice', 0.5), b.claimId)).status).toBe(200);
+  });
+
+  it('refuses the earlier runner\'s reports while a new claim is still clearing old files', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const { cartAdd, queue, claim, report, progress, status, MEDIA } = world();
+    await cartAdd({ title: 'pen' });
+    const id = await queue();
+    const a = await claim();
+    vi.advanceTimersByTime(RUNNER_LEASE_MS + 1000);
+    const clearing = hold(MEDIA, 'delete');
+    const b = claim();
+    await clearing.arrived;
+    expect((await report(id, progress('voice', 0.5), a.claimId)).status).toBe(409);
+    clearing.release();
+    expect((await b).job).toMatchObject({ id, status: 'storyboard' });
+    expect((await status(id)).status).toBe('storyboard');
+  });
+
+  it('never shows bytes that land after the job was claimed again', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const { cartAdd, queue, claim, report, upload, progress, done, send, MEDIA } = world();
+    await cartAdd({ title: 'pen' });
+    const id = await queue();
+    await claim(); await report(id, progress('voice', 1)); await report(id, progress('rendering', 0.9));
+    const put = hold(MEDIA, 'put');
+    const late = upload(id, 'video.mp4', video);
+    await put.arrived;
+    vi.advanceTimersByTime(RUNNER_LEASE_MS + 1000);
+    await claim(); await report(id, progress('voice', 1)); await report(id, progress('rendering', 0.9));
+    const ours = new Uint8Array([0, 0, 0, 24, 102, 116, 121, 112, 9]);
+    await upload(id, 'video.mp4', ours); await upload(id, 'thumbnail.jpg', thumbnail);
+    put.release();
+    await late;
+    const finished = promoJobSchema.parse(await (await report(id, done)).json());
+    expect([...new Uint8Array(await (await send(new URL(finished.output!.videoUrl).pathname)).arrayBuffer())]).toEqual([...ours]);
+  });
+
   it('hands out queued jobs oldest first, one at a time', async () => {
     const { cartAdd, queue, claim, next, report } = world();
     await cartAdd({ title: 'pen' });
@@ -247,15 +360,15 @@ describe('/runner', () => {
     await cartAdd({ title: 'pen' });
     const id = await queue();
     expect((await upload(id, 'video.mp4', video)).status).toBe(409);
-    await claim();
+    const { claimId } = await claim();
     expect((await upload(id, 'qa.json', new TextEncoder().encode('{"ok":true}'))).status).toBe(200);
-    expect((await MEDIA.get(`promo/${id}/qa.json`))?.httpMetadata?.contentType).toBe('application/json');
+    expect((await MEDIA.get(`promo/${id}/${claimId}/qa.json`))?.httpMetadata?.contentType).toBe('application/json');
     for (const name of ['audio.wav', '..%2Fvideo.mp4', 'video.MP4', 'constructor', 'toString']) expect((await upload(id, name, video)).status).toBe(404);
     expect((await upload('promo-00000000-0000-4000-8000-000000000000', 'video.mp4', video)).status).toBe(404);
     expect((await upload(id, 'video.mp4', new Uint8Array())).status).toBe(400);
     const tooBig = await upload(id, 'video.mp4', new Uint8Array(MAX_MEDIA_BYTES + 1));
     expect(tooBig.status).toBe(413);
-    expect(await MEDIA.head(`promo/${id}/video.mp4`)).toBeNull();
+    expect(await MEDIA.head(`promo/${id}/${claimId}/video.mp4`)).toBeNull();
     expect((await send(`/runner/jobs/${id}/media/video.mp4`, { method: 'POST', headers: auth })).status).toBe(405);
     expect((await send('/runner/next', { method: 'GET', headers: auth })).status).toBe(405);
     expect((await send('/runner/other', { method: 'POST', headers: auth })).status).toBe(404);

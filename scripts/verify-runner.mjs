@@ -24,8 +24,9 @@ const call = async (name, args) => {
   return result.structuredContent;
 };
 const next = () => fetch(`${worker.origin}/runner/next`, { method: 'POST', headers: auth });
-const report = (jobId, update) => fetch(`${worker.origin}/runner/jobs/${jobId}`, { method: 'POST', headers: asJson, body: JSON.stringify(update) });
-const upload = (jobId, name, bytes) => fetch(`${worker.origin}/runner/jobs/${jobId}/media/${name}`, { method: 'PUT', headers: auth, body: bytes });
+// Reports and uploads go out under the claim they belong to, as runner/worker-client.ts sends them.
+const report = (claim, update) => fetch(`${worker.origin}/runner/jobs/${claim.job.id}`, { method: 'POST', headers: { ...asJson, 'x-runner-claim': claim.claimId }, body: JSON.stringify(update) });
+const upload = (claim, name, bytes) => fetch(`${worker.origin}/runner/jobs/${claim.job.id}/media/${name}`, { method: 'PUT', headers: { ...auth, 'x-runner-claim': claim.claimId }, body: bytes });
 const room = path => fetch(`${worker.origin}${path}`).then(response => response.json());
 
 // Not decodable video: the worker stores bytes and does not look inside them.
@@ -52,19 +53,20 @@ try {
   assert.ok(!/priceTwd|priceRange|totalTwd|totalRange|420/.test(JSON.stringify(claim)), 'a hidden view hands the runner no price');
   assert.equal((await next()).status, 204, 'a claimed job is not offered again while its lease holds');
 
-  assert.equal((await report(claim.job.id, { status: 'rendering', progress: 0, costUsd: 0 })).status, 409, 'storyboard cannot jump to rendering');
-  for (const [status, progress] of [['storyboard', 0.5], ['voice', 0.3], ['rendering', 0.6]]) assert.equal((await report(claim.job.id, { status, progress, costUsd: 0.05 })).status, 200, `${status} reported`);
-  assert.equal((await report(claim.job.id, { status: 'done', costUsd: 0.2, video: { sha256, durationSec: 19.8 } })).status, 409, 'done is refused before the files are uploaded');
-  const stored = await (await upload(claim.job.id, 'video.mp4', mp4)).json();
-  assert.equal(stored.key, `promo/${claim.job.id}/video.mp4`);
-  assert.equal((await upload(claim.job.id, 'thumbnail.jpg', jpg)).status, 200);
-  const done = await (await report(claim.job.id, { status: 'done', costUsd: 0.2, video: { sha256, durationSec: 19.8 } })).json();
+  assert.equal((await report({ ...claim, claimId: crypto.randomUUID() }, { status: 'storyboard', progress: 0.1, costUsd: 0 })).status, 409, 'a report under another claim is refused');
+  assert.equal((await report(claim, { status: 'rendering', progress: 0, costUsd: 0 })).status, 409, 'storyboard cannot jump to rendering');
+  for (const [status, progress] of [['storyboard', 0.5], ['voice', 0.3], ['rendering', 0.6]]) assert.equal((await report(claim, { status, progress, costUsd: 0.05 })).status, 200, `${status} reported`);
+  assert.equal((await report(claim, { status: 'done', costUsd: 0.2, video: { sha256, durationSec: 19.8 } })).status, 409, 'done is refused before the files are uploaded');
+  const stored = await (await upload(claim, 'video.mp4', mp4)).json();
+  assert.equal(stored.key, `promo/${claim.job.id}/${claim.claimId}/video.mp4`);
+  assert.equal((await upload(claim, 'thumbnail.jpg', jpg)).status, 200);
+  const done = await (await report(claim, { status: 'done', costUsd: 0.2, video: { sha256, durationSec: 19.8 } })).json();
   assert.equal(done.status, 'done');
 
   const viaTool = await call('promo_status', { jobId: claim.job.id });
   assert.deepEqual(viaTool, done, 'promo_status shows the finished job');
   assert.deepEqual(await room('/api/promo'), done, '/api/promo shows the same job');
-  assert.equal(done.output.videoUrl, `${worker.origin}/media/promo/${claim.job.id}/video.mp4`);
+  assert.equal(done.output.videoUrl, `${worker.origin}/media/promo/${claim.job.id}/${claim.claimId}/video.mp4`);
   assert.equal(done.output.sha256, sha256);
   const video = await fetch(done.output.videoUrl);
   assert.equal(video.headers.get('content-type'), 'video/mp4');
@@ -79,7 +81,7 @@ try {
   assert.notEqual(second.jobId, queued.jobId, 'a new cart gets a new job');
   const secondClaim = await (await next()).json();
   assert.equal(secondClaim.job.id, second.jobId);
-  assert.equal((await report(second.jobId, { status: 'failed', costUsd: 0.01, error: '配音額度用完' })).status, 200);
+  assert.equal((await report(secondClaim, { status: 'failed', costUsd: 0.01, error: '配音額度用完' })).status, 200);
   assert.equal((await room('/api/promo')).error, '配音額度用完', 'a failure shows in the room');
 
   console.log(JSON.stringify({ jobs: [queued.jobId, second.jobId].map(jobId => jobId.slice(0, 14) + '…'), steps: ['storyboard', 'voice', 'rendering', 'done'], video: { bytes: mp4.length, sha256: sha256.slice(0, 12) + '…', rangeStatus: part.status }, unauthorized: 401, idle: 204 }, null, 2));
