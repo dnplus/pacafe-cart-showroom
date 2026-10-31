@@ -4,7 +4,6 @@ import type { Env } from './env';
 import { json, notAllowed, parseBody, readOr } from './http';
 import { requestSprite, SpriteError, SPRITE_MODEL } from './ownerSprite';
 
-/** The owner's cast routes, which the entry worker forwards to the Showroom. */
 export const castPath = /^\/api\/cast(?:\/owner-sprite)?$/;
 /** Room for the multipart framing and the consent field around a photo of MAX_PHOTO_BYTES. */
 const FORM_OVERHEAD = 16 * 1024;

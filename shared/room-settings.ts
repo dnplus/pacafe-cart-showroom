@@ -1,4 +1,3 @@
-// The showroom's furniture: the counter, the cart shelf behind it, and two pieces of decor. Every one is drawn from code.
 export const roomFurnitureCatalog = {
   plant: { variants: ['leafy', 'cactus'], mount: 'floor' },
   rug: { variants: ['star', 'round'], mount: 'floor' },

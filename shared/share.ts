@@ -19,7 +19,6 @@ const priceMode = z.enum(priceModes);
 /** A stored record; one written before visitors had choices (`{ slug, enabled }`) reads as hidden prices and the default nickname. */
 export const shareSettingsSchema = z.strictObject({ slug, enabled: z.boolean(), prices: priceMode.default('hidden'), nickname: nickname.default(DEFAULT_NICKNAME) });
 export type ShareSettings = z.output<typeof shareSettingsSchema>;
-/** The owner's PUT body: every choice at once; the slug is never writable. */
 export const shareUpdateSchema = z.strictObject({ enabled: z.boolean(), prices: priceMode, nickname });
 export type ShareUpdate = z.output<typeof shareUpdateSchema>;
 

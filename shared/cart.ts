@@ -46,7 +46,6 @@ export const cartSchema = z.strictObject({
   revision: z.number().int().nonnegative(),
   items: z.array(cartItemSchema),
   totalTwd: z.number().int().nonnegative(),
-  /** How full the shelf is, 0–1. */
   fill: z.number().min(0).max(1),
   updatedAt: timestamp,
 });

@@ -15,7 +15,7 @@ export function ReplayOffer({ focus, items, shelved, idOf, start }: { focus: Pro
     setOffered(id);
     const timer = setTimeout(() => setOffered(null), OFFER_MS);
     return () => clearTimeout(timer);
-  }, [focus]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [focus]);
   const item = offered === null ? undefined : items.find(entry => entry.id === offered);
   if (!item) return null;
   return <div className="replay-offer" role="status" data-testid="replay-offer">

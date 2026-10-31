@@ -20,7 +20,6 @@ export interface Store {
   latestPromo(): Promise<PromoRecord | undefined>;
   /** Stores a new job, makes it the latest and puts it last in the queue. */
   queuePromo(record: PromoRecord): Promise<void>;
-  /** Jobs that are not done or failed, oldest first. */
   promoQueue(): Promise<PromoRecord[]>;
   /** Stores a changed job; once it is done or failed it leaves the queue. */
   savePromo(record: PromoRecord): Promise<void>;

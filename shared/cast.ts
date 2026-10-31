@@ -11,13 +11,12 @@ export const ownerSpriteSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('generated'), key: z.string().regex(/^owner\/sprite-[0-9a-f-]{36}\.png$/), generatedAt: z.iso.datetime(), model: z.string().min(1) }),
 ]);
 
-/** The stored record; the owner has chosen nothing until the first PUT, so every field has a default. */
 /** Picks stored before Muse took the counter named the Kenney figures; they stand as Muse now. */
 const retired = new Set(['clerk', 'clerk-mint']);
 const storedCharacter = z.preprocess(value => typeof value === 'string' && retired.has(value) ? DEFAULT_CHARACTER : value, z.enum(characters));
+/** The stored record; the owner has chosen nothing until the first PUT, so every field has a default. */
 export const castSchema = z.strictObject({ character: storedCharacter.default(DEFAULT_CHARACTER), owner: ownerSpriteSchema.default({ kind: 'placeholder' }) });
 export type Cast = z.output<typeof castSchema>;
-/** The owner's PUT body. */
 export const castUpdateSchema = z.strictObject({ character: z.enum(characters) });
 
 /** Whether the server can ask Muse Image for a sprite; without its secrets the owner is told what to set. */

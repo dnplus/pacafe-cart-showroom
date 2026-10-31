@@ -46,6 +46,8 @@ npm test            # vitest run
 
 CI（`.github/workflows/ci.yml`）在每次 push 和 pull request 跑這三項，不需要 secret，也不需要瀏覽器。
 
+改完程式要怎麼驗、哪支腳本對應哪一塊、哪些結果不能當成通過，寫在 [`.claude/skills/verify-showroom`](.claude/skills/verify-showroom/SKILL.md)，給開發用的 coding agent 讀。
+
 ### 腳本
 
 | 指令 | 做什麼 |

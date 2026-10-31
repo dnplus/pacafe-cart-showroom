@@ -109,7 +109,6 @@ export function fitVoice(storyboard: Storyboard, clips: readonly VoiceClip[]): S
   return over.length ? stretch(storyboard, over.map(scene => ({ sceneId: scene.id })), voiceSec) : storyboard;
 }
 
-/** One repair per kind: each takes the storyboard and the issues of its kind and returns a storyboard without them. */
 export const FIXES: Readonly<Record<IssueKind, (storyboard: Storyboard, issues: readonly Issue[]) => Storyboard>> = {
   forbidden_wording: (storyboard, issues) => onScenes(storyboard, issues, scene => ({ ...scene, subtitle: scene.subtitle.map(line => FORBIDDEN_WORDING.reduce((text, [pattern, word]) => text.replace(pattern, word), line)) })),
   subtitle_overflow: (storyboard, issues) => onScenes(storyboard, issues, scene => ({ ...scene, subtitle: scene.subtitle.flatMap(line => wrapLine(line)) })),
