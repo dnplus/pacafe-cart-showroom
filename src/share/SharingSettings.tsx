@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import { Check, Copy, Download, ExternalLink, X } from 'lucide-react';
+import { Check, Copy, Download, ExternalLink } from 'lucide-react';
 import { z } from 'zod';
 import type { Cart } from '../../shared/cart';
 import { NICKNAME_MAX, priceModes, shareSettingsSchema, shareUpdateSchema, shareView, type PriceMode, type ShareSettings, type ShareUpdate } from '../../shared/share';
 import { t } from '../i18n';
+import { Panel } from './Panel';
 import type { TextKey } from '../i18n/messages';
-import { ownerFetch } from '../owner';
+import { ownerJson } from '../owner';
 import type { RoomControls } from '../room/RoomScene';
 import { shootCard } from './shareCard';
 import './share.css';
@@ -17,11 +18,6 @@ const modeText: Record<PriceMode, { name: TextKey; hint: TextKey }> = {
   range: { name: 'Price ranges', hint: 'Each item and the total as a range, such as NT$ 300–500.' },
   exact: { name: 'Exact prices', hint: 'Every price and the total, as you see them.' },
 };
-
-async function answer(response: Response) {
-  if (!response.ok) throw new Error(`/api/share answered ${response.status}`);
-  return ownerShareSchema.parse(await response.json());
-}
 
 /** The owner's sharing choices, saved as they change. `onPreview` gets the settings the room should draw a visitor's shelf from, and null on close. */
 export function SharingSettings({ cart, controls, onPreview, close }: { cart: Cart | null; controls: RefObject<RoomControls | null>; onPreview: (settings: ShareSettings | null) => void; close: () => void }) {
@@ -37,7 +33,7 @@ export function SharingSettings({ cart, controls, onPreview, close }: { cart: Ca
 
   useEffect(() => {
     let live = true;
-    ownerFetch('/api/share').then(answer).then(next => { if (live) { show(next); setProblem(null); } }, error => { if (live) { console.warn(error); setProblem('Could not load the share settings.'); } });
+    ownerJson('/api/share', ownerShareSchema).then(next => { if (live) { show(next); setProblem(null); } }, error => { if (live) { console.warn(error); setProblem('Could not load the share settings.'); } });
     return () => { live = false; };
   }, [attempt]);
   useEffect(() => () => preview.current(null), []);
@@ -47,7 +43,7 @@ export function SharingSettings({ cart, controls, onPreview, close }: { cart: Ca
     setBusy(true); setProblem(null);
     try {
       const body = shareUpdateSchema.parse({ enabled: share.enabled, prices: share.prices, nickname: share.nickname, ...change });
-      show(await answer(await ownerFetch('/api/share', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })));
+      show(await ownerJson('/api/share', ownerShareSchema, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }));
     } catch (error) { console.warn(error); setProblem('Could not save. Try again.'); } finally { setBusy(false); }
   };
   const copy = async () => {
@@ -64,11 +60,7 @@ export function SharingSettings({ cart, controls, onPreview, close }: { cart: Ca
   };
 
   const typed = nickname.trim(), nicknameOk = typed.length >= 1 && typed.length <= NICKNAME_MAX;
-  return <section className="share-panel" id="share-panel" aria-labelledby="share-title" aria-busy={busy} data-testid="share-panel">
-    <header className="share-panel-head">
-      <h2 id="share-title">{t('Share this cart')}</h2>
-      <button type="button" className="share-icon-button" onClick={close} aria-label={t('Close')} title={t('Close')}><X size={18} /></button>
-    </header>
+  return <Panel name="share" title={t('Share this cart')} busy={busy} close={close}>
     {!share ? problem ? <p className="cart-note cart-offline" role="alert">{t(problem)} <button type="button" className="share-text-button" onClick={() => setAttempt(count => count + 1)}>{t('Try again')}</button></p> : <p className="cart-note" role="status">{t('Loading…')}</p> : <>
       <label className="share-switch">
         <span>{t('Sharing on')}</span>
@@ -104,5 +96,5 @@ export function SharingSettings({ cart, controls, onPreview, close }: { cart: Ca
       {problem && <p className="cart-note cart-offline" role="alert">{t(problem)}</p>}
       <p className="cart-note">{t('While this panel is open, the room shows what visitors see.')}</p>
     </>}
-  </section>;
+  </Panel>;
 }

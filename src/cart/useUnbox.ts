@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { Cart } from '../../shared/cart';
 import { unboxStateSchema } from '../../shared/unbox';
-import { ownerFetch } from '../owner';
+import { ownerJson } from '../owner';
 import { popDuration, shelvedIds, STAGGER_MS, STAGGERED, unboxReducer, type Box } from './unbox';
 
 export const ARRIVE_MS = 520;
@@ -88,9 +88,7 @@ export function useUnbox(cart: Cart | null) {
     const controller = new AbortController(); let timer: ReturnType<typeof setTimeout> | undefined;
     const load = async () => {
       try {
-        const response = await ownerFetch('/api/unbox', { signal: controller.signal });
-        if (!response.ok) throw new Error(`GET /api/unbox answered ${response.status}`);
-        setRecorded(idsOf(unboxStateSchema.parse(await response.json()).opened));
+        setRecorded(idsOf((await ownerJson('/api/unbox', unboxStateSchema, { signal: controller.signal })).opened));
       } catch (error) {
         if (controller.signal.aborted) return;
         console.warn(error);
@@ -102,9 +100,7 @@ export function useUnbox(cart: Cart | null) {
   }, [signedIn]);
 
   const commit = useCallback(async (ids: string[], signal: AbortSignal) => {
-    const response = await ownerFetch('/api/unbox', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ itemIds: ids }), signal });
-    if (!response.ok) throw new Error(`POST /api/unbox answered ${response.status}`);
-    setRecorded(idsOf(unboxStateSchema.parse(await response.json()).opened));
+    setRecorded(idsOf((await ownerJson('/api/unbox', unboxStateSchema, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ itemIds: ids }), signal })).opened));
   }, []);
   const itemIds = useMemo(() => cart?.items.map(item => item.id) ?? null, [cart]);
   return useUnboxFlow(itemIds, recorded, commit);

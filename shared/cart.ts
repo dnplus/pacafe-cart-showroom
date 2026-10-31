@@ -46,7 +46,6 @@ export const cartSchema = z.strictObject({
   revision: z.number().int().nonnegative(),
   items: z.array(cartItemSchema),
   totalTwd: z.number().int().nonnegative(),
-  /** How full the shelf is, 0–1. */
   fill: z.number().min(0).max(1),
   updatedAt: timestamp,
 });
@@ -71,7 +70,6 @@ export function cartView(items: readonly CartItem[]) {
   const totalTwd = items.reduce((sum, item) => sum + (item.priceTwd ?? 0) * item.qty, 0);
   return { count: items.length, totalTwd, fill: Math.min(1, items.length / SHELF_SLOTS), overflow: Math.max(0, items.length - SHELF_SLOTS) };
 }
-export type CartView = ReturnType<typeof cartView>;
 
 /** `NT$ 12,340`: how the register and the room's labels write an amount. */
 export const formatTwd = (amount: number) => `NT$ ${Math.round(amount).toLocaleString('en-US')}`;

@@ -4,7 +4,7 @@ import { charCount, retime, SUBTITLE, textWidthEm, type Scene, type Storyboard, 
 
 /** In the order fixes apply: wording changes the text, overflow then re-wraps it, pacing last re-times the result. */
 export const ISSUE_KINDS = ['forbidden_wording', 'subtitle_overflow', 'pacing_too_fast'] as const;
-export type IssueKind = typeof ISSUE_KINDS[number];
+type IssueKind = typeof ISSUE_KINDS[number];
 
 export const issueSchema = z.strictObject({
   atSec: z.number().nonnegative(),
@@ -22,7 +22,7 @@ export interface QaReport { version: 1; storyboard: 'spark' | 'fallback' | 'muse
 /** A subtitle faster than this is hard to read; the pacing fix aims for TARGET_CPS so a stretched scene clears it with room. */
 export const MAX_CPS = 9;
 const TARGET_CPS = 7;
-export const MIN_SCENE_SEC = 1.5;
+const MIN_SCENE_SEC = 1.5;
 
 export { FORBIDDEN_WORDING };
 
@@ -52,7 +52,7 @@ export function mockReview(storyboard: Storyboard): Issue[] {
 }
 
 /** Split after the last punctuation that keeps a line at least half full, else at the width; Latin words stay whole. */
-export function wrapLine(text: string, maxEm = SUBTITLE.maxWidthEm): string[] {
+function wrapLine(text: string, maxEm = SUBTITLE.maxWidthEm): string[] {
   const tokens = text.match(/[A-Za-z0-9$,.'’\-–]+|\s+|./gu) ?? [];
   const lines: string[] = [];
   let current = '';
@@ -109,7 +109,6 @@ export function fitVoice(storyboard: Storyboard, clips: readonly VoiceClip[]): S
   return over.length ? stretch(storyboard, over.map(scene => ({ sceneId: scene.id })), voiceSec) : storyboard;
 }
 
-/** One repair per kind: each takes the storyboard and the issues of its kind and returns a storyboard without them. */
 export const FIXES: Readonly<Record<IssueKind, (storyboard: Storyboard, issues: readonly Issue[]) => Storyboard>> = {
   forbidden_wording: (storyboard, issues) => onScenes(storyboard, issues, scene => ({ ...scene, subtitle: scene.subtitle.map(line => FORBIDDEN_WORDING.reduce((text, [pattern, word]) => text.replace(pattern, word), line)) })),
   subtitle_overflow: (storyboard, issues) => onScenes(storyboard, issues, scene => ({ ...scene, subtitle: scene.subtitle.flatMap(line => wrapLine(line)) })),

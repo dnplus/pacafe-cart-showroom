@@ -50,7 +50,6 @@ export function unboxReducer(boxes: readonly Box[], event: UnboxEvent): readonly
   }
 }
 
-/** The ids the room's shelf may draw: parcels already unboxed and recorded. */
 export const shelvedIds = (boxes: readonly Box[]): ReadonlySet<string> => new Set(boxes.filter(box => box.phase === 'shelved').map(box => box.id));
 
 /** The part of the tape a stroke has cut, as fractions of its length. */
@@ -68,7 +67,6 @@ export function extendSlit(slit: Slit | null, point: TapePoint, reach: number): 
   return slit ? { lo: Math.min(slit.lo, at), hi: Math.max(slit.hi, at) } : { lo: at, hi: at };
 }
 
-/** How much of the tape is cut, 0 to 1. */
 export const sliceProgress = (slit: Slit | null) => slit ? slit.hi - slit.lo : 0;
 
 export const REVEAL_MS = 3400;

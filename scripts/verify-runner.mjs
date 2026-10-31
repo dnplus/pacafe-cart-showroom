@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { root } from './lib/root.mjs';
 import { build, startWorker } from './lib/wrangler.mjs';
+import { mcpClient } from './lib/mcp.mjs';
 
 const token = crypto.randomBytes(24).toString('base64url');
 fs.mkdirSync(path.join(root, '.local'), { recursive: true });
@@ -16,13 +17,7 @@ build();
 const worker = await startWorker(persistTo, { CART_MCP_TOKEN: token, SEED_FIXTURE: 'false' });
 const auth = { authorization: `Bearer ${token}` };
 const asJson = { ...auth, 'content-type': 'application/json' };
-let id = 0;
-const call = async (name, args) => {
-  const response = await fetch(`${worker.origin}/mcp`, { method: 'POST', headers: { ...asJson, accept: 'application/json, text/event-stream' }, body: JSON.stringify({ jsonrpc: '2.0', id: ++id, method: 'tools/call', params: { name, arguments: args } }) });
-  const { result } = await response.json();
-  assert.equal(result.isError, false, `${name} succeeded: ${result.content?.[0]?.text}`);
-  return result.structuredContent;
-};
+const { call } = mcpClient(worker.origin, token);
 const next = () => fetch(`${worker.origin}/runner/next`, { method: 'POST', headers: auth });
 // Reports and uploads go out under the claim they belong to, as runner/worker-client.ts sends them.
 const report = (claim, update) => fetch(`${worker.origin}/runner/jobs/${claim.job.id}`, { method: 'POST', headers: { ...asJson, 'x-runner-claim': claim.claimId }, body: JSON.stringify(update) });

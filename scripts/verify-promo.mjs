@@ -13,6 +13,7 @@ import { promoScriptSchema } from '../shared/script.ts';
 import { claimFor, fakeRunnerWorker } from '../tests/fake-runner-worker.ts';
 import { root } from './lib/root.mjs';
 import { build, startWorker } from './lib/wrangler.mjs';
+import { mcpClient } from './lib/mcp.mjs';
 
 const fake = process.argv.includes('--fake-worker');
 const withScript = process.argv.includes('--script');
@@ -41,12 +42,7 @@ async function queueOnWorker() {
   const json = { ...auth, 'content-type': 'application/json' };
   assert.equal((await fetch(`${worker.origin}/api/cart`, { method: 'POST', headers: json, body: JSON.stringify({ items }) })).status, 200);
   assert.equal((await fetch(`${worker.origin}/api/share`, { method: 'PUT', headers: json, body: JSON.stringify({ enabled: false, prices: 'range', nickname: '小島' }) })).status, 200);
-  const mcp = async (name, args) => {
-    const response = await fetch(`${worker.origin}/mcp`, { method: 'POST', headers: { ...json, accept: 'application/json, text/event-stream' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }) });
-    const { result } = await response.json();
-    assert.equal(result.isError, false, `${name}: ${result.content?.[0]?.text}`);
-    return result.structuredContent;
-  };
+  const { call: mcp } = mcpClient(worker.origin, token);
   const { jobId } = await mcp('promo_generate', { durationSec: 30, ...withScript ? { script: museScript } : {} });
   return {
     origin: worker.origin, jobId, stop: worker.stop,

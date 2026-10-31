@@ -28,6 +28,6 @@ export function useFlashedLine(focus: ProductFocus | null, ready: boolean, list:
     setFlashed(focus.key);
     const timer = setTimeout(() => setFlashed(null), FLASH_MS);
     return () => clearTimeout(timer);
-  }, [focus, ready]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [focus, ready]);
   return flashed;
 }

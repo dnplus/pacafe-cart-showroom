@@ -1,12 +1,12 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { Cable, ChartNoAxesColumn, ChevronDown, ChevronUp, Clapperboard, ExternalLink, KeyRound, MessagesSquare, RotateCcw, Share2, ShoppingBasket, Sticker, Trash2, Undo2, UsersRound } from 'lucide-react';
 import { cartView, formatTwd } from '../../shared/cart';
+import { categoryLabel } from '../../shared/habits';
 import { REMOVAL_REASONS, type RemovalReason } from '../../shared/removals';
 import type { TextKey } from '../i18n/messages';
-import { t } from '../i18n';
+import { getLocale, t } from '../i18n';
 import { LanguageSwitch } from '../i18n/LanguageSwitch';
 import { hasOwnerKey } from '../owner';
-import { categoryLabel } from './category';
 import { ProductThumb } from './ProductThumb';
 import type { CartState } from './useCart';
 import type { RemovalController } from './useRemoval';
@@ -96,7 +96,7 @@ export function CartHud({ state, open, onToggle, unlock, sharing, onShare, casti
             : <span className="cart-line-title">{item.title}</span>}
           <span className="cart-line-meta">
             {item.store && <small>{item.store}</small>}
-            {item.category && <small className="cart-chip" data-category={item.category}>{categoryLabel(item.category)}</small>}
+            {item.category && <small className="cart-chip" data-category={item.category}>{categoryLabel(item.category, getLocale())}</small>}
           </span>
         </span>
         <span className="cart-line-price">{item.priceTwd === null ? t('No price') : formatTwd(item.priceTwd)}{item.qty > 1 && <small>×{item.qty}</small>}</span>

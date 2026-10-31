@@ -1,12 +1,11 @@
 import fs from 'node:fs';
 import { z } from 'zod';
+import { chatCompletion, sparkCost } from '../shared/meta.ts';
 import type { RunnerClaim } from '../shared/runner.ts';
-import { PRICING } from '../tools/meta-hackathon/probe/common.ts';
 import { issueSchema, ISSUE_KINDS, MAX_CPS, mockReview, sceneAt, type Issue } from './qa.ts';
 import { scriptProblems, scriptScenes } from '../shared/script.ts';
 import { fallbackStoryboard, PRICE_PATTERN, sceneFrames, SUBTITLE, withSubtitles, type Storyboard } from './storyboard.ts';
 
-export const SPARK_MODEL = 'muse-spark-1.3';
 /** Meta does not publish how many tokens an image costs; this guess only feeds the estimate when a reply has no usage. */
 const IMAGE_TOKENS_GUESS = 1500;
 
@@ -14,16 +13,10 @@ export interface MetaConfig { baseUrl: string; apiKey: string; fetch: typeof fet
 interface Spoken { content: string; costUsd: number }
 
 const replySchema = z.object({ choices: z.array(z.object({ message: z.object({ content: z.string() }) })).min(1), usage: z.object({ prompt_tokens: z.number(), completion_tokens: z.number() }).optional() });
-const sparkCost = (input: number, output: number) => input / 1e6 * PRICING.SPARK_INPUT_PER_M + output / 1e6 * PRICING.SPARK_OUTPUT_PER_M;
 
 /** One JSON-mode chat completion. The estimate counts characters and images when the reply carries no usage. */
 async function chat(config: MetaConfig, messages: unknown[], estimate: { inputTokens: number; outputTokens: number }): Promise<Spoken> {
-  const response = await config.fetch(`${config.baseUrl}/chat/completions`, {
-    method: 'POST', headers: { authorization: `Bearer ${config.apiKey}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ model: SPARK_MODEL, messages, response_format: { type: 'json_object' }, temperature: 0.2 }),
-  });
-  if (!response.ok) throw new Error(`Meta Model API answered ${response.status}: ${(await response.text()).slice(0, 200)}`);
-  const reply = replySchema.parse(await response.json());
+  const reply = replySchema.parse(await chatCompletion(config.fetch, config, { messages, response_format: { type: 'json_object' }, temperature: 0.2 }));
   const usage = reply.usage ?? { prompt_tokens: estimate.inputTokens, completion_tokens: estimate.outputTokens };
   return { content: reply.choices[0].message.content, costUsd: sparkCost(usage.prompt_tokens, usage.completion_tokens) };
 }

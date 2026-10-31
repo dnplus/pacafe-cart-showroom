@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { formatTwd, webUrl } from '../shared/cart.ts';
 import { PROMO_LANGUAGES, type PromoJob, type PromoLanguage } from '../shared/promo.ts';
 import { ENDING_SECONDS, itemSceneCount, OPENING_SECONDS, PRICE_PATTERN } from '../shared/script.ts';
-import { DEFAULT_NICKNAME, priceModes, type PriceRange, type ShareView } from '../shared/share.ts';
+import { nicknameIn, priceModes, type PriceRange, type ShareView } from '../shared/share.ts';
 
 /** 720p and two render tabs: the runner works on a laptop next to wrangler dev. */
 export const PROMO_FORMAT = { width: 1280, height: 720, fps: 30 } as const;
@@ -24,7 +24,7 @@ export { itemSceneCount, PRICE_PATTERN };
 
 const line = z.string().trim().min(1).max(200);
 const timing = { id: z.string().min(1), startSec: z.number().nonnegative(), endSec: z.number().positive(), subtitle: z.array(line).min(1) };
-export const sceneSchema = z.discriminatedUnion('kind', [
+const sceneSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('opening'), ...timing, nickname: z.string(), count: z.number().int().nonnegative(), total: z.string().nullable() }),
   z.strictObject({ kind: z.literal('item'), ...timing, title: z.string(), qty: z.number().int().positive(), price: z.string().nullable(), image: webUrl.nullable() }),
   z.strictObject({ kind: z.literal('ending'), ...timing, more: z.number().int().nonnegative() }),
@@ -70,13 +70,10 @@ export const PROMO_WORDS = {
   },
 } as const satisfies Record<PromoLanguage, unknown>;
 
-/** The owner's name as the video shows it: the default nickname reads as "Owner" in English. */
-export const promoNickname = (nickname: string, language: PromoLanguage) => language === 'en' && nickname === DEFAULT_NICKNAME ? 'Owner' : nickname;
-
 const rangeText = (language: PromoLanguage) => ({ minTwd, maxTwd }: PriceRange) => maxTwd === null ? PROMO_WORDS[language].orMore(formatTwd(minTwd)) : `${formatTwd(minTwd)}–${formatTwd(maxTwd).replace('NT$ ', '')}`;
 
 /** What the video may say about each item and the total, in the owner's share mode: hidden says nothing. */
-export function viewPrices(view: ShareView, language: PromoLanguage = 'zh-TW'): { total: string | null; items: (string | null)[] } {
+function viewPrices(view: ShareView, language: PromoLanguage = 'zh-TW'): { total: string | null; items: (string | null)[] } {
   const range = rangeText(language);
   switch (view.mode) {
     case 'hidden': return { total: null, items: view.items.map(() => null) };
@@ -90,7 +87,7 @@ type JobShape = Pick<PromoJob, 'durationSec'> & { language?: PromoLanguage };
 export function sceneFrames(view: ShareView, job: JobShape): Scene[] {
   const language = job.language ?? 'zh-TW', prices = viewPrices(view, language), shown = view.items.slice(0, itemSceneCount(view.items.length, job.durationSec));
   const scenes: Scene[] = [
-    { kind: 'opening', id: 'opening', startSec: 0, endSec: 0, subtitle: [], nickname: promoNickname(view.nickname, language), count: view.items.length, total: prices.total },
+    { kind: 'opening', id: 'opening', startSec: 0, endSec: 0, subtitle: [], nickname: nicknameIn(view.nickname, language), count: view.items.length, total: prices.total },
     ...shown.map((item, i): Scene => ({ kind: 'item', id: `item-${i + 1}`, startSec: 0, endSec: 0, subtitle: [], title: item.title, qty: item.qty, price: prices.items[i], image: item.imageUrl })),
     { kind: 'ending', id: 'ending', startSec: 0, endSec: 0, subtitle: [], more: view.items.length - shown.length },
   ];
@@ -100,7 +97,7 @@ export function sceneFrames(view: ShareView, job: JobShape): Scene[] {
 }
 
 /** The cards already show prices and the total, so the words stay short; fitting lines to the screen is the QA loop's job. */
-export function fallbackSubtitle(scene: Scene, mode: ShareView['mode'], language: PromoLanguage = 'zh-TW'): string[] {
+function fallbackSubtitle(scene: Scene, mode: ShareView['mode'], language: PromoLanguage = 'zh-TW'): string[] {
   const words = PROMO_WORDS[language];
   switch (scene.kind) {
     case 'opening': return words.opening(scene.nickname, scene.count);

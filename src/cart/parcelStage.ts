@@ -2,10 +2,9 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import type { Packaging } from '../../shared/packaging';
 import { rarityOf } from '../../shared/packaging';
-import { cardFace } from './cartScene';
-import { shelfColour } from './shelf';
+import { canvasTexture, cardFace } from './cardFace';
 import type { ImageLoader } from './productImage';
-import type { ShelfItem } from './shelf';
+import { shelfColour, type ShelfItem } from './shelf';
 
 export interface StageParcel { id: string; packaging: Packaging; store: string | null; product: ShelfItem }
 export interface StageOptions {
@@ -27,20 +26,16 @@ const spring = (u: number) => u <= 0 ? 0 : u >= 1 ? 1 : 1 - Math.exp(-5 * u) * M
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 const rand = (seed: number) => { let s = seed >>> 0 || 1; return () => (s = Math.imul(s ^ (s >>> 15), 2246822507) >>> 0, s / 4294967296); };
 
-function glowTexture(inner: string, outer: string) {
-  const canvas = document.createElement('canvas'); canvas.width = canvas.height = 128;
-  const ctx = canvas.getContext('2d')!, g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64); g.addColorStop(0, inner); g.addColorStop(1, outer);
+const glowTexture = (inner: string, outer: string) => canvasTexture(128, 128, ctx => {
+  const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64); g.addColorStop(0, inner); g.addColorStop(1, outer);
   ctx.fillStyle = g; ctx.fillRect(0, 0, 128, 128);
-  return new THREE.CanvasTexture(canvas);
-}
-function raysTexture(colour: string) {
-  const canvas = document.createElement('canvas'); canvas.width = canvas.height = 256;
-  const ctx = canvas.getContext('2d')!; ctx.translate(128, 128);
+});
+const raysTexture = (colour: string) => canvasTexture(256, 256, ctx => {
+  ctx.translate(128, 128);
   for (let i = 0; i < 14; i++) { ctx.rotate(Math.PI / 7); ctx.fillStyle = colour; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-9, -128); ctx.lineTo(9, -128); ctx.closePath(); ctx.fill(); }
   const fade = ctx.createRadialGradient(0, 0, 10, 0, 0, 128); fade.addColorStop(0, '#fff'); fade.addColorStop(1, '#fff0');
   ctx.globalCompositeOperation = 'destination-in'; ctx.fillStyle = fade; ctx.fillRect(-128, -128, 256, 256);
-  return new THREE.CanvasTexture(canvas);
-}
+});
 
 interface Flap { pivot: THREE.Group; axis: 'x' | 'z'; sign: number; max: number; delay: number }
 interface Slot {
@@ -74,7 +69,7 @@ export function createParcelStage(host: HTMLElement, parcels: readonly StageParc
   const shadowMat = own(new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false }));
 
   const narrow = host.clientWidth < host.clientHeight, cols = many ? (parcels.length <= 5 && !narrow ? parcels.length : Math.ceil(parcels.length / 2)) : 1, rows = many ? Math.ceil(parcels.length / cols) : 1;
-  const stepX = 2.05, stepZ = 1.8, scale = many ? Math.min(1, 4.6 / Math.max(4.6, cols * 1.1)) * 1 : 1;
+  const stepX = 2.05, stepZ = 1.8, scale = many ? Math.min(1, 4.6 / Math.max(4.6, cols * 1.1)) : 1;
   const floorMat = own(new THREE.MeshStandardMaterial({ color: 0xf4ead2, roughness: .9 })), ringMat = own(new THREE.MeshStandardMaterial({ color: 0xd98b5f, roughness: .8 }));
   const floor = many
     ? new THREE.Mesh(own(new RoundedBoxGeometry(cols * stepX + .8, .12, rows * stepZ + .6, 3, .06)), floorMat)
@@ -83,7 +78,7 @@ export function createParcelStage(host: HTMLElement, parcels: readonly StageParc
   if (!many) { const ring = new THREE.Mesh(own(new THREE.TorusGeometry(1.95, .035, 8, 64)), ringMat); ring.rotation.x = Math.PI / 2; ring.position.y = .002; scene.add(ring); }
 
   const slots: Slot[] = parcels.map((parcel, index) => {
-    const { tape, filler, sticker } = parcel.packaging, shelf = shelfColour(parcel.product);
+    const { tape, filler } = parcel.packaging, shelf = shelfColour(parcel.product);
     const group = new THREE.Group(), cardboard = (colour: number, lift = 0) => own(new THREE.MeshStandardMaterial({ color: new THREE.Color(colour).lerp(new THREE.Color(0xffffff), lift), roughness: .85 }));
     const bodyMat = cardboard(new THREE.Color(shelf).getHex()), flapMat = cardboard(new THREE.Color(shelf).getHex(), .18), tapeMat = own(new THREE.MeshStandardMaterial({ color: TAPE[tape], roughness: .5, transparent: true }));
     const body = new THREE.Mesh(bodyGeo, bodyMat); body.position.y = H / 2; group.add(body);
@@ -128,7 +123,6 @@ export function createParcelStage(host: HTMLElement, parcels: readonly StageParc
     for (let i = 0; i < count; i++) { dummy.position.set(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]); dummy.rotation.set(rot[i * 3], rot[i * 3 + 1], rot[i * 3 + 2]); dummy.scale.setScalar(1); dummy.updateMatrix(); mesh.setMatrixAt(i, dummy.matrix); }
     const rarity = rarityOf(parcel.packaging), origin = new THREE.Vector3(many ? ((index % cols) - (cols - 1) / 2) * stepX : 0, 0, many ? (Math.floor(index / cols) - (rows - 1) / 2) * stepZ : 0);
     group.position.copy(origin); group.scale.setScalar(scale); scene.add(group);
-    void sticker;
     return { parcel, index, group, body: bodyMat, flaps, tape: tapes, tapeMat, filler: fl, rare: rarity === 'rare', fine: rarity === 'fine', opened: null, shaking: false, origin, scale } satisfies Slot;
   });
 

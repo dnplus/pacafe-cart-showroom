@@ -1,4 +1,4 @@
-.share-panel{margin-top:12px;padding-top:12px;border-top:1px solid #ece4d0;display:grid;gap:12px}
+.share-panel,.promo-panel{margin-top:12px;padding-top:12px;border-top:1px solid #ece4d0;display:grid;gap:12px}
 .share-panel-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .share-panel-head h2{margin:0;font-size:15px;font-weight:900}
 .share-icon-button{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;background:transparent;color:var(--muted)}

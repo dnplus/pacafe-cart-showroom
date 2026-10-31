@@ -9,6 +9,7 @@ import path from 'node:path';
 import { launchBrowser } from './lib/browser.mjs';
 import { root } from './lib/root.mjs';
 import { build, startWorker } from './lib/wrangler.mjs';
+import { RENDER_READY } from './lib/room.mjs';
 
 const viewports = [
   { size: '1440', viewport: { width: 1440, height: 900 } },
@@ -33,7 +34,7 @@ const items = [
 const browser = await launchBrowser();
 const report = [];
 const shoot = async (page, file, ready) => {
-  await page.waitForSelector('.house-world[data-render-ready="true"][data-renderer="three-webgl"]', { timeout: 60_000 });
+  await page.waitForSelector(RENDER_READY, { timeout: 60_000 });
   await page.waitForFunction(ready, items.length, { timeout: 60_000 });
   await page.waitForTimeout(1500);
   await page.screenshot({ path: path.join(out, file) });
@@ -68,7 +69,7 @@ try {
     await page.goto(share.url);
     const visitor = await shoot(page, `share-page-${size}.png`, count => {
       const room = document.querySelector('.room-canvas');
-      return room?.getAttribute('data-cart-shelf') === String(count) && room.getAttribute('data-barista-source') !== 'loading' && document.querySelector('[data-testid="share-hud"]') && (room.hasAttribute('data-studio-set') || room.hasAttribute('data-studio-set-error'));
+      return document.querySelectorAll('[data-testid="unbox-box"]').length === count && room?.getAttribute('data-barista-source') !== 'loading' && document.querySelector('[data-testid="share-hud"]') && (room.hasAttribute('data-studio-set') || room.hasAttribute('data-studio-set-error'));
     });
     const hud = await page.evaluate(() => ({ title: document.title, total: document.querySelector('[data-testid="share-total"]')?.textContent, links: [...document.querySelectorAll('.share-list a')].map(a => ({ href: a.getAttribute('href'), rel: a.getAttribute('rel') })), text: document.querySelector('[data-testid="share-hud"]')?.textContent ?? '' }));
     assert.equal(visitor.register, 'NT$ 5,000–10,000', 'the visitor\'s register shows the total\'s range');

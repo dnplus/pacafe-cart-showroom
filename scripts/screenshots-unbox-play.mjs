@@ -7,6 +7,7 @@ import path from 'node:path';
 import { launchBrowser } from './lib/browser.mjs';
 import { root } from './lib/root.mjs';
 import { build, startWorker } from './lib/wrangler.mjs';
+import { RENDER_READY } from './lib/room.mjs';
 
 const out = path.resolve(root, process.env.PLAY_SCREENSHOTS_DIR ?? '.local/screenshots-unbox-play');
 fs.mkdirSync(out, { recursive: true });
@@ -14,7 +15,7 @@ const viewports = [{ size: '1440', viewport: { width: 1440, height: 900 } }, { s
 const front = '[data-testid="unbox"] .unbox-hit', hit = `${front} [data-testid="unbox-box"]`;
 const shelfCount = page => page.evaluate(() => Number(document.querySelector('.room-canvas')?.getAttribute('data-cart-shelf')));
 const waitShelf = (page, count) => page.waitForFunction(count => Number(document.querySelector('.room-canvas')?.getAttribute('data-cart-shelf')) === count, count, { timeout: 30_000 });
-const ready = page => page.waitForSelector('.house-world[data-render-ready="true"][data-renderer="three-webgl"]', { timeout: 120_000 });
+const ready = page => page.waitForSelector(RENDER_READY, { timeout: 120_000 });
 
 async function openFront(page) {
   // Software rendering is slow, so what the stage showed is recorded as it appears instead of being asked for afterwards.

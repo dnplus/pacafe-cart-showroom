@@ -1,13 +1,20 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { Check, MessagesSquare, SendHorizontal, Wrench, X } from 'lucide-react';
-import type { ClerkView } from '../../shared/clerk';
+import { Check, MessagesSquare, SendHorizontal, Wrench } from 'lucide-react';
+import { z } from 'zod';
+import { clerkTurnSchema, type ClerkView } from '../../shared/clerk';
 import { getLocale, t } from '../i18n';
+import { Panel } from '../share/Panel';
 import type { TextKey } from '../i18n/messages';
-import { ownerFetch } from '../owner';
+import { failureSchema, ownerFetch, ownerJson } from '../owner';
 import '../share/share.css';
 import './clerk.css';
 
 const SUGGESTIONS: TextKey[] = ['What is on my shelf?', 'I took some things out. Remember my taste.', 'How do I spend?', 'Make an intro video of my cart.'];
+const clerkViewSchema = z.object({
+  model: z.string(), turns: z.array(clerkTurnSchema), spentUsd: z.number(), limitUsd: z.number(),
+  ownKey: z.object({ keyEnd: z.string(), baseUrl: z.string().nullable() }).nullable(),
+  ready: z.enum(['no_key', 'daily_limit', 'own', 'house']), houseBaseUrl: z.boolean(),
+}) satisfies z.ZodType<ClerkView>;
 const usd = (value: number) => `$${value.toFixed(value < 0.1 ? 3 : 2)}`;
 
 function useClerk(onActed: () => void) {
@@ -17,13 +24,13 @@ function useClerk(onActed: () => void) {
   const acted = useRef(onActed);
   useEffect(() => { acted.current = onActed; });
   useEffect(() => {
-    ownerFetch('/api/clerk').then(async response => { if (response.ok) setView(await response.json()); else setProblem(t('Could not reach the clerk.')); }, () => setProblem(t('Could not reach the clerk.')));
+    ownerJson('/api/clerk', clerkViewSchema).then(setView, () => setProblem(t('Could not reach the clerk.')));
   }, []);
   const call = async (path: string, init: RequestInit) => {
     const response = await ownerFetch(path, { ...init, headers: { 'content-type': 'application/json' } });
-    const body: (Partial<ClerkView> & { error?: string; message?: string }) | null = await response.json().then(value => value as object, () => null);
-    if (body?.turns) setView(body as ClerkView);
-    return { ok: response.ok, body };
+    const reply: unknown = await response.json().catch(() => null), next = clerkViewSchema.safeParse(reply);
+    if (next.success) setView(next.data);
+    return { ok: response.ok, body: failureSchema.safeParse(reply).data ?? null };
   };
   const send = async (message: string) => {
     setPending(message); setProblem(null);
@@ -70,11 +77,7 @@ export function ClerkPanel({ close, onActed }: { close: () => void; onActed: () 
   const submit = async (text: string) => { if (!text.trim() || pending) return; setDraft(''); if (!await send(text.trim())) setDraft(text); };
   const onKey = (event: KeyboardEvent<HTMLTextAreaElement>) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void submit(draft); } };
   const ready = view && (view.ready === 'own' || view.ready === 'house');
-  return <section className="share-panel clerk-panel" id="clerk-panel" aria-labelledby="clerk-title" data-testid="clerk-panel" aria-busy={Boolean(pending)}>
-    <header className="share-panel-head">
-      <h2 id="clerk-title"><MessagesSquare size={15} aria-hidden="true" />{t('Talk to Muse')}</h2>
-      <button type="button" className="share-icon-button" onClick={close} aria-label={t('Close')} title={t('Close')}><X size={18} /></button>
-    </header>
+  return <Panel name="clerk" className="clerk-panel" title={<><MessagesSquare size={15} aria-hidden="true" />{t('Talk to Muse')}</>} busy={Boolean(pending)} close={close}>
     <p className="share-hint">{t('Muse runs on {model} with the same cart tools Muse Code uses. Ask her to look, tidy up, or film an intro.', { model: view?.model ?? 'Muse Spark' })}</p>
     {view && <Status view={view} />}
     <ol className="clerk-log" ref={log} aria-live="polite" data-testid="clerk-log">
@@ -96,5 +99,5 @@ export function ClerkPanel({ close, onActed }: { close: () => void; onActed: () 
     </form>
     {view && <KeyForm view={view} save={saveKey} drop={dropKey} />}
     {view && view.turns.length > 0 && <button type="button" className="clerk-clear" onClick={() => void clear()}>{t('Start over')}</button>}
-  </section>;
+  </Panel>;
 }

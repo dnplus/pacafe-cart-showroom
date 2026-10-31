@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { metaBase } from '../shared/meta.ts';
 import type { RunnerClaim, RunnerUpdate } from '../shared/runner.ts';
 import { applyFixes, fitVoice, keyframes, type Issue, type QaReport, type QaRound } from './qa.ts';
 import type { Renderer } from './render.ts';
@@ -30,7 +31,7 @@ export interface RunnerDeps {
 
 export function modelsFromEnv(env: Env, http: typeof fetch, log: (line: string) => void): Pick<RunnerDeps, 'storyboarder' | 'reviewer' | 'tts'> {
   const missing = ['META_API_KEY', 'META_API_BASE_URL'].filter(name => !env[name]);
-  const meta = missing.length ? null : { baseUrl: env.META_API_BASE_URL!.replace(/\/+$/, ''), apiKey: env.META_API_KEY!, fetch: http };
+  const meta = missing.length ? null : { baseUrl: metaBase(env.META_API_BASE_URL!), apiKey: env.META_API_KEY!, fetch: http };
   log(meta ? `分鏡和看片用 Spark（${meta.baseUrl}）。` : `沒有設定 ${missing.join('、')}：分鏡用本地 fallback，看片用 mock 規則，不花錢。`);
   return {
     storyboarder: museStoryboarder(meta ? sparkStoryboarder(meta, log) : fallbackStoryboarder, log),

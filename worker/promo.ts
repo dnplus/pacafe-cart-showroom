@@ -3,7 +3,7 @@ import { shareView } from '../shared/share';
 import { promoRequestSchema, queuedPromoJob, type PromoJob, type PromoRequest } from '../shared/promo';
 import { isOwner, unauthorized } from './auth';
 import type { Env } from './env';
-import { invalidBody, json, readJson } from './http';
+import { json, notAllowed, parseBody } from './http';
 import type { Store } from './tools';
 
 export class ScriptRefused extends Error {
@@ -30,15 +30,13 @@ export async function queuePromo(store: Store, request: PromoRequest, now = new 
 
 /** `/api/promo` for the owner's room: GET the latest job (or null), POST to queue one. */
 export async function promoApi(request: Request, env: Env, store: Store) {
-  if (request.method !== 'GET' && request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405, { allow: 'GET, POST' });
+  if (request.method !== 'GET' && request.method !== 'POST') return notAllowed('GET', 'POST');
   if (!isOwner(request, env)) return unauthorized();
   if (request.method === 'GET') return json((await store.latestPromo())?.job ?? null);
-  const sent = await readJson(request);
-  if (!sent) return json({ error: 'invalid_json' }, 400);
-  const parsed = promoRequestSchema.safeParse(sent.body);
-  if (!parsed.success) return invalidBody(parsed.error);
+  const body = await parseBody(request, promoRequestSchema);
+  if (body instanceof Response) return body;
   let job: PromoJob | null;
-  try { job = await queuePromo(store, parsed.data); } catch (error) {
+  try { job = await queuePromo(store, body.data); } catch (error) {
     if (error instanceof ScriptRefused) return json({ error: 'invalid_script', problems: error.problems }, 400);
     throw error;
   }

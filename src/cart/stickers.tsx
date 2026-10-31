@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { X } from 'lucide-react';
 import { z } from 'zod';
 import type { CartItem } from '../../shared/cart';
 import { packagingOf, STICKERS, type StickerId } from '../../shared/packaging';
 import { readStoredJson, writeStored } from '../browserStorage';
 import { t } from '../i18n';
+import { Panel } from '../share/Panel';
 import type { TextKey } from '../i18n/messages';
 import '../share/share.css';
 import './stickers.css';
@@ -38,16 +38,12 @@ export const foundCount = (book: StickerBook) => book.filter(page => page.from.l
 
 export function StickerAlbum({ book, close }: { book: StickerBook; close: () => void }) {
   const found = foundCount(book);
-  return <section className="share-panel album" id="album-panel" aria-labelledby="album-title" data-testid="album-panel">
-    <header className="share-panel-head">
-      <h2 id="album-title">{t('Sticker album')}</h2>
-      <button type="button" className="share-icon-button" onClick={close} aria-label={t('Close')} title={t('Close')}><X size={18} /></button>
-    </header>
+  return <Panel name="album" className="album" title={t('Sticker album')} close={close}>
     <p className="cart-note" data-testid="album-count">{t('{found} of {total} stickers found. About one parcel in four has one tucked inside.', { found, total: book.length })}</p>
     <ul className="album-grid" aria-label={t('Sticker album')}>
       {book.map(({ id, from }, slot) => <li key={id} data-found={from.length > 0} data-testid="album-slot" style={{ '--tilt': `${[-4, 3, -2, 5, -5, 2, -3, 4][slot]}deg` } as React.CSSProperties} title={from.length ? from.join(' · ') : undefined}>
         {from.length ? <><Sticker id={id} />{from.length > 1 && <b className="album-count">×{from.length}</b>}<small>{stickerName(id)}</small></> : <><span className="sticker-blank" aria-hidden="true">?</span><small>{t('Not found yet')}</small></>}
       </li>)}
     </ul>
-  </section>;
+  </Panel>;
 }

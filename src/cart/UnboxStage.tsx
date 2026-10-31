@@ -27,7 +27,7 @@ function ParcelCanvas({ parcels, mode, loadImage, stageRef, autoOpen = false }: 
     if (stageRef) stageRef.current = stage;
     if (autoOpen) stage?.open(0);
     return () => { stage?.dispose(); if (stageRef) stageRef.current = null; };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
   return <div className="stage-3d" ref={host} data-testid="stage-3d" />;
 }
 
@@ -58,7 +58,7 @@ export function PullStage({ boxes, byId, settle, loadImage }: { boxes: readonly 
     if (view !== 'cascade') return;
     stage.current?.shake(step < n ? step : null);
     if (step > 0) { stage.current?.open(step - 1); if (rarityOf(byId.get(ids[step - 1])!.packaging) === 'rare') setLucky(count => count + 1); }
-  }, [step, view]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [step, view]);
   const item = (id: string) => byId.get(id)!;
   useEffect(() => {
     if (view !== 'cascade') return;
@@ -67,7 +67,7 @@ export function PullStage({ boxes, byId, settle, loadImage }: { boxes: readonly 
     const last = step > 0 ? rarityOf(item(ids[step - 1]).packaging) : 'plain';
     const timer = setTimeout(() => setStep(step + 1), reduced ? REDUCED_STEP_MS : SHAKE_MS + (last === 'rare' ? RARE_MS : last === 'fine' ? FINE_MS : 0));
     return () => clearTimeout(timer);
-  }, [step, view]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [step, view]);
   const put = () => {
     if (leaving) return;
     setLeaving(true);
