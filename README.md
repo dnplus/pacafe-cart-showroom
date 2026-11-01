@@ -69,9 +69,17 @@ CI（`.github/workflows/ci.yml`）在每次 push 和 pull request 跑這三項�
 
 截圖和算圖腳本需要 Playwright 的 Chromium（`npx playwright-core install chromium`），用 SwiftShader 在沒有 GPU 的機器上畫 WebGL。
 
+### 部署到正式環境
+
+```bash
+scripts/deploy-wizard.sh
+```
+
+一步一步帶你做完：確認 wrangler 登入能部署、建 R2 bucket `pacafe-cart-showroom-media`、產生屋主金鑰、貼上 Meta API 的金鑰和 base URL、設 `CLERK_DAILY_USD`，然後 build 並 `wrangler deploy`，secrets 跟這次上傳一起送出。部署完它會檢查網址（首頁 200、沒金鑰的 `/api/cart` 回 401、帶金鑰回 200、worker 看得到 Meta 金鑰），把屋主金鑰放進剪貼簿讓你貼進房間，最後把網址寫進 `SUBMISSION.md`。這些值存在 `.env`（已列在 `.gitignore`），runner 也讀這個檔，所以重跑時按 Enter 就沿用。改完程式要重新部署時，重跑一次就好。
+
 ### 正式環境的屋主權限
 
-正式環境的 `/api/cart`（讀和寫）和 `/api/share` 只回應帶 `Authorization: Bearer <CART_MCP_TOKEN>` 的請求，其餘回 401。房間第一次被擋時會請屋主輸入這把金鑰，存在瀏覽器的 localStorage，之後每次讀寫都帶上。用 `wrangler secret put CART_MCP_TOKEN` 設定 token；token 不放進任何檔案。`.env.example` 只列出變數名稱。
+正式環境的 `/api/cart`（讀和寫）和 `/api/share` 只回應帶 `Authorization: Bearer <CART_MCP_TOKEN>` 的請求，其餘回 401。房間第一次被擋時會請屋主輸入這把金鑰，存在瀏覽器的 localStorage，之後每次讀寫都帶上。token 是 worker secret（部署引導會設，或用 `wrangler secret put CART_MCP_TOKEN`），不放進任何進版控的檔案。`.env.example` 只列出變數名稱。
 
 `/mcp` 在任何環境都要這個 token，`env.local` 也一樣。在本機用 MCP 時，把 token 寫進 `.dev.vars`（已列在 `.gitignore`），再跑 `npm run dev:worker`：
 
