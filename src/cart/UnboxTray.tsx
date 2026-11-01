@@ -25,16 +25,18 @@ function FrontParcel({ box, item, index, slice, release }: { box: Box; item: Tra
   const [flat, setFlat] = useState(false);
   const live = box.phase === 'atCounter' || box.phase === 'slicing';
   useEffect(() => {
+    // Held here: React clears the ref before this effect's cleanup runs, and a resize can land in between.
+    const el = host.current!;
     let made: ParcelStage;
-    try { made = createParcelStage(host.current!, [stageParcel(item)], { mode: 'counter', reduced: reducedMotion() }); } catch (error) { console.warn(error); setFlat(true); return; }
+    try { made = createParcelStage(el, [stageParcel(item)], { mode: 'counter', reduced: reducedMotion() }); } catch (error) { console.warn(error); setFlat(true); return; }
     stage.current = made;
     // The scissors ride a rail laid over the projected tape, in fractions of the box so they stay put whatever the box is doing.
     place.current = () => {
-      const tape = made.tapeRect(), frame = host.current!.getBoundingClientRect(), css = rail.current?.style; if (!tape || !css || !frame.width) return;
+      const tape = made.tapeRect(), frame = el.getBoundingClientRect(), css = rail.current?.style; if (!tape || !css || !frame.width) return;
       css.left = `${(tape.left - frame.left) / frame.width * 100}%`; css.top = `${(tape.top - frame.top) / frame.height * 100}%`;
       css.width = `${tape.width / frame.width * 100}%`; css.height = `${tape.height / frame.height * 100}%`; css.visibility = 'visible';
     };
-    const observer = new ResizeObserver(() => place.current()); observer.observe(host.current!); place.current();
+    const observer = new ResizeObserver(() => place.current()); observer.observe(el); place.current();
     return () => { observer.disconnect(); made.dispose(); stage.current = null; place.current = noop; };
   }, []);
   useEffect(() => place.current(), [live]);
