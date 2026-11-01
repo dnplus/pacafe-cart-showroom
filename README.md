@@ -62,6 +62,7 @@ CI（`.github/workflows/ci.yml`）在每次 push 和 pull request 跑這三項�
 | `node scripts/screenshots.mjs` | 建置、啟動 `wrangler dev --env local`，先把 5 個快遞箱都記成拆過，等貨架擺上 5 件商品後存 `docs/screenshots/desktop.png` 和 `mobile-390.png`。 |
 | `npm run screenshots:share` | 存房間分享面板和訪客分享頁的截圖（1440 和 390 寬，range 模式）到 `docs/screenshots/`。設了 `SHARE_SCREENSHOTS_COPY_TO` 會另外複製一份到那個目錄。 |
 | `node scripts/screenshots-unbox-play.mjs` | 用真的 `wrangler dev` 跑一遍拆快遞，1440 和 390 寬各存一組圖到 `PLAY_SCREENSHOTS_DIR`（預設 `.local/screenshots-unbox-play`）：櫃台的箱子、單個拆開（3D 舞台、手寫小卡）、一鍵秒開的連抽（開到一半、結果列、放大一張卡）、貼紙本、從貨架或清單再拆一次、訪客分享頁自己拆（並檢查沒有呼叫屋主的 `/api/unbox`）。設 `PLAY_REDUCED_MOTION=1` 用「減少動態」再跑一次；設 `PLAY_ORIGIN` 可指定已在跑的 worker。 |
+| `node scripts/verify-panels.mjs` | 用真的 `wrangler dev`，在 1440 和 390 寬、清單收起和展開時，依序打開側欄每個面板（店員、分享、角色、習慣、貼紙本、介紹片、連線），確認面板等內容載入、高度穩定後整個在畫面內（面板比側欄高時，填滿側欄可見的高度），而且整頁沒有被捲動。 |
 | `node scripts/screenshots-cast.mjs` | 存角色面板和房間（Muse 和店主、換店員前後、沒金鑰的說明、用假 Meta API 生成的角色、訪客頁，以及走路、拆快遞後的歡呼和店員去貨架、新東西進來的反應）的截圖到 `$CAST_SCREENSHOTS_DIR`，1440 和 390 寬各一套。 |
 | `node scripts/promo-plates.mjs` | 在 Vite 開發伺服器開 `plates.html`，從房間的直播棚拍介紹片的背景板（遠景、近景各一張去掉角色的房間、一張只有桌子），連同屋主站的位置寫到 `runner/composition/plates/`。房間或棚景改了以後要重拍。 |
 | `node tools/meta-hackathon/probe/run-all.ts --dry-run` | 不呼叫 API，印出 Meta Model API 探針的請求和費用估算。見 [探針說明](tools/meta-hackathon/probe/README.md)。 |

@@ -66,6 +66,8 @@ try {
       await shoot(owner, '3c-multipull-results');
       await owner.locator('[data-testid="pull-card"][data-rarity="rare"]').first().click();
       await owner.waitForSelector('[data-testid="pull-zoom"] [data-testid="unbox-note"]'); await owner.waitForTimeout(900);
+      const zoomed = await owner.locator('[data-testid="pull-zoom"] [data-testid="unbox-reveal"]').evaluate(card => { const box = card.getBoundingClientRect(), frame = card.parentElement.getBoundingClientRect(); return { left: Math.round(box.left), right: Math.round(box.right), frame: Math.round(frame.left), width: innerWidth }; });
+      assert.ok(zoomed.left >= 0 && zoomed.right <= zoomed.width && Math.abs(zoomed.left - zoomed.frame) <= 2, `the zoomed card sits in its frame on screen: ${JSON.stringify(zoomed)}`);
       await shoot(owner, '3d-multipull-card-zoom');
       await owner.locator('.pull-zoom-close').click();
       assert.equal(Object.keys((await (await fetch(`${worker.origin}/api/unbox`)).json()).opened).length, 1, 'nothing is recorded until they are put on the shelf');

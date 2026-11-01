@@ -26,6 +26,7 @@ npm run build && npm run typecheck && npx vitest run
 | `adapter/` | `npm run verify:adapter` |
 | 店員（`worker/clerk.ts`、`shared/clerk.ts`、`shared/meta.ts`） | vitest 的 `tests/clerk.test.ts`；要看畫面就開下面的 `showroom-clerk` |
 | 房間、貨架、包裹、開箱（`src/cart`、`src/room`） | `node scripts/screenshots-unbox-play.mjs`，再看截圖 |
+| 側欄面板（`src/share/Panel.tsx` 和用它的面板）、`.cart-hud` 的版面 | `node scripts/verify-panels.mjs` |
 | 分享面板、訪客頁 | `npm run screenshots:share`（會覆寫 `docs/screenshots/` 裡 README 用的圖，有變就一起 commit） |
 | 角色、店員走路 | `node scripts/screenshots-cast.mjs`（`CAST_SCREENSHOTS_DIR` 要設） |
 | `scripts/` 本身 | 對每支改過的檔案 `node --check`，再實際跑一支用到改動的腳本 |
