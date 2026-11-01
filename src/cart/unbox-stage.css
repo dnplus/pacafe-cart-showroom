@@ -41,7 +41,7 @@
 
 .pull-zoom{--u:min(3vh,6vw,32px);position:absolute;inset:0;z-index:2;display:grid;place-items:center;background:#1b1408d9;animation:scrim-in .25s both}
 .pull-zoom>div{position:relative;margin-top:5em;font-size:var(--u)}
-.parcel-item.parcel-item-still{position:relative;left:auto;top:auto;translate:0 0;animation:none;opacity:1;transform:none;pointer-events:auto}
+.parcel-item.parcel-item-still{position:relative;left:auto;top:auto;translate:none;animation:none;opacity:1;pointer-events:auto}
 .parcel-item.parcel-item-still .parcel-note{animation:note-pop .5s .15s cubic-bezier(.3,1.4,.5,1) both}
 .pull-zoom-sticker{position:absolute;right:-1.8em;top:6em;rotate:10deg;font-size:1em;animation:note-pop .5s .3s cubic-bezier(.3,1.5,.5,1) both}
 .pull-zoom-sticker .sticker{position:relative;overflow:hidden}
@@ -56,6 +56,7 @@
   .twinkle{display:none}
   .parcel-sticker .sticker::after,.pull-card[data-rarity=rare]::after{animation:none}
   .stage-note,.stage-info,.pull-lucky,.parcel-item-still .parcel-note,.pull-zoom-sticker{animation:scrim-in .3s both}
+  .parcel-item.parcel-item-still{transform:none}
   .stage-scrim[data-leaving]{animation:scrim-out .3s forwards}
   .stage-scrim[data-leaving] .pull-card{animation:scrim-out .25s forwards}
 }
