@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import type { Packaging } from '../../shared/packaging';
 import { rarityOf } from '../../shared/packaging';
-import { canvasTexture, cardFace } from './cardFace';
+import { canvasTexture, cardFace, fitCard } from './cardFace';
 import type { ImageLoader } from './productImage';
 import { shelfColour, type ShelfItem } from './shelf';
 
@@ -72,7 +72,7 @@ export function createParcelStage(host: HTMLElement, parcels: readonly StageParc
   const raysTex = own(raysTexture('rgba(255,243,184,.9)')), goldRaysTex = own(raysTexture('rgba(255,209,74,.95)'));
   const bodyGeo = own(new RoundedBoxGeometry(W, H, D, 4, .07)), insideGeo = own(new THREE.PlaneGeometry(W - .2, D - .2));
   const majorGeo = own(new RoundedBoxGeometry(W + .02, FLAP_T, D / 2 + .01, 2, .02)), minorGeo = own(new RoundedBoxGeometry(D / 2 + .01, FLAP_T, D, 2, .02));
-  const tapeGeo = own(new THREE.BoxGeometry((W + .12) / 2, .02, .24)), labelGeo = own(new THREE.PlaneGeometry(W * .62, W * .62 * .75)), shadowGeo = own(new THREE.PlaneGeometry(1, 1)), raysGeo = own(new THREE.PlaneGeometry(1, 1));
+  const tapeGeo = own(new THREE.BoxGeometry((W + .12) / 2, .02, .24)), labelGeo = own(new THREE.PlaneGeometry(1, 1)), shadowGeo = own(new THREE.PlaneGeometry(1, 1)), raysGeo = own(new THREE.PlaneGeometry(1, 1));
   const insideMat = own(new THREE.MeshStandardMaterial({ color: 0x2b1d10, roughness: 1 }));
   const shadowMat = own(new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false }));
 
@@ -101,8 +101,11 @@ export function createParcelStage(host: HTMLElement, parcels: readonly StageParc
     hinge(majorGeo, 'x', 1, [0, 0, D / 2], [0, 0, -D / 4], .06, 2.0, 0);
     hinge(majorGeo, 'x', -1, [0, 0, -D / 2], [0, 0, D / 4], .06, 2.0, .03);
     const tapes = [-1, 1].map(side => { const m = new THREE.Mesh(tapeGeo, tapeMat); m.position.set(side * (W + .12) / 4, H + .13, 0); group.add(m); return m; });
-    const face = own(cardFace(parcel.product, options.loadImage, 2));
-    const label = new THREE.Mesh(labelGeo, own(new THREE.MeshBasicMaterial({ map: face.texture, toneMapped: false }))); label.position.set(0, H * .47, D / 2 + .004); group.add(label);
+    const label = new THREE.Mesh(labelGeo, own(new THREE.MeshBasicMaterial({ toneMapped: false }))); label.position.set(0, H * .47, D / 2 + .004); group.add(label);
+    own(cardFace(parcel.product, (texture, aspect) => {
+      label.material.map = texture; label.material.needsUpdate = true;
+      const fitted = fitCard(aspect, W * .62, H * .78); label.scale.set(fitted.width, fitted.height, 1);
+    }, options.loadImage, 2));
     const shadow = new THREE.Mesh(shadowGeo, shadowMat); shadow.rotation.x = -Math.PI / 2; shadow.scale.set(W * (counter ? 1.3 : 1.9), D * (counter ? 1.25 : 2.2), 1); shadow.position.y = .004; group.add(shadow);
 
     const count = many ? 30 : 56, random = rand(index * 7919 + 13);
@@ -166,18 +169,24 @@ export function createParcelStage(host: HTMLElement, parcels: readonly StageParc
   fit();
   const observer = new ResizeObserver(fit); observer.observe(host); addEventListener('resize', fit);
 
-  const CARD = 1.5;
+  /** A tall picture makes the card narrower rather than taller, so it stays inside the stage's framing. */
+  const CARD = 1.5, CARD_MAX_H = 1.35;
   const revealCard = (slot: Slot) => {
-    const face = cardFace(slot.parcel.product, options.loadImage, 3), h = CARD / face.aspect;
     const frame = new THREE.MeshStandardMaterial({ color: slot.rare ? GOLD : slot.fine ? 0xf4b9c9 : 0xfffaf0, roughness: .35, metalness: slot.rare ? .45 : 0, emissive: slot.rare ? 0x6b4a00 : 0x000000 });
-    const back = new THREE.MeshStandardMaterial({ color: shelfColour(slot.parcel.product), roughness: .6 }), front = new THREE.MeshBasicMaterial({ map: face.texture, toneMapped: false, transparent: true });
-    const bodyGeo = new RoundedBoxGeometry(CARD + .12, h + .12, .04, 2, .03), faceGeo = new THREE.PlaneGeometry(CARD, h);
-    const node = new THREE.Group(), card = new THREE.Group(); card.position.y = h / 2 + .06; node.add(card);
-    card.add(new THREE.Mesh(bodyGeo, frame));
-    const shown = new THREE.Mesh(faceGeo, front); shown.position.z = .021; card.add(shown);
-    const behind = new THREE.Mesh(faceGeo, back); behind.position.z = -.021; behind.rotation.y = Math.PI; card.add(behind);
+    const back = new THREE.MeshStandardMaterial({ color: shelfColour(slot.parcel.product), roughness: .6 }), front = new THREE.MeshBasicMaterial({ toneMapped: false, transparent: true });
+    const node = new THREE.Group(), card = new THREE.Group(); node.add(card);
+    const body = new THREE.Mesh(undefined, frame), shown = new THREE.Mesh(undefined, front), behind = new THREE.Mesh(undefined, back);
+    shown.position.z = .021; behind.position.z = -.021; behind.rotation.y = Math.PI; card.add(body, shown, behind);
     card.rotation.x = -.18;
-    return { node, dispose() { face.dispose(); [frame, back, front].forEach(m => m.dispose()); bodyGeo.dispose(); faceGeo.dispose(); } };
+    // The card takes its picture's shape within CARD × CARD_MAX_H, so its frame is rebuilt to fit.
+    const face = cardFace(slot.parcel.product, (texture, aspect) => {
+      front.map = texture; front.needsUpdate = true;
+      const { width: w, height: h } = fitCard(aspect, CARD, CARD_MAX_H), before = [body.geometry, shown.geometry];
+      body.geometry = new RoundedBoxGeometry(w + .12, h + .12, .04, 2, .03); shown.geometry = behind.geometry = new THREE.PlaneGeometry(w, h);
+      card.position.y = h / 2 + .06;
+      before.forEach(geometry => geometry.dispose());
+    }, options.loadImage, 3);
+    return { node, dispose() { face.dispose(); [frame, back, front].forEach(m => m.dispose()); body.geometry.dispose(); shown.geometry.dispose(); } };
   };
 
   const sparkCount = 46;

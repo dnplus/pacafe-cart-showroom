@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { SHELF_SLOTS } from '../../shared/cart';
 import { registerModel, shelfSlot } from '../room/furnitureModels';
-import { canvasTexture, cardFace, font } from './cardFace';
+import { canvasTexture, cardFace, fitCard, font } from './cardFace';
 import { seed, shelfColour, type Shelf, type ShelfItem } from './shelf';
 import type { ImageLoader } from './productImage';
 
@@ -18,8 +18,11 @@ function productBox(item: ShelfItem, space: { width: number; height: number; dep
   const body = new THREE.Mesh(new RoundedBoxGeometry(width, height, depth, 2, .025), new THREE.MeshStandardMaterial({ color: colour, roughness: .55 }));
   body.position.y = height / 2; body.castShadow = true; body.receiveShadow = true; node.add(body);
   geometries.push(body.geometry); materials.push(body.material);
-  const face = cardFace(item, loadImage, labelScale);
-  const card = new THREE.Mesh(new THREE.PlaneGeometry(width * .9, Math.min(height * .82, width * .9 * .75)), new THREE.MeshBasicMaterial({ map: face.texture, toneMapped: false }));
+  const card = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ toneMapped: false }));
+  const face = cardFace(item, (texture, aspect) => {
+    card.material.map = texture; card.material.needsUpdate = true;
+    const fitted = fitCard(aspect, width * .9, height * .82); card.scale.set(fitted.width, fitted.height, 1);
+  }, loadImage, labelScale);
   card.position.set(0, height / 2, depth / 2 + .003); node.add(card);
   geometries.push(card.geometry); materials.push(card.material);
   node.traverse(part => { part.userData.cartKey = item.key; });
