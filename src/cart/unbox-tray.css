@@ -66,6 +66,10 @@
 .spark{position:absolute;z-index:5;left:calc(50% - .2em);top:1.4em;width:.4em;height:.4em;border-radius:50%;background:var(--spark);box-shadow:0 0 .5em var(--spark);opacity:0;pointer-events:none;animation:spark .75s calc(var(--i) * 90ms + .1s) ease-out forwards}
 .parcel-front[data-phase=slicing]{transform:translateY(calc(var(--p,0) * -.25em))}
 .parcel-front{filter:drop-shadow(0 .45em .5em #3e45232e)}
+.parcel-3d{filter:none}
+.parcel-host{position:absolute;inset:0;pointer-events:none}
+.parcel-rail{position:absolute;z-index:4;visibility:hidden;pointer-events:none}
+.parcel-rail .parcel-scissors{top:50%;margin-top:-1em}
 
 .unbox-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px}
 .unbox-queue{display:flex;align-items:center;gap:6px;min-width:0}
