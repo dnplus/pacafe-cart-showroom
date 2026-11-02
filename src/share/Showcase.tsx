@@ -90,7 +90,7 @@ export function Showcase({ slug }: { slug: string }) {
       : <aside className="cart-hud share-hud"><p className="cart-note" role="status">{t('Loading the shared cart…')}</p></aside>}
     <section className="world-stage game-stage" aria-label={t('Cart showroom')}>
       <RoomZones>
-        <RoomScene scenery="peach" shelf={shelf} counter={() => setListOpen(true)} baristaName={t('Clerk')} owner={load.status === 'ready' ? { name: load.view.nickname, sprite: null } : undefined} studioSet={showroomStudioSet} hour={14} />
+        <RoomScene scenery="peach" shelf={shelf} counter={() => setListOpen(true)} baristaName={t('Clerk')} owner={load.status === 'ready' ? { name: shownNickname(load.view.nickname), sprite: null } : undefined} studioSet={showroomStudioSet} hour={14} />
       </RoomZones>
     </section>
     {replayItem ? <ReplayTray key={replaying!.n} item={replayItem} done={endReplay} loadImage={loader} /> : <UnboxTray {...unbox} items={trayItems} loadImage={loader} />}
