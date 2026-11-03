@@ -346,7 +346,7 @@ muse exec --prompt-file muse/demo-task.txt --disable-approval --max-model-steps 
 | 剪輯桌與房間角落元件 | `src/components/` | pa-cafe `s10-studio-desk` | 賽前搬來，刪減 |
 | 房間共用設定 | `shared/` 的 `room-*.ts`、`scenery.ts`、`performance-script.ts`、`locales.ts`、`sprites.ts`、`safe-decode.ts`、`studio.ts`、`domain.ts`、`starter-furniture.ts` | pa-cafe `s10-studio-desk` | 賽前搬來，刪減 |
 | 介面字串、樣式 | `src/i18n/`、`src/world.css` | pa-cafe `s10-studio-desk` | 賽前搬來，只留用到的部分 |
-| Meta Model API 探針、計畫書 | `tools/meta-hackathon/probe/`、`docs/PLAN.md` | agentic-remotion-studio `meta-hackathon/2026`（0a0bc75） | 賽前搬來，刪減 |
+| Meta Model API 探針 | `tools/meta-hackathon/probe/` | agentic-remotion-studio `meta-hackathon/2026`（0a0bc75） | 賽前搬來，刪減 |
 | 購物車資料形狀與推導、fixture | `shared/cart.ts`、`shared/fixtures/cart.ts` | 無 | 賽中新寫 |
 | Worker 與 Showroom Durable Object | `worker/index.ts`、`worker/showroom.ts`、`worker/env.ts`、`wrangler.jsonc` | 無 | 賽中新寫 |
 | MCP 傳輸 | `worker/mcp.ts` | 參考 pa-cafe main 的 `worker/streamable-mcp.ts`、`worker/protocol.ts` | 賽中重寫：只留 JSON-RPC 和協定協商，刪掉配對、Clerk session、簽章、版本偏差 |
