@@ -9,8 +9,10 @@ projects of the same owner and are included under this product's license.
 
 This product includes third-party assets and software:
 
-- The Muse clerk art (public/art/characters/muse-*), drawn for PA Cafe by the
-  same owner and copied from pa-cafe/pa-cafe. The owner figure
+- The Muse clerk art (public/art/characters/muse-fullbody.png,
+  muse-portrait-208.webp, muse-spritesheet.png) is AI generated with the
+  image_gen tool from a PA Cafe reference image approved by the owner, and
+  copied unchanged from pa-cafe/pa-cafe. The owner licenses it under Apache-2.0. The owner figure
   (public/art/characters/owner-*) is generated with Codex image generation.
   Both are released under this product's license.
 - Nunito Sans, Copyright 2016 The Nunito Sans Project Authors
