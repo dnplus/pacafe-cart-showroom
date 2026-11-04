@@ -1,7 +1,7 @@
 import { formatTwd } from '../../shared/cart';
 import type { ShareView } from '../../shared/share';
 import { formatRange } from '../cart/shelf';
-import { t } from '../i18n';
+import { shownNickname, t } from '../i18n';
 import type { RoomControls } from '../room/RoomScene';
 
 /** The size link previews expect (Open Graph's 1.91:1). */
@@ -12,7 +12,7 @@ const CARD_BACKGROUND = '#fff7e9';
 export function cardWords(view: ShareView) {
   const price = view.mode === 'range' && view.totalRange ? t('Total about {amount}', { amount: formatRange(view.totalRange) })
     : view.mode === 'exact' && view.totalTwd !== null ? t('Total {amount}', { amount: formatTwd(view.totalTwd) }) : null;
-  return { brand: 'pacafe-cart-showroom', title: t("{nickname}'s cart showroom", { nickname: view.nickname }), count: t('{count} things', { count: view.items.length }), price, note: t('Things their Muse noted while shopping') };
+  return { brand: 'pacafe-cart-showroom', title: t("{nickname}'s cart showroom", { nickname: shownNickname(view.nickname) }), count: t('{count} things', { count: view.items.length }), price, note: t('Things their Muse noted while shopping') };
 }
 
 /** Breaks between CJK characters and between words, never before closing punctuation; the last line ends in … when the text runs over. */

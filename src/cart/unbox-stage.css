@@ -41,7 +41,7 @@
 
 .pull-zoom{--u:min(3vh,6vw,32px);position:absolute;inset:0;z-index:2;display:grid;place-items:center;background:#1b1408d9;animation:scrim-in .25s both}
 .pull-zoom>div{position:relative;margin-top:5em;font-size:var(--u)}
-.parcel-item.parcel-item-still{position:relative;left:auto;top:auto;translate:0 0;animation:none;opacity:1;transform:none;pointer-events:auto}
+.parcel-item.parcel-item-still{position:relative;left:auto;top:auto;translate:none;animation:none;opacity:1;pointer-events:auto}
 .parcel-item.parcel-item-still .parcel-note{animation:note-pop .5s .15s cubic-bezier(.3,1.4,.5,1) both}
 .pull-zoom-sticker{position:absolute;right:-1.8em;top:6em;rotate:10deg;font-size:1em;animation:note-pop .5s .3s cubic-bezier(.3,1.5,.5,1) both}
 .pull-zoom-sticker .sticker{position:relative;overflow:hidden}
@@ -56,6 +56,7 @@
   .twinkle{display:none}
   .parcel-sticker .sticker::after,.pull-card[data-rarity=rare]::after{animation:none}
   .stage-note,.stage-info,.pull-lucky,.parcel-item-still .parcel-note,.pull-zoom-sticker{animation:scrim-in .3s both}
+  .parcel-item.parcel-item-still{transform:none}
   .stage-scrim[data-leaving]{animation:scrim-out .3s forwards}
   .stage-scrim[data-leaving] .pull-card{animation:scrim-out .25s forwards}
 }
@@ -63,7 +64,7 @@
 .stage-3d{position:absolute;inset:0}
 .stage-canvas{position:absolute;display:block;pointer-events:none}
 .stage-hud{position:absolute;inset:0;pointer-events:none;font-size:var(--u)}
-.stage-note{position:absolute;left:0;top:8%;width:min(16em,62%);margin:0;rotate:-4deg;padding:.8em 1em .9em;border-radius:.2em;background:#fff4a3 repeating-linear-gradient(transparent 0 1.27em,#d9c76a55 1.27em 1.32em);color:#4a3a1c;font:700 1.05em/1.32em 'Kaiti TC','BiauKai','DFKai-SB','Segoe Print','Bradley Hand','Marker Felt',cursive;text-align:left;box-shadow:0 .3em .8em #0004;animation:hud-in 3.4s both}
+.stage-note{position:absolute;right:calc(50% + 4.8em);top:14%;width:min(12em,calc(50vw - 4.8em - 1rem));margin:0;rotate:-4deg;padding:.8em 1em .9em;border-radius:.2em;background:#fff4a3 repeating-linear-gradient(transparent 0 1.27em,#d9c76a55 1.27em 1.32em);color:#4a3a1c;font:700 1.05em/1.32em 'Kaiti TC','BiauKai','DFKai-SB','Segoe Print','Bradley Hand','Marker Felt',cursive;text-align:left;box-shadow:0 .3em .8em #0004;animation:hud-in 3.4s both}
 .stage-note i{position:absolute;left:50%;top:-.55em;width:3.4em;height:1.1em;translate:-50% 0;rotate:3deg;background:#f4b9c9c8}
 .stage-info{position:absolute;left:50%;bottom:3%;translate:-50% 0;width:min(21em,94%);display:grid;gap:.3em;justify-items:center;padding:.6em .9em .7em;border-radius:1em;background:#fffdf5;border:1px solid #e6dcc5;box-shadow:0 .4em 1.2em #0005;color:var(--ink);text-align:center;animation:hud-in 3.4s both;pointer-events:auto}
 .stage-info b{font-size:1.1em;font-weight:900;line-height:1.25;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
@@ -74,4 +75,4 @@
 .stage-info a{display:inline-flex;align-items:center;gap:.3em;padding:.3em .9em;border-radius:999px;background:var(--forest);color:#fff;font-weight:850;font-size:.85em;text-decoration:none}
 .stage-sticker-anchor{position:absolute;left:60%;top:50%;font-size:1em}
 @keyframes hud-in{0%,28%{opacity:0;transform:translateY(1em)}40%,84%{opacity:1;transform:none}94%,100%{opacity:0}}
-@media(max-width:700px){.stage-note{top:auto;bottom:27%;width:min(14em,70%)}.stage-sticker-anchor{left:40%}}
+@media(max-width:700px){.stage-note{right:auto;left:0;top:auto;bottom:27%;width:min(14em,70%)}.stage-sticker-anchor{left:40%}}

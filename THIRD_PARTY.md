@@ -44,7 +44,7 @@ The versions are the ones pinned in `package.json`. Their own dependencies are i
 ## Code ported from the owner's earlier projects
 
 - The 3D room in `src/room/`, `src/components/`, `src/video/ease.ts`, `src/browserStorage.ts`, `src/i18n/`, `src/world.css` and the room modules in `shared/` come from PA Cafe (`pa-cafe/pa-cafe`, branch `s10-studio-desk`, commit `a48a6b66`), cut down to the showroom. `src/room/furnitureModels.ts` and everything in `src/cart/` are new.
-- `tools/meta-hackathon/probe/` and `docs/PLAN.md` come from agentic-remotion-studio (`dnplus/agentic-remotion-studio`, branch `meta-hackathon/2026`, commit `0a0bc75`), cut down as their headers say.
+- `tools/meta-hackathon/probe/` comes from agentic-remotion-studio (`dnplus/agentic-remotion-studio`, branch `meta-hackathon/2026`, commit `0a0bc75`), cut down as their headers say.
 
 Both projects have the same owner as this repository, and the ported code is included under this repository's Apache-2.0 license.
 

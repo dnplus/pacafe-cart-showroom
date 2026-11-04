@@ -1,8 +1,10 @@
-import { useEffect, useReducer, useRef, type KeyboardEvent, type PointerEvent } from 'react';
-import { PackageOpen, X } from 'lucide-react';
+import { useEffect, useReducer, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { PackageOpen, Scissors, X } from 'lucide-react';
 import { t } from '../i18n';
-import { Parcel } from './Parcel';
-import { PullStage, SingleStage } from './UnboxStage';
+import { Parcel, style } from './Parcel';
+import { createParcelStage, type ParcelStage } from './parcelStage';
+import { shelfColour } from './shelf';
+import { PullStage, SingleStage, reducedMotion, stageParcel } from './UnboxStage';
 import type { ImageLoader } from './productImage';
 import type { TrayItem } from './trayItem';
 import { extendSlit, popDuration, sliceProgress, unboxReducer, type Box, type Slit } from './unbox';
@@ -15,20 +17,39 @@ const NONE: ReadonlySet<string> = new Set(), noop = () => {};
 /** px a finger may stray from the tape's edge and still be cutting it. */
 const REACH_PX = 40;
 
-/** The one parcel on the counter that a finger or mouse can cut open along its tape. */
+/** The one parcel on the counter that a finger or mouse can cut open along its tape. It is drawn by a small three.js stage; without WebGL it is the flat CSS parcel. */
 function FrontParcel({ box, item, index, slice, release }: { box: Box; item: TrayItem; index: number } & Pick<UnboxController, 'slice' | 'release'>) {
   const root = useRef<HTMLDivElement>(null);
   const stroke = useRef<{ pointer: number; slit: Slit | null } | null>(null);
+  const host = useRef<HTMLDivElement>(null), rail = useRef<HTMLElement>(null), stage = useRef<ParcelStage | null>(null), place = useRef(noop);
+  const [flat, setFlat] = useState(false);
   const live = box.phase === 'atCounter' || box.phase === 'slicing';
+  useEffect(() => {
+    // Held here: React clears the ref before this effect's cleanup runs, and a resize can land in between.
+    const el = host.current!;
+    let made: ParcelStage;
+    try { made = createParcelStage(el, [stageParcel(item)], { mode: 'counter', reduced: reducedMotion() }); } catch (error) { console.warn(error); setFlat(true); return; }
+    stage.current = made;
+    // The scissors ride a rail laid over the projected tape, in fractions of the box so they stay put whatever the box is doing.
+    place.current = () => {
+      const tape = made.tapeRect(), frame = el.getBoundingClientRect(), css = rail.current?.style; if (!tape || !css || !frame.width) return;
+      css.left = `${(tape.left - frame.left) / frame.width * 100}%`; css.top = `${(tape.top - frame.top) / frame.height * 100}%`;
+      css.width = `${tape.width / frame.width * 100}%`; css.height = `${tape.height / frame.height * 100}%`; css.visibility = 'visible';
+    };
+    const observer = new ResizeObserver(() => place.current()); observer.observe(el); place.current();
+    return () => { observer.disconnect(); made.dispose(); stage.current = null; place.current = noop; };
+  }, []);
+  useEffect(() => place.current(), [live]);
   const paint = (slit: Slit | null, at?: number) => {
+    stage.current?.cut(slit);
     const css = root.current?.style; if (!css) return;
     css.setProperty('--lo', String(slit?.lo ?? 0)); css.setProperty('--hi', String(slit?.hi ?? 0));
     if (at !== undefined) css.setProperty('--at', String(at));
   };
   const cut = (event: PointerEvent<HTMLDivElement>) => {
-    const current = stroke.current, tape = root.current?.querySelector('.parcel-tape');
-    if (!current || current.pointer !== event.pointerId || !tape) return;
-    const rect = tape.getBoundingClientRect(), along = (event.clientX - rect.left) / rect.width;
+    const current = stroke.current, rect = stage.current?.tapeRect() ?? root.current?.querySelector('.parcel-tape')?.getBoundingClientRect();
+    if (!current || current.pointer !== event.pointerId || !rect) return;
+    const along = (event.clientX - rect.left) / rect.width;
     const next = extendSlit(current.slit, { along, off: event.clientY - (rect.top + rect.height / 2) }, rect.height / 2 + REACH_PX);
     const strayed = current.slit && !next;
     current.slit = next; paint(next, along);
@@ -47,7 +68,12 @@ function FrontParcel({ box, item, index, slice, release }: { box: Box; item: Tra
       stroke.current = { pointer: event.pointerId, slit: null }; cut(event);
     }} onPointerMove={cut} onPointerUp={end} onPointerCancel={end} onContextMenu={event => event.preventDefault()}
     onKeyDown={(event: KeyboardEvent) => { if (live && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); slice(box.id, 1); } }}>
-    <Parcel box={box} item={item} index={index} variant="front" />
+    {flat ? <Parcel box={box} item={item} index={index} variant="front" />
+      : <div className="parcel parcel-front parcel-3d" data-testid="unbox-box" data-item-id={box.id} data-phase={box.phase} data-tape={item.packaging.tape} data-filler={item.packaging.filler} data-progress={box.phase === 'slicing' ? box.progress.toFixed(2) : undefined}
+        style={style({ '--c': shelfColour(item), '--p': box.phase === 'slicing' ? box.progress : 0, '--i': index })}>
+        <div className="parcel-host" ref={host} />
+        <i className="parcel-rail" ref={rail}><Scissors className="parcel-scissors" aria-hidden="true" /></i>
+      </div>}
   </div>;
 }
 

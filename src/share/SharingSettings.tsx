@@ -3,7 +3,7 @@ import { Check, Copy, Download, ExternalLink } from 'lucide-react';
 import { z } from 'zod';
 import type { Cart } from '../../shared/cart';
 import { NICKNAME_MAX, priceModes, shareSettingsSchema, shareUpdateSchema, shareView, type PriceMode, type ShareSettings, type ShareUpdate } from '../../shared/share';
-import { t } from '../i18n';
+import { shownNickname, t } from '../i18n';
 import { Panel } from './Panel';
 import type { TextKey } from '../i18n/messages';
 import { ownerJson } from '../owner';
@@ -29,7 +29,7 @@ export function SharingSettings({ cart, controls, onPreview, close }: { cart: Ca
   const [attempt, setAttempt] = useState(0);
   const preview = useRef(onPreview);
   useEffect(() => { preview.current = onPreview; });
-  const show = (next: OwnerShare) => { setShare(next); setNickname(next.nickname); preview.current(next); };
+  const show = (next: OwnerShare) => { setShare(next); setNickname(shownNickname(next.nickname)); preview.current(next); };
 
   useEffect(() => {
     let live = true;
@@ -59,7 +59,8 @@ export function SharingSettings({ cart, controls, onPreview, close }: { cart: Ca
     setTimeout(() => URL.revokeObjectURL(link.href), 10_000);
   };
 
-  const typed = nickname.trim(), nicknameOk = typed.length >= 1 && typed.length <= NICKNAME_MAX;
+  // The field shows the nickname as this language reads it, so an untouched field is compared with that, not with the stored default.
+  const typed = nickname.trim(), nicknameOk = typed.length >= 1 && typed.length <= NICKNAME_MAX, unchanged = !share || typed === shownNickname(share.nickname);
   return <Panel name="share" title={t('Share this cart')} busy={busy} close={close}>
     {!share ? problem ? <p className="cart-note cart-offline" role="alert">{t(problem)} <button type="button" className="share-text-button" onClick={() => setAttempt(count => count + 1)}>{t('Try again')}</button></p> : <p className="cart-note" role="status">{t('Loading…')}</p> : <>
       <label className="share-switch">
@@ -73,11 +74,11 @@ export function SharingSettings({ cart, controls, onPreview, close }: { cart: Ca
           <span><strong>{t(modeText[mode].name)}</strong><small>{t(modeText[mode].hint)}</small></span>
         </label>)}
       </fieldset>
-      <form className="share-field" onSubmit={event => { event.preventDefault(); if (nicknameOk && typed !== share.nickname) void save({ nickname: typed }); }}>
+      <form className="share-field" onSubmit={event => { event.preventDefault(); if (nicknameOk && !unchanged) void save({ nickname: typed }); }}>
         <label htmlFor="share-nickname">{t('Nickname')}</label>
         <div className="share-row">
           <input id="share-nickname" value={nickname} maxLength={NICKNAME_MAX + 8} disabled={busy} aria-invalid={!nicknameOk} aria-describedby="share-nickname-note" onChange={event => setNickname(event.currentTarget.value)} />
-          <button type="submit" className="share-button primary" disabled={busy || !nicknameOk || typed === share.nickname}>{t('Save')}</button>
+          <button type="submit" className="share-button primary" disabled={busy || !nicknameOk || unchanged}>{t('Save')}</button>
         </div>
         <small id="share-nickname-note" className={nicknameOk ? 'share-hint' : 'share-hint share-problem'}>{nicknameOk ? t("{nickname}'s cart showroom", { nickname: typed }) : t('Use 1–24 characters.')}</small>
       </form>

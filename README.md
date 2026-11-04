@@ -62,15 +62,24 @@ CI（`.github/workflows/ci.yml`）在每次 push 和 pull request 跑這三項�
 | `node scripts/screenshots.mjs` | 建置、啟動 `wrangler dev --env local`，先把 5 個快遞箱都記成拆過，等貨架擺上 5 件商品後存 `docs/screenshots/desktop.png` 和 `mobile-390.png`。 |
 | `npm run screenshots:share` | 存房間分享面板和訪客分享頁的截圖（1440 和 390 寬，range 模式）到 `docs/screenshots/`。設了 `SHARE_SCREENSHOTS_COPY_TO` 會另外複製一份到那個目錄。 |
 | `node scripts/screenshots-unbox-play.mjs` | 用真的 `wrangler dev` 跑一遍拆快遞，1440 和 390 寬各存一組圖到 `PLAY_SCREENSHOTS_DIR`（預設 `.local/screenshots-unbox-play`）：櫃台的箱子、單個拆開（3D 舞台、手寫小卡）、一鍵秒開的連抽（開到一半、結果列、放大一張卡）、貼紙本、從貨架或清單再拆一次、訪客分享頁自己拆（並檢查沒有呼叫屋主的 `/api/unbox`）。設 `PLAY_REDUCED_MOTION=1` 用「減少動態」再跑一次；設 `PLAY_ORIGIN` 可指定已在跑的 worker。 |
+| `node scripts/verify-panels.mjs` | 用真的 `wrangler dev`，在 1440 和 390 寬、清單收起和展開時，依序打開側欄每個面板（店員、分享、角色、習慣、貼紙本、介紹片、連線），確認面板等內容載入、高度穩定後整個在畫面內（面板比側欄高時，填滿側欄可見的高度），而且整頁沒有被捲動。 |
 | `node scripts/screenshots-cast.mjs` | 存角色面板和房間（Muse 和店主、換店員前後、沒金鑰的說明、用假 Meta API 生成的角色、訪客頁，以及走路、拆快遞後的歡呼和店員去貨架、新東西進來的反應）的截圖到 `$CAST_SCREENSHOTS_DIR`，1440 和 390 寬各一套。 |
 | `node scripts/promo-plates.mjs` | 在 Vite 開發伺服器開 `plates.html`，從房間的直播棚拍介紹片的背景板（遠景、近景各一張去掉角色的房間、一張只有桌子），連同屋主站的位置寫到 `runner/composition/plates/`。房間或棚景改了以後要重拍。 |
 | `node tools/meta-hackathon/probe/run-all.ts --dry-run` | 不呼叫 API，印出 Meta Model API 探針的請求和費用估算。見 [探針說明](tools/meta-hackathon/probe/README.md)。 |
 
 截圖和算圖腳本需要 Playwright 的 Chromium（`npx playwright-core install chromium`），用 SwiftShader 在沒有 GPU 的機器上畫 WebGL。
 
+### 部署到正式環境
+
+```bash
+scripts/deploy-wizard.sh
+```
+
+一步一步帶你做完：確認 wrangler 登入能部署、建 R2 bucket `pacafe-cart-showroom-media`、產生屋主金鑰、貼上 Meta API 的金鑰和 base URL、設 `CLERK_DAILY_USD`，然後 build 並 `wrangler deploy`，secrets 跟這次上傳一起送出。部署完它會檢查網址（首頁 200、沒金鑰的 `/api/cart` 回 401、帶金鑰回 200、worker 看得到 Meta 金鑰），把屋主金鑰放進剪貼簿讓你貼進房間，最後把網址寫進 `SUBMISSION.md`。這些值存在 `.env`（已列在 `.gitignore`），runner 也讀這個檔，所以重跑時按 Enter 就沿用。改完程式要重新部署時，重跑一次就好。
+
 ### 正式環境的屋主權限
 
-正式環境的 `/api/cart`（讀和寫）和 `/api/share` 只回應帶 `Authorization: Bearer <CART_MCP_TOKEN>` 的請求，其餘回 401。房間第一次被擋時會請屋主輸入這把金鑰，存在瀏覽器的 localStorage，之後每次讀寫都帶上。用 `wrangler secret put CART_MCP_TOKEN` 設定 token；token 不放進任何檔案。`.env.example` 只列出變數名稱。
+正式環境的 `/api/cart`（讀和寫）和 `/api/share` 只回應帶 `Authorization: Bearer <CART_MCP_TOKEN>` 的請求，其餘回 401。房間第一次被擋時會請屋主輸入這把金鑰，存在瀏覽器的 localStorage，之後每次讀寫都帶上。token 是 worker secret（部署引導會設，或用 `wrangler secret put CART_MCP_TOKEN`），不放進任何進版控的檔案。`.env.example` 只列出變數名稱。
 
 `/mcp` 在任何環境都要這個 token，`env.local` 也一樣。在本機用 MCP 時，把 token 寫進 `.dev.vars`（已列在 `.gitignore`），再跑 `npm run dev:worker`：
 
@@ -95,7 +104,7 @@ echo "CART_MCP_TOKEN=$(openssl rand -base64 24)" > .dev.vars
 
 房間的「看清單」每一行是一件東西：左邊縮圖（有去背圖用去背圖，沒有就用 `imageUrl`；沒圖或載入失敗時，是一格依類別上色、畫類別圖示的方塊，不放任何「示意」字樣）、品名（有 `url` 就是連結，新分頁開，`rel="noopener noreferrer"`）、店名、類別標籤（服飾配件、美妝保養、3C 家電、居家生活、廚房餐具、食品飲料、書籍文具、玩具嗜好、運動戶外、其他）、價格和數量。圖片用 `referrerpolicy="no-referrer"` 載入。訪客的分享頁同樣有縮圖和品名連結，但沒有店名和類別（`ShareView` 本來就不給）。
 
-貨架上的商品盒子，有圖的會把商品圖貼在盒面上。WebGL 讀跨網域圖片要 CORS，所以由 worker 代送：
+貨架上的商品盒子，有圖的會把商品圖貼在盒面上。圖不裁切：盒面、包裹標籤和開箱時升起的卡片，圖的區域照原圖比例變高或變矮（太扁或太長的圖整張放進限度內，兩邊留白），卡片再整張縮進盒面；清單和連抽結果的縮圖也是整張圖放進方格。WebGL 讀跨網域圖片要 CORS，所以由 worker 代送：
 
 | 請求 | 回應 |
 |---|---|
@@ -337,7 +346,7 @@ muse exec --prompt-file muse/demo-task.txt --disable-approval --max-model-steps 
 | 剪輯桌與房間角落元件 | `src/components/` | pa-cafe `s10-studio-desk` | 賽前搬來，刪減 |
 | 房間共用設定 | `shared/` 的 `room-*.ts`、`scenery.ts`、`performance-script.ts`、`locales.ts`、`sprites.ts`、`safe-decode.ts`、`studio.ts`、`domain.ts`、`starter-furniture.ts` | pa-cafe `s10-studio-desk` | 賽前搬來，刪減 |
 | 介面字串、樣式 | `src/i18n/`、`src/world.css` | pa-cafe `s10-studio-desk` | 賽前搬來，只留用到的部分 |
-| Meta Model API 探針、計畫書 | `tools/meta-hackathon/probe/`、`docs/PLAN.md` | agentic-remotion-studio `meta-hackathon/2026`（0a0bc75） | 賽前搬來，刪減 |
+| Meta Model API 探針 | `tools/meta-hackathon/probe/` | agentic-remotion-studio `meta-hackathon/2026`（0a0bc75） | 賽前搬來，刪減 |
 | 購物車資料形狀與推導、fixture | `shared/cart.ts`、`shared/fixtures/cart.ts` | 無 | 賽中新寫 |
 | Worker 與 Showroom Durable Object | `worker/index.ts`、`worker/showroom.ts`、`worker/env.ts`、`wrangler.jsonc` | 無 | 賽中新寫 |
 | MCP 傳輸 | `worker/mcp.ts` | 參考 pa-cafe main 的 `worker/streamable-mcp.ts`、`worker/protocol.ts` | 賽中重寫：只留 JSON-RPC 和協定協商，刪掉配對、Clerk session、簽章、版本偏差 |

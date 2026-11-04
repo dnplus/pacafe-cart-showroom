@@ -11,7 +11,7 @@ vi.mock('../src/promo/usePromo', () => ({ usePromo: vi.fn() }));
 
 const panel = (script?: unknown) => {
   vi.mocked(usePromo).mockReturnValue({ job: claimFor(fixtureCartItems, 'range', 30, script ? promoScriptSchema.parse(script) : undefined).job, offline: false, queueing: false, queueFailed: false, queue: async () => {} });
-  return renderToStaticMarkup(<PromoPanel count={5} />);
+  return renderToStaticMarkup(<PromoPanel count={5} close={() => {}} />);
 };
 
 describe('PromoPanel script', () => {

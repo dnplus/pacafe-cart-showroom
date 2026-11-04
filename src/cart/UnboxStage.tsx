@@ -12,11 +12,11 @@ import type { Box } from './unbox';
 import { ExternalLink } from 'lucide-react';
 import './unbox-stage.css';
 
-const reducedMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+export const reducedMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 const SHAKE_MS = 460, RARE_MS = 800, FINE_MS = 250, RESULTS_MS = 1000;
 const REDUCED_STEP_MS = 160, REDUCED_RESULTS_MS = 300, REDUCED_PUT_MS = 250, PUT_MS = 800;
 
-const stageParcel = (item: TrayItem): StageParcel => ({ id: item.id, packaging: item.packaging, store: item.store, product: { key: item.id, title: item.title, qty: item.qty, price: item.price, image: item.picture } });
+export const stageParcel = (item: TrayItem): StageParcel => ({ id: item.id, packaging: item.packaging, store: item.store, product: { key: item.id, title: item.title, qty: item.qty, price: item.price, image: item.picture } });
 
 /** A separate three.js canvas from the room's. Without WebGL the canvas stays empty and the cards still show. */
 function ParcelCanvas({ parcels, mode, loadImage, stageRef, autoOpen = false }: { parcels: readonly StageParcel[]; mode: 'single' | 'pull'; loadImage?: ImageLoader; stageRef?: RefObject<ParcelStage | null>; autoOpen?: boolean }) {
